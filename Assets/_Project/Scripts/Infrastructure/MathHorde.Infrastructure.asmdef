@@ -6,7 +6,8 @@
         "MathHorde.MathEngine",
         "MathHorde.GameLogic",
         "MathHorde.Analytics",
-        "Unity.Nuget.Newtonsoft-Json"
+        "Unity.Nuget.Newtonsoft-Json",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
