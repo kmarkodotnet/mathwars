@@ -1,6 +1,6 @@
 # Math Horde — Feladatlista (backlog index)
 
-> **Állapot (2026-11-16): 18 kész / 91 feladat (73 nyitott).**
+> **Állapot (2026-11-16): 19 kész / 91 feladat (72 nyitott).**
 >
 > Ez a fájl **generált index**. Minden feladat önálló fájlban él, és a fájl
 > HELYE jelzi az állapotát:
@@ -26,7 +26,7 @@
 | [F0-04](backlog/done/F0-04.md) | .gitignore, scripts/build.ps1, scripts/test.ps1, gyökér README.md a… | `mobile-build-engineer` | F0-01 | PAR | S | — | ✅ **KÉSZ** |
 | [F0-05](backlog/done/F0-05.md) | Resources/Strings/hu.json váz + ILocalizationService kulcsfeloldó | `ui-dev` | F0-02 | PAR | S | — | ✅ **KÉSZ** |
 
-## Fázis 1 — Játszható harci alap  ·  13/18 kész
+## Fázis 1 — Játszható harci alap  ·  14/18 kész
 
 | ID | Feladat | Agent | Függ | Mód | Becs. | Krit. | Állapot |
 |---|---|---|---|---|---|---|---|
@@ -40,7 +40,7 @@
 | [F1-08](backlog/done/F1-08.md) | IGameSessionService + a kötelező tick-sorrend + győzelem/vereség… | `gameplay-dev` | F1-06, F1-07 | SZEKV | M | A, F | ✅ **KÉSZ** |
 | [F1-09](backlog/done/F1-09.md) | SO-k | `gameplay-dev` | F1-02 | PAR | M | — | ✅ **KÉSZ** |
 | [F1-10](backlog/done/F1-10.md) | GameConfigurationRepository | `save-data-engineer` | F1-09 | PAR | M | — | ✅ **KÉSZ** |
-| [F1-11](backlog/F1-11.md) | UnityGameClock, SceneFlowManager, alkalmazás-állapotgép… | `gameplay-dev` | F0-02 | PAR | M | — | ⬜ nyitott |
+| [F1-11](backlog/done/F1-11.md) | UnityGameClock, SceneFlowManager, alkalmazás-állapotgép… | `gameplay-dev` | F0-02 | PAR | M | — | ✅ **KÉSZ** |
 | [F1-12](backlog/done/F1-12.md) | 3D pálya-prefab | `ui-dev` | F0-01 | PAR | M | K | ✅ **KÉSZ** |
 | [F1-13](backlog/F1-13.md) | PlayerController + InputAdapter | `ui-dev` | F1-12, F1-11 | PAR | M | K | ⬜ nyitott |
 | [F1-14](backlog/done/F1-14.md) | EnemyPresenter + ObjectPool<T> ellenséghez, lövedékhez, effekthez | `ui-dev` | F1-12 | PAR | M | A | ✅ **KÉSZ** |
