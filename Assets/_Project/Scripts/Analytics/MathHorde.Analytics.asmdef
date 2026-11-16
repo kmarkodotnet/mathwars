@@ -1,0 +1,16 @@
+{
+    "name": "MathHorde.Analytics",
+    "rootNamespace": "MathHorde.Analytics",
+    "references": [
+        "MathHorde.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

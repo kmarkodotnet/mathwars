@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tükör-projekt (ADR-003): Compile Include linkeli az
+    Assets/_Project/Scripts/MathEngine alatti fájlokat. Lásd
+    MathHorde.Core.Mirror.csproj megjegyzését a linkelési szabályról.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>MathHorde.MathEngine</AssemblyName>
+    <RootNamespace>MathHorde.MathEngine</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Assets\_Project\Scripts\MathEngine\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MathHorde.Core.Mirror\MathHorde.Core.Mirror.csproj" />
+  </ItemGroup>
+
+</Project>

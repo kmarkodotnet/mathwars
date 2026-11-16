@@ -1,0 +1,60 @@
+# ---- Unity ----
+[Ll]ibrary/
+[Tt]emp/
+# Unity 6 build-ideiglenes mappa (az Android/IL2CPP build hozza létre)
+.utmp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Unity által generált, nem verziózandó projektfájlok
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+.vs/
+.vscode/
+.idea/
+
+# Crashlog, csomagolt build
+sysinfo.txt
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# Unity addressables / burst / il2cpp köztes kimenetek
+/[Aa]ssets/AddressableAssetsData/*/*.bin*
+/[Aa]ssets/StreamingAssets/aa.meta
+/[Aa]ssets/StreamingAssets/aa/*
+
+# ---- tükör .NET teszt-solution (ADR-003) ----
+# A *.csproj globális kizárása alól a tükör-projekteket KI KELL venni,
+# mert azok kézzel írt, verziózandó fájlok (nem Unity generálja őket).
+!tests/**/*.csproj
+!tests/**/*.sln
+tests/**/bin/
+tests/**/obj/
+
+# ---- teszt- és build-kimenetek ----
+artifacts/
+test-results/
+*.log
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini

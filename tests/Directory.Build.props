@@ -1,0 +1,13 @@
+<Project>
+  <!--
+    Közös build-beállítások a tükör .NET solution (ADR-003) minden projektjéhez.
+    LangVersion 9.0: a Unity 6.3 C# 9-et fordít. Ha a tükör-solution engedékenyebb
+    nyelvi szinten futna, olyan kódot engedne át, amit az Unity Editor elutasítana —
+    a két build-út divergálna (ADR-003, "Következmények" szakasz).
+  -->
+  <PropertyGroup>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+</Project>

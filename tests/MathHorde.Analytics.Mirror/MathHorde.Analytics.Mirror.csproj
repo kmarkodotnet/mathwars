@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tükör-projekt (ADR-003). Az ARCHITECTURE.md nem sorolja fel explicit az
+    Analytics réteget a tests/ fában, de az Assets/_Project/Tests/EditMode/
+    MathHorde.Tests.EditMode.asmdef references listája tartalmazza
+    "MathHorde.Analytics"-ot — az EditMode tesztek tehát hivatkozhatnak rá.
+    Hogy a tükör-solution ugyanazokat a teszteket tudja linkelni (és ne csak
+    a futtatásukkor derüljön ki egy hiányzó referencia), az Analytics réteget
+    is tükrözzük, ugyanazzal a Compile Include mintával.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>MathHorde.Analytics</AssemblyName>
+    <RootNamespace>MathHorde.Analytics</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Assets\_Project\Scripts\Analytics\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MathHorde.Core.Mirror\MathHorde.Core.Mirror.csproj" />
+  </ItemGroup>
+
+</Project>

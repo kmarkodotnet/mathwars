@@ -1,0 +1,11 @@
+{
+  "hud.health": "Életerő",
+  "hud.ammo": "Lőszer",
+  "hud.shield": "Pajzs",
+  "hud.wave": "{0}. hullám",
+  "hud.level": "{0}. pálya",
+  "hud.pause": "Szünet",
+  "hud.challengeLevel": "Kihívásszint: {0}",
+  "result.gameOver": "Játék vége",
+  "result.retry": "Újrakezdés"
+}

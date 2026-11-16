@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tükör-projekt (ADR-003): nem saját forrás, csak Compile Include linkeli az
+    Assets/_Project/Scripts/Core alatti fájlokat, hogy Unity Editor nélkül,
+    dotnet test-tel is lefordulhassanak és tesztelhetők legyenek.
+    Duplikált forrásfájl TILOS — ez a projekt egyetlen forrása a linkelt mappa.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>MathHorde.Core</AssemblyName>
+    <RootNamespace>MathHorde.Core</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Assets\_Project\Scripts\Core\**\*.cs" />
+  </ItemGroup>
+
+</Project>

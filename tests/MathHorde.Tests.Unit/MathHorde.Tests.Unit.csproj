@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tükör teszt-futtató projekt (ADR-003). A game/Assets/_Project/Tests/EditMode
+    alatti NUnit-tesztfájlokat linkeli (Compile Include), hogy Unity Editor
+    nélkül, dotnet test-tel is lefussanak. A Unity Test Framework is NUnit-
+    alapú, így ugyanaz a tesztkód mindkét futtatási módban fordul és fut.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>MathHorde.Tests.EditMode</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Linkelt EditMode tesztfájlok — jelenleg üres (F0-03 még nem ír tesztesetet). -->
+    <Compile Include="..\..\Assets\_Project\Tests\EditMode\**\*.cs" />
+    <!-- Saját fájl, NEM linkelt: a tükör-solution F0-03-as infrastruktúrájához tartozik. -->
+    <Compile Include="SmokeTests.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="4.2.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MathHorde.Core.Mirror\MathHorde.Core.Mirror.csproj" />
+    <ProjectReference Include="..\MathHorde.MathEngine.Mirror\MathHorde.MathEngine.Mirror.csproj" />
+    <ProjectReference Include="..\MathHorde.GameLogic.Mirror\MathHorde.GameLogic.Mirror.csproj" />
+    <ProjectReference Include="..\MathHorde.Analytics.Mirror\MathHorde.Analytics.Mirror.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,33 @@
+{
+    "name": "MathHorde.Tests.PlayMode",
+    "rootNamespace": "MathHorde.Tests.PlayMode",
+    "references": [
+        "MathHorde.Core",
+        "MathHorde.MathEngine",
+        "MathHorde.GameLogic",
+        "MathHorde.Analytics",
+        "MathHorde.Presentation",
+        "MathHorde.Infrastructure",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor",
+        "Android",
+        "WindowsStandalone64",
+        "macOSStandalone",
+        "LinuxStandalone64"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

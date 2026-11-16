@@ -1,0 +1,554 @@
+# Kontrakt — GameLogic réteg
+
+> Assembly: `MathHorde.GameLogic` · Namespace: `MathHorde.GameLogic.*`
+> References: `MathHorde.Core`, `MathHorde.MathEngine`
+> **`noEngineReferences: true` — `using UnityEngine;` TILOS** (ADR-003, ARCHITECTURE 2.1).
+> A réteg headless futtatható: a balancing-szimuláció (spec 9.1) Unity nélkül pörgeti.
+> Mélység: **MÉLY** (Fázis 1–3). `IAdaptiveDifficultyService`: **vázlat** (Fázis 4).
+
+## 0. Alapszabályok
+
+| # | Szabály |
+|---|---|
+| G1 | Semmilyen szolgáltatás nem olvas `Time.deltaTime`-ot — az idő **mindig** `IGameClock`-ból vagy `Tick(double gameTime)` paraméterből jön. |
+| G2 | A szolgáltatások **nem** hívják egymást keresztbe-kasul: a `GameSessionService` az egyetlen kompozíciós gyökér, amely a `Tick` sorrendet vezényli. |
+| G3 | Esemény-kibocsátás `IGameEventSink`-en keresztül; a kibocsátó nem tud az előfizetőkről. |
+| G4 | `Tick`-ben nincs allokáció: előre allokált bufferek, `struct` eseménypayload, nincs LINQ. |
+| G5 | A `MathEventDirector` és a `WaveDirector` **nem hivatkozik egymásra** — sem fordításilag, sem futásidőben. Ezt a konstruktor-szignatúrák kényszerítik ki (egyiknek sincs a másikra mutató paramétere). |
+| G6 | Minden véletlen `IRandomSource`-ból (ADR-006). |
+
+---
+
+## 1. Események — `IGameEventSink`
+
+```csharp
+namespace MathHorde.GameLogic.Events;
+
+public interface IGameEventSink
+{
+    void Publish<TEvent>(in TEvent gameEvent) where TEvent : struct, IGameEvent;
+}
+
+public interface IGameEvent { double GameTime { get; } }
+```
+
+**Teljes eseménykatalógus (Fázis 1–3):**
+
+| Esemény (struct) | Kibocsátó | Mezők |
+|---|---|---|
+| `SessionStarted` | GameSessionService | `GameSessionId SessionId, LevelId LevelId, int Seed, double GameTime` |
+| `SessionEnded` | GameSessionService | `GameSessionId SessionId, SessionResult Result, FailureReason Reason, double GameTime` |
+| `ResourceChanged` | ResourceService | `ResourceChange Change, double GameTime` |
+| `WaveStarted` | WaveDirector | `int WaveIndex, double GameTime` |
+| `WaveCleared` | WaveDirector | `int WaveIndex, double GameTime` |
+| `EnemySpawned` | WaveDirector | `int EnemyInstanceId, string EnemyId, LaneIndex Lane, Vec2 Position, double GameTime` |
+| `EnemyDamaged` | CombatService | `int EnemyInstanceId, int Damage, int RemainingHealth, double GameTime` |
+| `EnemyKilled` | CombatService | `int EnemyInstanceId, string EnemyId, int RewardValue, double GameTime` |
+| `EnemyReachedPlayer` | CombatService | `int EnemyInstanceId, int ContactDamage, double GameTime` |
+| `WeaponFired` | CombatService | `int TargetEnemyInstanceId, int AmmoUsed, double GameTime` |
+| `WeaponDryFire` | CombatService | `double GameTime` (nincs lőszer) |
+| `PlayerDamaged` | CombatService | `int Damage, int RemainingHealth, double GameTime` |
+| `PlayerLaneChanged` | CombatService | `LaneIndex From, LaneIndex To, double GameTime` |
+| `MathEventPreviewStarted` | MathEventDirector | `MathEventId EventId, MathProblemId ProblemId, string DisplayExpression, double GameTime` |
+| `MathEventGatesSpawned` | MathEventDirector | `MathEventId EventId, int SnapshotValue, ResourceType SnapshotResource, double GameTime` |
+| `MathEventDecisionWindowOpened` | MathEventDirector | `MathEventId EventId, double DeadlineGameTime, double GameTime` |
+| `MathEventResolved` | GateResolutionService | `MathEventId EventId, LaneIndex SelectedLane, bool WasCorrect, double GameTime` |
+| `MathEventCompleted` | MathEventDirector | `MathEventId EventId, int AppliedDelta, ResourceType Resource, double GameTime` |
+| `MathEventExpired` | MathEventDirector | `MathEventId EventId, double GameTime` |
+| `RewardApplied` | RewardService | `MathEventId EventId, ResourceType Resource, int AppliedDelta, double GameTime` |
+| `RewardSkipped` | RewardService | `MathEventId EventId, string ReasonCode, double GameTime` (`"INCORRECT"`, `"ALREADY_APPLIED"`, `"EXPIRED"`) |
+| `ChallengeLevelChanged` | AdaptiveDifficultyService | `int Previous, int New, string Reason, double GameTime` (Fázis 4) |
+
+A Presentation réteg **kizárólag** ezekre az eseményekre és az olvasó property-kre
+támaszkodhat; a GameLogic belső mezőihez nem fér hozzá.
+
+---
+
+## 2. IResourceService (spec 4.3, 5.1 — a legszigorúbb kontrakt)
+
+```csharp
+namespace MathHorde.GameLogic;
+
+public interface IResourceService
+{
+    ResourceState State { get; }
+    int GetCurrent(ResourceType type);
+    int GetMax(ResourceType type);
+
+    /// EGYETLEN módosítási út. Pozitív és negatív delta egyaránt.
+    /// A [Min, Max] tartományra vág, soha nem dob kivételt.
+    /// reasonCode: "WEAPON_FIRE" | "MATH_GATE" | "ENEMY_CONTACT" | "PICKUP" | "LEVEL_INIT"
+    ResourceChange ApplyDelta(ResourceType type, int delta, string reasonCode);
+
+    /// Lefoglalás: csak akkor von le, ha a teljes mennyiség rendelkezésre áll.
+    /// Visszatérés: true, ha sikerült. A fegyver ezt használja (nincs részleges lövés).
+    bool TryConsume(ResourceType type, int amount, string reasonCode, out ResourceChange change);
+
+    /// Maximum módosítása (upgrade). A Current soha nem haladhatja meg az új Max-ot.
+    ResourceChange SetMax(ResourceType type, int newMax, string reasonCode);
+
+    /// A matematikai feladat bázisának rögzítése (spec 5.1).
+    /// A snapshot CSAK olvasási másolat; semmilyen későbbi művelet nem írja vissza.
+    int CaptureSnapshot(ResourceType type);
+
+    /// Pálya kezdeti feltöltése a LevelDefinition alapján. Csak a GameSessionService hívja.
+    void Initialize(LevelDefinition level);
+}
+```
+
+### 2.1. TILTÁSOK (kódszinten kikényszerítve)
+
+| Tilos | Miért |
+|---|---|
+| **Nincs publikus `SetCurrent(type, absoluteValue)`** | A kapu soha nem írhatja felül a harc által módosított tényleges értéket (spec 5.1, 17.3). |
+| `ApplyDelta` hívása a Presentation rétegből | A HUD csak olvas és `ResourceChanged` eseményre animál. |
+| `ResourcePool` közvetlen mutálása | `ResourceState` immutable. |
+
+### 2.2. Kötelező referencia-viselkedés (spec 17.3 teszt)
+
+```
+Initialize: Ammo = 20 (Max 200)
+CaptureSnapshot(Ammo) -> 20
+... harc: TryConsume(Ammo, 1, "WEAPON_FIRE") × 12  ->  Current = 8
+GateResolution: operationResult = 45, snapshot = 20  =>  delta = +25
+ApplyDelta(Ammo, +25, "MATH_GATE")  ->  PreviousValue = 8, NewValue = 33, WasClamped = false
+```
+
+---
+
+## 3. ICombatService (spec 4.1, 4.2)
+
+```csharp
+public interface ICombatService
+{
+    void Initialize(LevelDefinition level, WeaponDefinition weapon,
+                    IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog);
+
+    /// Egy szimulációs lépés: ellenségmozgás, célzás, tüzelés, találat, ütközés, halál.
+    /// NEM függ semmilyen matematikai esemény állapotától (spec 1., 23./4.).
+    void Tick(double gameTime, float deltaTime);
+
+    /// A WaveDirector ezen keresztül helyez be ellenséget — a két szolgáltatás
+    /// nem hivatkozik egymásra, a GameSessionService köti őket össze.
+    int SpawnEnemy(string enemyId, LaneIndex lane, float spawnDepth);
+
+    void MovePlayerToLane(LaneIndex lane);
+    LaneIndex PlayerLane { get; }
+    bool IsPlayerAlive { get; }
+
+    /// Olvasó nézet a Presentation számára (előre allokált, Tick között stabil buffer).
+    IReadOnlyList<EnemySnapshot> ActiveEnemies { get; }
+
+    /// Harci nehézség-szorzók, a CombatDifficulty dimenzióból (spec 7.3).
+    void ApplyCombatModifiers(CombatModifiers modifiers);
+}
+
+public readonly struct EnemySnapshot
+{
+    public int InstanceId { get; }
+    public string EnemyId { get; }
+    public EnemyType Type { get; }
+    public LaneIndex Lane { get; }
+    public Vec2 Position { get; }
+    public int CurrentHealth { get; }
+    public int MaxHealth { get; }
+    public bool IsAlive { get; }
+}
+
+public readonly struct CombatModifiers
+{
+    public float EnemySpeedMultiplier { get; }     // 0.5 .. 2.0
+    public float EnemyHealthMultiplier { get; }    // 0.5 .. 2.0
+    public float EnemyDamageMultiplier { get; }    // 0.5 .. 2.0
+    public float SpawnRateMultiplier { get; }      // 0.5 .. 2.0
+    public float AmmoConsumptionMultiplier { get; }// 0.5 .. 2.0
+    public static CombatModifiers Neutral { get; }
+}
+```
+
+**Kötelező harci szabályok (spec 4.2, 17.4):**
+
+1. Tüzelés: `1 / (FireRate * ...)` másodpercenként egy lövés, ha van célpont **és**
+   `TryConsume(Ammo, AmmoPerShot)` sikerül. Sikertelenség ⇒ `WeaponDryFire`, a harc folytatódik.
+2. Célpontválasztás a `TargetingMode` szerint: alap `OwnLaneThenAdjacent` — először a
+   játékos sávjában a legközelebbi élő ellenség, csak ha nincs, akkor a szomszédos sáv.
+3. `ProjectileSpeed == 0` ⇒ hitscan (azonnali találat); különben a lövedék a `Tick`-ben halad
+   és ütközéskor sebez.
+4. **A matematikai kapu-/válaszhordozó egységek NEM célpontok** (spec 3.3): külön entitáslista,
+   a `CombatService` nem is látja őket; a `MathEventDirector` kezeli a pozíciójukat.
+5. Ellenség a játékos vonalát elérve `ContactDamage`-et okoz, majd `AttackCooldownSeconds`-ig
+   nem sebez újra; a `PlayerHealth` `ApplyDelta(Health, -dmg, "ENEMY_CONTACT")`-on keresztül fogy.
+6. `Health <= 0` ⇒ `IsPlayerAlive = false` + `PlayerDamaged` majd a `GameSessionService`
+   `SessionEnded(Defeat, HealthDepleted)`.
+7. Ellenség `CurrentHealth <= 0` ⇒ `EnemyKilled`, az instance a poolba kerül (az instance-id
+   nem használható újra ugyanabban a session-ben).
+
+---
+
+## 4. IWaveDirector (spec 4.1)
+
+```csharp
+public interface IWaveDirector
+{
+    void Initialize(LevelDefinition level, IRandomSource random);
+
+    /// Hullám-ütemezés. SOHA nem kérdezi le és nem várja meg a matematikai eseményt
+    /// (spec 14.: "A WaveDirector ettől függetlenül működtesse az ellenséges hullámokat").
+    void Tick(double gameTime);
+
+    int CurrentWaveIndex { get; }
+    int TotalWaves { get; }
+    bool AllWavesCompleted { get; }
+    bool IsBossActive { get; }
+
+    /// A kibocsátandó spawn-parancsok a Tick során; a GameSessionService üríti és
+    /// továbbítja az ICombatService.SpawnEnemy felé.
+    IReadOnlyList<SpawnCommand> PendingSpawns { get; }
+    void ClearPendingSpawns();
+
+    void ApplyCombatModifiers(CombatModifiers modifiers);
+}
+
+public readonly struct SpawnCommand
+{
+    public string EnemyId { get; }
+    public LaneIndex Lane { get; }
+    public float SpawnDepth { get; }
+    public double ScheduledGameTime { get; }
+}
+```
+
+**Szabály:** két matematikai feladat között sem állhat le tartósan a spawnolás
+(spec 4.1) — a `WaveDefinition`-ök időben átfedhetnek vagy közvetlenül követik egymást; a
+hullámok közötti maximális szünet a `CombatBalanceSO.MaxWaveGapSeconds` (alap 2 mp).
+
+---
+
+## 5. IMathEventDirector (spec 5., 13., 14.)
+
+```csharp
+public readonly struct MathEventId : IEquatable<MathEventId>
+{
+    public Guid Value { get; }
+    /// Determinisztikus: a session seedjéből és az esemény sorszámából képzett GUID.
+    public static MathEventId Create(int sessionSeed, int eventIndex);
+}
+
+public enum MathEventState { Inactive, Preview, Approaching, AwaitingDecision,
+                             Resolving, Completed, Expired }
+
+public interface IMathEventDirector
+{
+    void Initialize(LevelDefinition level, DifficultyProfile difficulty,
+                    IMathProblemGenerator generator, IRandomSource random);
+
+    /// Léptetés. NEM módosít harci állapotot és NEM hívja az IGameClock.Pause-t.
+    /// A feloldásokat parancsként sorba állítja (PendingResolutions), nem alkalmazza.
+    void Tick(double gameTime);
+
+    /// A játékos sávváltása. Csak AwaitingDecision állapotú eseményre hat.
+    /// Idempotens: ugyanazon eventId második választása figyelmen kívül marad.
+    void OnPlayerLaneSelected(LaneIndex lane, double gameTime);
+
+    /// A session vége: minden nem terminális esemény Expired-be kerül.
+    /// A már Completed eseményeket NEM vonja vissza.
+    void OnSessionEnded(double gameTime);
+
+    IReadOnlyList<ActiveMathEvent> ActiveEvents { get; }
+    IReadOnlyList<ResolveCommand> PendingResolutions { get; }
+    void ClearPendingResolutions();
+
+    /// Fázis 4: adaptív időnyomás a következő eseményektől kezdve.
+    /// A MÁR AKTÍV események paraméterei nem változnak (spec 7.5).
+    void ApplyTimePressure(float thinkTimeMultiplier, float gateSpeedMultiplier);
+}
+
+public sealed class ActiveMathEvent
+{
+    public MathEventId EventId { get; }
+    public MathEventState State { get; }
+    public MathProblem Problem { get; }
+    public double PreviewStartedAt { get; }
+    public double DecisionOpenedAt { get; }
+    public double DeadlineGameTime { get; }
+    public int SnapshotValue { get; }               // ResourceOperationComparison esetén
+    public ResourceType SnapshotResource { get; }
+    public IReadOnlyList<GateCarrier> Carriers { get; }
+}
+
+public readonly struct GateCarrier
+{
+    public int OptionIndex { get; }
+    public LaneIndex Lane { get; }
+    public Vec2 Position { get; }          // a Presentation ezt képezi le 3D-re
+    public string DisplayLabel { get; }    // "×2", "+25", "56"
+    public bool IsCorrect { get; }         // a Presentation NEM jelenítheti meg döntés előtt!
+}
+
+public readonly struct ResolveCommand
+{
+    public MathEventId EventId { get; }
+    public LaneIndex SelectedLane { get; }
+    public bool TimedOut { get; }
+    public double GameTime { get; }
+}
+```
+
+**Állapotgép-időzítés:**
+
+```
+t0                      : Inactive -> Preview            (MathEventScheduleEntry.TriggerGameTime)
+t0 + PreviewDuration    : Preview -> Approaching         (kapuk spawn, SNAPSHOT itt rögzül)
+kapuk a döntési zónában : Approaching -> AwaitingDecision
+DecisionOpenedAt + ThinkTime : -> Expired, ha nincs választás
+LaneSelected            : AwaitingDecision -> Resolving  (ResolveCommand sorba állítva)
+RewardApplied           : Resolving -> Completed
+```
+
+> `IsCorrect` a `GateCarrier`-ben **csak a feloldás után** használható fel vizuálisan.
+> Döntés előtt a Presentation nem jeleníthet meg semmit belőle (spec 5.1: „A két kapu
+> eredményét a döntés előtt ne jelenítsd meg”). Ezt a code-reviewer ellenőrzi.
+
+---
+
+## 6. IGateResolutionService
+
+```csharp
+public interface IGateResolutionService
+{
+    /// Kiértékel egy feloldási parancsot. IDEMPOTENS: ugyanarra az EventId-ra a második
+    /// hívás GateResolution.Duplicate-et ad vissza, és NEM nyúl az erőforrásokhoz.
+    GateResolution Resolve(in ResolveCommand command, ActiveMathEvent mathEvent);
+
+    /// Már feloldott-e az esemény (mentés-visszatöltés után is helyes).
+    bool IsResolved(MathEventId eventId);
+
+    /// A session kezdetekor / visszatöltéskor az idempotencia-napló helyreállítása.
+    void RestoreResolvedEvents(IReadOnlyCollection<Guid> resolvedEventIds);
+}
+
+public readonly struct GateResolution
+{
+    public MathEventId EventId { get; }
+    public GateResolutionOutcome Outcome { get; }
+    public bool WasCorrect { get; }
+    public int SelectedOptionIndex { get; }     // -1, ha timeout
+    public int OperationResult { get; }         // a választott kapu matematikai eredménye
+    public int SnapshotValue { get; }
+    /// RewardDelta = OperationResult − SnapshotValue (spec 5.1).
+    /// AnswerLaneSelection esetén = RewardSpec.FlatAmount.
+    public int RewardDelta { get; }
+    public ResourceType Resource { get; }
+    public MathAnswer Answer { get; }           // az Analytics/QuestionAttempt számára
+}
+
+public enum GateResolutionOutcome { CorrectRewarded, IncorrectNoReward, Expired, Duplicate }
+```
+
+**Feloldási szabályok:**
+
+| Eset | `Outcome` | `RewardDelta` |
+|---|---|---|
+| helyes sáv, `ResourceOperationComparison` | `CorrectRewarded` | `OperationResult − SnapshotValue` |
+| helyes sáv, `AnswerLaneSelection` | `CorrectRewarded` | `RewardSpec.FlatAmount` |
+| hibás sáv | `IncorrectNoReward` | `RewardSpec.IncorrectAmount` (alap 0) |
+| határidő lejárt | `Expired` | 0 |
+| ugyanaz az `EventId` másodszor | `Duplicate` | 0, erőforrás nem változik |
+
+---
+
+## 7. IRewardService
+
+```csharp
+public interface IRewardService
+{
+    /// Idempotens jutalomkönyvelés (ARCHITECTURE 6.2).
+    /// Első hívás az EventId-ra: alkalmaz és Applied-et ad.
+    /// Bármely további hívás: AlreadyApplied, erőforrás-változás NÉLKÜL.
+    RewardApplication ApplyReward(in GateResolution resolution);
+
+    /// Nem matematikai jutalom (ellenség kill, pickup) — nem idempotencia-köteles.
+    ResourceChange ApplyCombatReward(ResourceType type, int amount, string reasonCode);
+
+    IReadOnlyCollection<Guid> AppliedRewardEventIds { get; }
+    void RestoreAppliedRewards(IReadOnlyCollection<Guid> eventIds);
+}
+
+public readonly struct RewardApplication
+{
+    public MathEventId EventId { get; }
+    public RewardApplicationStatus Status { get; }
+    public int RequestedDelta { get; }
+    public int AppliedDelta { get; }     // Max-vágás után
+    public ResourceType Resource { get; }
+}
+
+public enum RewardApplicationStatus { Applied, AlreadyApplied, SkippedIncorrect, SkippedExpired }
+```
+
+---
+
+## 8. IGameSessionService — a kompozíciós gyökér
+
+```csharp
+public interface IGameSessionService
+{
+    GameSessionId SessionId { get; }
+    SessionResult Result { get; }
+    bool IsRunning { get; }
+
+    void StartSession(LevelDefinition level, PlayerProgress progress, int seed);
+
+    /// AZ EGYETLEN helyen definiált Tick-sorrend (ARCHITECTURE 6.1).
+    /// A Presentation (MonoBehaviour.Update) ezt hívja, mást nem.
+    void Tick(float deltaTime);
+
+    void Pause();
+    void Resume();
+
+    /// Pontosan egyszer fut le; idempotens. Előállítja a GameSessionRecord-ot.
+    GameSessionRecord Finalize(SessionResult result, FailureReason reason);
+}
+```
+
+**Kötelező `Tick` implementációs sorrend (ettől eltérni TILOS):**
+
+```csharp
+// pszeudokód, a szerződés része
+_clock.Advance(deltaTime);
+double t = _clock.GameTime;
+if (_clock.IsPaused) return;          // szünetben sem harc, sem határidő nem halad
+
+_waveDirector.Tick(t);
+foreach (var cmd in _waveDirector.PendingSpawns)
+    _combatService.SpawnEnemy(cmd.EnemyId, cmd.Lane, cmd.SpawnDepth);
+_waveDirector.ClearPendingSpawns();
+
+_combatService.Tick(t, deltaTime);    // HARC — a mateseménytől FÜGGETLENÜL
+
+_mathEventDirector.Tick(t);           // matek állapotgép — harcot NEM módosít
+
+foreach (var res in _mathEventDirector.PendingResolutions)
+{
+    var resolution = _gateResolutionService.Resolve(res, _mathEventDirector.Find(res.EventId));
+    _rewardService.ApplyReward(resolution);          // idempotens
+    _performanceTracker.Record(resolution.Answer);   // Analytics, passzív
+}
+_mathEventDirector.ClearPendingResolutions();
+
+EvaluateVictoryOrDefeat(t);
+```
+
+**Győzelem/vereség (spec 1.2, 1.3):**
+- Győzelem: `WaveDirector.AllWavesCompleted && !IsBossActive && Health > 0 &&
+  MathAccuracy >= LevelDefinition.RequiredMathAccuracy`.
+- Vereség: `Health <= 0` ⇒ `Defeat / HealthDepleted`.
+- **A lőszer kifogyása önmagában nem vereség** (spec 1.3).
+
+---
+
+## 9. ILevelProgressionService (Fázis 5 — vázlat)
+
+```csharp
+public interface ILevelProgressionService
+{
+    PlayerProgress RegisterSessionResult(PlayerProgress progress, GameSessionRecord session);
+    bool IsLevelUnlocked(PlayerProgress progress, LevelId levelId);
+    bool IsWorldUnlocked(PlayerProgress progress, WorldId worldId);
+    int CalculateStars(GameSessionRecord session, LevelDefinition level);  // 0..3
+    IReadOnlyList<string> GrantRewards(PlayerProgress progress, GameSessionRecord session);
+}
+```
+
+---
+
+## 10. IAdaptiveDifficultyService — VÁZLAT (Fázis 4, spec 7.)
+
+> Ez a szakasz még **nem kötelező érvényű kontrakt**; a Fázis 4 indulásakor az architect
+> mélyíti. A szignatúrák iránymutatók, a viselkedési táblázat viszont már most köti a
+> balance-designer agentet.
+
+```csharp
+public interface IAdaptiveDifficultyService
+{
+    /// Pályák közötti igazítás (spec 7.4).
+    DifficultyAdjustment EvaluateBetweenLevels(PlayerProgress progress,
+                                               GameSessionRecord lastSession);
+
+    /// Pályán belüli segítség (spec 7.5) — csak az ÚJ eseményekre és hullámokra hat.
+    InLevelAssistance EvaluateInLevel(IReadOnlyList<MathAnswer> recentAnswers,
+                                      ResourceState resources, double gameTime);
+
+    /// A három dimenzió szétválasztása (spec 7.3).
+    DifficultyProfile Recalculate(DifficultyProfile current, SkillProfile skills,
+                                  PerformanceWindow window);
+}
+
+public readonly struct InLevelAssistance
+{
+    public float ThinkTimeMultiplier { get; }     // 1.0 .. 1.8
+    public float GateSpeedMultiplier { get; }     // 0.6 .. 1.0
+    public int MathComplexityDelta { get; }       // -2 .. 0
+    public CombatModifiers CombatModifiers { get; }
+    public bool TriggerRescueWave { get; }
+}
+```
+
+**Már most rögzített viselkedési szabályok:**
+
+| Trigger | Reakció |
+|---|---|
+| pálya első próbálkozásra teljesítve | `ChallengeLevel + 1` |
+| második próbálkozásra teljesítve | nincs változás |
+| ugyanazon pálya 2 egymást követő bukása | `ChallengeLevel − 1` |
+| további 2 egymást követő bukás | ismét `−1` |
+| mindig | `1 <= ChallengeLevel <= 10` |
+| 3 egymást követő hibás matek-válasz | `InLevelAssistance` aktiválódik |
+| matematikailag jó, de harcban bukik | csak `CombatDifficulty` csökken |
+| jól számol, de lassan | csak `TimePressure` csökken (több idő) |
+| globális szint emelkedik | **nem** old fel nem tanult készséget (`SkillClassifier.IsEligible`) |
+| minden változtatás | `DifficultyAdjustment` naplóba kerül (visszakövethetőség, spec 7.6) |
+
+Hiszterézis: a `ChallengeLevel` legfeljebb `±1` egy pálya után, és a `Recalculate` a három
+dimenziót pályánként legfeljebb `±1`-gyel mozdítja (spec 7.6 „lassan változzon”).
+
+---
+
+## 11. Infrastruktúra-portok (a GameLogic által definiált, kívül implementált interfészek)
+
+```csharp
+public interface ISaveRepository
+{
+    PlayerProgress LoadProgress();                       // sérült fájl ⇒ alapértelmezett profil
+    void SaveProgress(PlayerProgress progress);          // atomi írás
+    void AppendSession(GameSessionRecord session);
+    IReadOnlyList<GameSessionRecord> LoadSessions(int maxCount);
+    void DeleteAllData();
+}
+
+public interface IConfigurationProvider
+{
+    LevelDefinition GetLevel(LevelId id);
+    WorldDefinition GetWorld(WorldId id);
+    IReadOnlyList<WorldDefinition> GetAllWorlds();
+    EnemyDefinition GetEnemy(string enemyId);
+    WeaponDefinition GetWeapon(string weaponId);
+    DifficultyProfile GetDifficultyForLevel(int challengeLevel);
+    T GetBalanceSection<T>(string sectionKey) where T : class;
+}
+```
+
+Implementáció: `LocalSaveRepository`, `GameConfigurationRepository` (Infrastructure réteg).
+
+---
+
+## 12. Elfogadási kapcsolat (spec 21.)
+
+| Kritérium | Mely kontrakt-elem fedi |
+|---|---|
+| A. Folyamatos harc | `ICombatService.Tick`, `IWaveDirector.Tick` |
+| B. Erőforrás-kapu | `IGateResolutionService` + `IResourceService.CaptureSnapshot/ApplyDelta` |
+| C. Eredményválasztó sávok | `IMathEventDirector` + `AnswerLaneSelection` |
+| F. Valós idejű működés | `IGameSessionService.Tick` sorrend (8. szakasz), G5 szabály |
+| G. Erőforráshiány | `WeaponDryFire`, `TryConsume == false` ág |
+| H. Adaptív nehézség | `IAdaptiveDifficultyService` (Fázis 4) |

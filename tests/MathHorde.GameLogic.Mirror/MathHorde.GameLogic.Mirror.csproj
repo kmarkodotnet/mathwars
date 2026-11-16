@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tükör-projekt (ADR-003): Compile Include linkeli az
+    Assets/_Project/Scripts/GameLogic alatti fájlokat. Lásd
+    MathHorde.Core.Mirror.csproj megjegyzését a linkelési szabályról.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>MathHorde.GameLogic</AssemblyName>
+    <RootNamespace>MathHorde.GameLogic</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Assets\_Project\Scripts\GameLogic\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MathHorde.Core.Mirror\MathHorde.Core.Mirror.csproj" />
+    <ProjectReference Include="..\MathHorde.MathEngine.Mirror\MathHorde.MathEngine.Mirror.csproj" />
+  </ItemGroup>
+
+</Project>

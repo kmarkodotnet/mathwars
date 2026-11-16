@@ -1,0 +1,17 @@
+{
+    "name": "MathHorde.GameLogic",
+    "rootNamespace": "MathHorde.GameLogic",
+    "references": [
+        "MathHorde.Core",
+        "MathHorde.MathEngine"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

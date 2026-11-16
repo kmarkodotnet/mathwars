@@ -1,0 +1,16 @@
+{
+    "name": "MathHorde.MathEngine",
+    "rootNamespace": "MathHorde.MathEngine",
+    "references": [
+        "MathHorde.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
