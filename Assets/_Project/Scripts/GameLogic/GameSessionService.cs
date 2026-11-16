@@ -158,7 +158,8 @@ namespace MathHorde.GameLogic
                 totalQuestions: 0,
                 correctQuestions: 0,
                 timedOutQuestions: 0,
-                appliedRewardEventIds: Array.Empty<Guid>());
+                appliedRewardEventIds: Array.Empty<Guid>(),
+                attempts: Array.Empty<QuestionAttempt>());
 
             return _finalizedRecord;
         }

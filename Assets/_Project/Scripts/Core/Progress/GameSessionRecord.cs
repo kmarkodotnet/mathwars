@@ -8,16 +8,13 @@ namespace MathHorde.Core.Progress
     /// produced exactly once by IGameSessionService.Finalize (game-logic.md
     /// 8.).
     ///
-    /// SCOPE NOTE (flagged for the architect, not silently reinterpreted):
-    /// the contract's full GameSessionRecord also carries
-    /// `IReadOnlyList&lt;QuestionAttempt&gt; Attempts`. QuestionAttempt depends on
-    /// MathProblemId/SkillTag/ErrorCategory (core-domain.md 3.), none of
-    /// which exist in this codebase yet — they are MathEngine/Problems-layer
-    /// types, out of this package's scope (F1-06/07/08, gameplay-dev) and a
-    /// different agent's responsibility to land. Every OTHER field below
-    /// has no such dependency and is included exactly as contracted.
-    /// `Attempts` should be added here, additively, once QuestionAttempt
-    /// exists — this class is otherwise contract-complete.
+    /// UPDATE (save-data-engineer task, ADR-011): QuestionAttempt now exists
+    /// (Core.Progress), so `Attempts` is added here, additively — the
+    /// constructor gained one new trailing parameter and the one existing
+    /// call site (GameSessionService.Finalize) was updated to pass
+    /// `Array.Empty&lt;QuestionAttempt&gt;()` until the Phase-4
+    /// PerformanceTracker (F4-01) actually populates it per question. This
+    /// class is now contract-complete.
     /// </summary>
     public sealed class GameSessionRecord
     {
@@ -42,6 +39,9 @@ namespace MathHorde.Core.Progress
         /// <summary>Idempotency log (ARCHITECTURE 6.2) — event ids whose reward has already been applied.</summary>
         public IReadOnlyCollection<Guid> AppliedRewardEventIds { get; }
 
+        /// <summary>Per-question log for this session (contract core-domain.md 6., spec 15.). Empty in Phase 1-3 until F4-01's PerformanceTracker populates it.</summary>
+        public IReadOnlyList<QuestionAttempt> Attempts { get; }
+
         public GameSessionRecord(
             GameSessionId sessionId,
             LevelId levelId,
@@ -57,7 +57,8 @@ namespace MathHorde.Core.Progress
             int totalQuestions,
             int correctQuestions,
             int timedOutQuestions,
-            IReadOnlyCollection<Guid> appliedRewardEventIds)
+            IReadOnlyCollection<Guid> appliedRewardEventIds,
+            IReadOnlyList<QuestionAttempt> attempts)
         {
             if (mathAccuracy < 0f || mathAccuracy > 1f)
             {
@@ -79,6 +80,7 @@ namespace MathHorde.Core.Progress
             CorrectQuestions = correctQuestions;
             TimedOutQuestions = timedOutQuestions;
             AppliedRewardEventIds = appliedRewardEventIds ?? Array.Empty<Guid>();
+            Attempts = attempts ?? Array.Empty<QuestionAttempt>();
         }
     }
 }
