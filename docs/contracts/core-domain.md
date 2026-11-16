@@ -5,6 +5,12 @@
 > fordítási hibát okoz.** Csak a .NET BCL használható (`System`, `System.Collections.Generic`,
 > `System.Linq` — utóbbi forró ciklusban kerülendő).
 > Mélység: **MÉLY** (Fázis 1–3 kötelező érvényű).
+>
+> **Revízió r2 (2026-11-16, architect):** `LevelDefinition.MaxShield` felvéve;
+> `EnemyType` 5 értékűre bővítve (`Swarmlet`) explicit numerikus értékekkel (ADR-008);
+> `SkillMasteryLevel` bevezetve (ADR-010); `WorldDefinition` feloldási feltétele
+> kibővítve; a definíció/snapshot szétválasztás explicit megjegyzéssel rögzítve.
+> A dokumentum-hierarchia (kontrakt > design-dokumentum) ADR-009.
 
 ## 0. Általános szabályok
 
@@ -15,6 +21,8 @@
 | Minden azonosító erős típus (`readonly struct`), nem csupasz `Guid`/`string` | összekeverhetetlenség |
 | Kivétel csak programozói hibánál; üzleti hiba `Result<T>` / enum | headless szimuláció robusztussága |
 | `System.Random` példányosítása TILOS (a teljes megoldásban) — minden véletlen `IRandomSource`-on keresztül, `DeterministicRandomSource` implementációval | ADR-006 |
+| **Statikus adat és futásidejű állapot külön típus.** `*Definition` = konfigurációból fordított, immutable, session-független adat. `*Snapshot` / `Active*` / `*State` = futásidejű, per-instance állapot a GameLogic rétegben. A kettő **soha nem egyesítendő** (ADR-009) | a definíció megosztható több instance között, poolozható, és a szimuláció tetszőleges számú instance-t futtathat ugyanarra a definícióra |
+| **Minden perzisztált vagy SO-ban szerkesztett enum értékei explicit numerikusak** (`Basic = 0, …`), és új érték **csak a lista végére**, új számmal kerülhet; meglévő érték számát átírni TILOS | Unity az enumot `int`-ként szerializálja; sorrend-változás csendben átírja a kész assetek és mentések jelentését |
 
 ---
 
@@ -77,12 +85,14 @@ namespace MathHorde.Core.Expressions;
 
 public enum BinaryOperator
 {
-    Addition, Subtraction, Multiplication,
-    Division,            // egész osztás; maradék nélküli oszthatóságot a validátor kényszeríti
-    Modulo,              // a % b, b > 0
-    IntegerDivisionWithRemainder  // eredménye hányados+maradék pár, ld. EvaluationResult
+    Addition = 0, Subtraction = 1, Multiplication = 2,
+    Division = 3,            // egész osztás; maradék nélküli oszthatóságot a validátor kényszeríti
+    Modulo = 4,              // a % b, b > 0
+    IntegerDivisionWithRemainder = 5  // eredménye hányados+maradék pár, ld. EvaluationResult
 }
+```
 
+```csharp
 /// Minden csomópont immutable. A látogatót generikusan is lehet használni.
 public abstract class ExpressionNode
 {
@@ -163,14 +173,21 @@ namespace MathHorde.Core.Problems;
 
 public enum ProblemType
 {
-    ResourceOperationComparison,  // 5.1 — erőforrás-módosító kapuk
-    AnswerLaneSelection,          // 5.2 — eredményválasztó sávok
-    MissingOperand,               // 7 + ? = 3 × 8
-    EquationSolving,              // (? + 17) × 3 = 6 × (14 − 3)
-    TargetValueSelection          // "Érd el a célértéket!"
+    ResourceOperationComparison = 0,  // 5.1 — erőforrás-módosító kapuk
+    AnswerLaneSelection = 1,          // 5.2 — eredményválasztó sávok
+    MissingOperand = 2,               // 7 + ? = 3 × 8
+    EquationSolving = 3,              // (? + 17) × 3 = 6 × (14 − 3)
+    TargetValueSelection = 4          // "Érd el a célértéket!"
 }
 
-public enum GateGoal { Maximize, Minimize, ReachTarget }
+/// A kapu/sáv-feladat CÉLJA — kizárólag az optimalizálás IRÁNYA, erőforrás-független.
+/// A "melyik erőforrásról van szó" kérdést a MathProblem.Reward.Resource /
+/// MathEventScheduleEntry.RewardResource adja meg. A kettő ORTOGONÁLIS:
+/// "Több lőszert!" = (Maximize, Ammo); "Kevesebb páncél!" = (Minimize, EnemyArmor);
+/// "Több pajzsot!" = (Maximize, Shield); "Érd el a 60-at!" = (ReachTarget, bármi).
+/// A GAME_DESIGN.md 3.4 táblázatának `MoreAmmo` / `LessEnemyArmor` / `MoreShield`
+/// nevei PREZENTÁCIÓS címkék (ikon + string-tábla kulcs), NEM enum-értékek.
+public enum GateGoal { Maximize = 0, Minimize = 1, ReachTarget = 2 }
 
 public readonly struct MathProblemId : IEquatable<MathProblemId>
 { public Guid Value { get; } public static MathProblemId New(IRandomSource rng); }
@@ -198,30 +215,38 @@ public sealed class AnswerOption
 
 public enum ErrorCategory
 {
-    None,
-    NeighbourInTimesTable,   // szorzótáblában szomszédos
-    OnesDigitError,          // egyesek elrontása
-    TensDigitError,          // tízesek elrontása
-    CarryError,              // átvitel elrontása
-    OperatorPrecedenceError, // rossz műveleti sorrend
-    IgnoredParentheses,      // zárójel figyelmen kívül hagyása
-    RemainderMisread,        // osztási maradék félreértelmezése
-    SignError,               // előjelhiba
-    ReverseCalculationError, // visszafelé számolási hiba
-    Timeout,                 // nem adott választ (csak attempt-naplóban)
-    Unclassified
+    None = 0,
+    NeighbourInTimesTable = 1,   // szorzótáblában szomszédos
+    OnesDigitError = 2,          // egyesek elrontása
+    TensDigitError = 3,          // tízesek elrontása
+    CarryError = 4,              // átvitel elrontása
+    OperatorPrecedenceError = 5, // rossz műveleti sorrend
+    IgnoredParentheses = 6,      // zárójel figyelmen kívül hagyása
+    RemainderMisread = 7,        // osztási maradék félreértelmezése
+    SignError = 8,               // előjelhiba
+    ReverseCalculationError = 9, // visszafelé számolási hiba
+    Timeout = 10,                // nem adott választ (csak attempt-naplóban)
+    Unclassified = 11
 }
 
+/// A készség-taxonómia. Új érték CSAK a lista végére (0. szakasz enum-szabálya).
+/// FIGYELEM: a `ProblemType.EquationSolving` egy FELADATTÍPUS, nem SkillTag —
+/// az egyenletes feladatok készségei: `MissingOperand` + `MultiStepExpressions`
+/// (+ `Parentheses`, ha van zárójel). A design-dokumentumok ne hivatkozzanak
+/// `SkillTag.EquationSolving`-ra vagy `SkillTag.MixedOperations`-ra; utóbbi helyes
+/// neve `MultiStepExpressions`.
 public enum SkillTag
 {
-    Addition, Subtraction, Multiplication, Division, Remainder,
-    OperatorPrecedence, Parentheses, MissingOperand,
-    MultiStepExpressions, ResourceComparison,
+    Addition = 0, Subtraction = 1, Multiplication = 2, Division = 3, Remainder = 4,
+    OperatorPrecedence = 5, Parentheses = 6, MissingOperand = 7,
+    MultiStepExpressions = 8, ResourceComparison = 9,
     // finomszemcsés készségek (spec 8.)
-    SingleDigitAddition, TwoDigitAddition, CrossingTen, SubtractionWithBorrowing,
-    TimesTable2, TimesTable3, TimesTable4, TimesTable5, TimesTable6,
-    TimesTable7, TimesTable8, TimesTable9, TimesTable10,
-    TwoDigitMultiplication, DivisionWithRemainder
+    SingleDigitAddition = 10, TwoDigitAddition = 11, CrossingTen = 12,
+    SubtractionWithBorrowing = 13,
+    TimesTable2 = 14, TimesTable3 = 15, TimesTable4 = 16, TimesTable5 = 17,
+    TimesTable6 = 18, TimesTable7 = 19, TimesTable8 = 20, TimesTable9 = 21,
+    TimesTable10 = 22,
+    TwoDigitMultiplication = 23, DivisionWithRemainder = 24
 }
 
 /// Mit ad a helyes válasz. RewardDelta = OperationResult − SnapshotValue (5.1).
@@ -267,7 +292,7 @@ public sealed class MathProblem
 | I7 | minden részkifejezés és a végeredmény `int` tartományban marad (`checked` ellenőrzés) |
 | I8 | `MissingOperand`/`EquationSolving` esetén az ismeretlen **egyértelmű** (pontosan egy egész megoldás) |
 | I9 | a helyes válasz sávpozíciója az `IRandomSource`-ból sorsolt, hosszú távon egyenletes |
-| I10 | `ResourceOperationComparison` esetén a két kapu eredménye **különböző** és a `Goal` szerinti sorrend egyértelmű (nincs döntetlen), figyelembe véve a `ResourcePool.Max` vágást |
+| I10 | `ResourceOperationComparison` esetén a két kapu eredménye **különböző**, a különbség legalább `MinGateGap` (ld. `MathDifficultyTableSO`), és a `Goal` szerinti sorrend egyértelmű (nincs döntetlen), figyelembe véve a `ResourcePool.Max` vágást |
 | I11 | negatív végeredmény csak akkor engedett, ha a `DifficultyProfile.AllowNegativeResults == true` |
 
 ```csharp
@@ -292,6 +317,24 @@ public sealed class MathAnswer
 ```csharp
 namespace MathHorde.Core.Skills;
 
+/// A készség-elsajátítás diszkrét fokozatai (ADR-010).
+/// A generátor és a világ-feloldás KIZÁRÓLAG ezen keresztül kérdezi a tudást —
+/// nyers `MasteryEstimate` float összehasonlítás a hívó oldalon TILOS.
+/// Küszöbök: SkillPrerequisiteSO (MasteryThreshold, MinAttemptsForMastery).
+public enum SkillMasteryLevel
+{
+    /// Soha nem találkozott vele, és az előfeltételei sem teljesülnek.
+    /// A generátor NEM adhat ilyen készségű feladatot.
+    Locked = 0,
+    /// Előfeltételei teljesülnek, a generátor adhat ilyen feladatot.
+    /// (Attempts == 0 is ide tartozik, ha az előfeltételek rendben.)
+    Introduced = 1,
+    /// Attempts >= MinAttemptsForMastery/2 (alap 4) és MasteryEstimate >= 0.5.
+    Practiced = 2,
+    /// MasteryEstimate >= MasteryThreshold (alap 0.8) és Confidence >= 0.6.
+    Mastered = 3
+}
+
 /// Egyetlen készség mért statisztikája (spec 8. + 15. SkillStatistics).
 public sealed class SkillStatistics
 {
@@ -315,7 +358,10 @@ public sealed class SkillProfile
     public IReadOnlyDictionary<SkillTag, SkillStatistics> Skills { get; }
     public DateTimeOffset UpdatedAt { get; }
     public SkillStatistics GetOrEmpty(SkillTag tag);
-    /// Elsajátítottnak tekintett készségek (MasteryEstimate >= 0.8 && Confidence >= 0.6).
+    /// A diszkrét fokozat. Ez az EGYETLEN megengedett tudás-lekérdezés a
+    /// MathEngine, a GameLogic és a világ-feloldás számára (ADR-010).
+    SkillMasteryLevel GetMasteryLevel(SkillTag tag);
+    /// Elsajátítottnak tekintett készségek (GetMasteryLevel == Mastered).
     /// SOHA nem elég egyetlen helyes válasz (spec 8.).
     public IReadOnlyCollection<SkillTag> MasteredSkills { get; }
     /// Gyakorlásra szoruló készségek, fontossági sorrendben.
@@ -337,10 +383,18 @@ public sealed class DifficultyProfile
     public int MinOperandCount { get; }      // >= 2
     public int MaxOperandCount { get; }      // <= 5 (MVP)
     public bool AllowParentheses { get; }
+    /// 0 ⇒ nincs zárójel. 1 ⇒ egy szint (CL7–9), 2 ⇒ beágyazott (CL10).
+    /// Invariáns: `AllowParentheses == (MaxParenthesisDepth > 0)`.
+    public int MaxParenthesisDepth { get; }
     public bool AllowUnknownOperand { get; }
+    /// Hány `UnknownNode` kerülhet a fába (0 vagy 1 az MVP-ben).
+    /// Invariáns: `AllowUnknownOperand == (UnknownOperandCount > 0)`.
+    public int UnknownOperandCount { get; }
     public bool AllowNegativeResults { get; }
     public int AnswerOptionCount { get; }    // 2..4
     public float BaseThinkTimeSeconds { get; }
+    /// A `ResourceOperationComparison` két kapueredménye közti minimális eltérés (I10).
+    public int MinGateGap { get; }
     public bool AutoAdaptationEnabled { get; }
 }
 ```
@@ -348,6 +402,8 @@ public sealed class DifficultyProfile
 **Invariánsok:** `1 <= ChallengeLevel <= 10` és ugyanez a három dimenzióra.
 `UnlockedSkills` bővítése **kizárólag** a `SkillProfile` alapján történhet — a globális szint
 emelése önmagában soha nem old fel nem tanult műveletet (spec 7.2, 7.4).
+`UnlockedSkills` a `WorldDefinition.IntroducedSkills` és a `SkillProfile`-ban legalább
+`Introduced` fokozatú készségek **metszete** (worlds.md 1.).
 
 ---
 
@@ -358,7 +414,18 @@ namespace MathHorde.Core.Resources;
 
 /// Generikus erőforrásmodell (spec 4.3) — új típus hozzáadása nem igényel kódmódosítást
 /// a ResourceService-ben.
-public enum ResourceType { Ammo, Health, Shield, EnemyArmor /* negatív cél */, Energy }
+public enum ResourceType
+{
+    Ammo = 0,
+    Health = 1,
+    Shield = 2,
+    /// Session-szintű, NEM per-ellenség pool: a pálya összes `Armored` ellenségének
+    /// páncél-bónuszát skálázó, csökkentendő erőforrás. A `(Minimize, EnemyArmor)`
+    /// kapuk ezt viszik lejjebb; `Current == Min` ⇒ a páncél hatása 0.
+    /// A per-ellenség páncélértéket az `EnemyDefinition.ArmorPoints` adja (F5).
+    EnemyArmor = 3,
+    Energy = 4
+}
 
 public sealed class ResourcePool
 {
@@ -394,6 +461,14 @@ public readonly struct ResourceChange
 **Invariáns:** `Min <= Current <= Max` **mindig** fennáll; a vágás soha nem dob kivételt,
 hanem `WasClamped = true`-t jelez (spec 17.3 „amennyiben nincs kapacitáskorlátba ütközés”).
 
+**Kapacitás-szemantika (a GAME_DESIGN.md „soft cap” fogalmának kötelező értelmezése):**
+a `ResourcePool.Max` **kemény** felső korlát; a `Current` soha nem lépheti túl. A design-dokumentum
+„200-as soft cap, a felesleg pontszámmá válik” megfogalmazása azt jelenti, hogy
+`MaxAmmo == 200`, a vágott (`WasClamped == true`) `AppliedDelta − RequestedDelta` különbséget
+pedig a Fázis 5-ös pontszámítás írja jóvá (`ScoringService`, `AmmoBudgetSO.OverflowScorePerAmmo`).
+A Fázis 1–4-ben a vágott felesleg egyszerűen elveszik. **Nincs olyan állapot, amelyben a
+`Current > Max`.**
+
 ---
 
 ## 6. Progress és Session
@@ -417,6 +492,9 @@ public sealed class PlayerProfile       // spec 15.
     public IReadOnlyCollection<LevelId> CompletedLevels { get; }
 }
 
+/// Pályánkénti teljesítés- és próbálkozás-napló.
+/// A balance-dokumentumok „LevelAttemptRecord” néven hivatkoztak rá — a kontrakt
+/// szerinti név EZ (`LevelCompletionRecord`), más típus nincs.
 public sealed class LevelCompletionRecord
 {
     public LevelId LevelId { get; }
@@ -437,8 +515,31 @@ public sealed class PlayerProgress
     public IReadOnlyCollection<string> UnlockedRewardIds { get; }  // fegyver, skin, képesség
 }
 
-public enum SessionResult { InProgress, Victory, Defeat, Abandoned }
-public enum FailureReason { None, HealthDepleted, TimeLimit, PlayerQuit, MathMinimumNotMet }
+public enum SessionResult { InProgress = 0, Victory = 1, Defeat = 2, Abandoned = 3 }
+
+/// MIÉRT ért véget vereséggel — a játékszabály szintjén. ZÁRT lista:
+/// a lőszerhiány és az ellenség-áttörés NEM önálló vereség-ok (spec 1.3), hanem
+/// HealthDepleted-hez vezető ÚT. A diagnosztikát a LossDiagnosis adja.
+public enum FailureReason
+{
+    None = 0, HealthDepleted = 1, TimeLimit = 2, PlayerQuit = 3, MathMinimumNotMet = 4
+}
+
+/// Fázis 4 — az adaptációs motor bemenete. NEM játékszabály, hanem MÉRT diagnózis:
+/// miért fogyott el az életerő. A difficulty-model.md 6.2 dimenzió-választó mátrixa
+/// erre hivatkozik (korábbi, hibás nevei: `EnemyBreakthrough`, `AmmoStarvation`).
+public enum LossDiagnosis
+{
+    None = 0,
+    /// A vereség előtti 30 s-ban a lőszer > 20%-ban 0 volt (WeaponDryFire arány magas).
+    AmmoStarvation = 1,
+    /// Volt lőszer, de az ellenségek átjutottak (kontakt-sebzés dominált).
+    EnemyBreakthrough = 2,
+    /// A matematikai pontosság nem érte el a RequiredMathAccuracy-t.
+    MathAccuracyShortfall = 3,
+    /// A boss-fázisok gyengepont-feladatai maradtak megoldatlanul.
+    BossPhaseStall = 4
+}
 
 /// Egy lejátszott pálya naplója (spec 15. GameSession).
 public sealed class GameSessionRecord
@@ -452,6 +553,7 @@ public sealed class GameSessionRecord
     public int FinalChallengeLevel { get; }
     public SessionResult Result { get; }
     public FailureReason FailureReason { get; }
+    public LossDiagnosis LossDiagnosis { get; }   // Fázis 4; F1–F3-ban None
     public float MathAccuracy { get; }      // 0..1
     public int TotalQuestions { get; }
     public int CorrectQuestions { get; }
@@ -494,19 +596,73 @@ public sealed class DifficultyAdjustment  // spec 15.
 ```csharp
 namespace MathHorde.Core.Levels;
 
-public enum EnemyType { Basic, Fast, Armored, Boss }
+/// Viselkedési archetípusok. ZÁRT enum, explicit értékekkel — minden új archetípus
+/// a lista VÉGÉRE kerül, új számmal (0. szakasz enum-szabálya, ADR-008).
+/// A spec 4.1 „legalább négy típust” ír elő; az ötödik (`Swarmlet`) a horde-élmény
+/// miatt kötelező és F1-től létezik (ADR-008, GAME_DESIGN.md 5.).
+public enum EnemyType
+{
+    Basic = 0,
+    Fast = 1,
+    Armored = 2,
+    Boss = 3,
+    /// Apró, 1 HP-s, 4–6 fős kötelékben spawnoló „ágyútöltelék”.
+    /// A horde-survival műfaj „tömeg lekaszálása” élményének hordozója; 3 HP-s
+    /// ellenségekkel ez nem elérhető (GAME_DESIGN.md 5., difficulty-model.md 4.
+    /// „Rajzó arány” oszlop CL2-től).
+    Swarmlet = 4
+}
+```
 
+**`EnemyType` bővítési útiterv (NEM része a Fázis 1–4 enumnak).**
+A `balance/worlds.md` további archetípusokat vezet be a W4–W8 világokban. Ezek **csak az
+F5 „Világok és progresszió” fázisban** kerülnek az enumba, az itt lefoglalt számokkal — addig
+a design-dokumentum sem tekintheti őket létező értéknek:
+
+| Jövőbeli érték | Lefoglalt szám | Világ | Viselkedés | Fázis |
+|---|---|---|---|---|
+| `Splitter` | 5 | W4 | halálakor 2 `Swarmlet`-re esik szét | F5 |
+| `Shifter` | 6 | W5 | 2 s-onként szomszédos sávba lép | F5 |
+| `Mirror` | 7 | W6 | csak szomszédos sávból sebezhető | F5 |
+| `Prime` | 8 | W7 | gyengepont csak prím válasszal nyílik | F5 |
+| `Cipher` | 9 | W8 | HP binárisan jelenik meg | F6+ |
+
+Új archetípus bevezetésének kötelező lépései: (1) enum-érték a lista végére a fenti számmal,
+(2) `IEnemyBehaviour` stratégia a GameLogic rétegben, (3) `EnemyDefinitionSO` asset,
+(4) ADR-008 revíziója. **Enum-érték nélküli, `string EnemyId`-ra épülő „rejtett típus” TILOS.**
+
+```csharp
 /// Unity-mentes ellenség-leíró; a ScriptableObject-ből fordítódik (spec 4.1).
+///
+/// SZÁNDÉKOS SZÉTVÁLASZTÁS (ADR-009): ez a típus KIZÁRÓLAG statikus konfigurációt
+/// tartalmaz, egyetlen példánya osztódik meg a pálya összes azonos ellenségén.
+/// A futásidejű állapot (`CurrentHealth`, `Position`, `Lane`, `IsAlive`) a GameLogic
+/// `EnemySnapshot` struct-jában él (game-logic.md 3.). A kettőt összevonni TILOS:
+/// a definíció immutable és poolozható, a snapshot per-instance és Tickenként változik.
+/// A spec 4.1 „aktuális életerő” követelményét az `EnemySnapshot.CurrentHealth` fedi.
 public sealed class EnemyDefinition
 {
     public string EnemyId { get; }         // "basic_bot"
     public EnemyType Type { get; }
     public int MaxHealth { get; }          // > 0
     public float MovementSpeed { get; }    // világegység/mp, > 0
-    public int ContactDamage { get; }      // >= 0
+    public int ContactDamage { get; }      // >= 0 — a játékos vonalát elérve okozott sebzés
     public float AttackCooldownSeconds { get; } // >= 0
+    /// A kill jutalma: ennyi **lőszer** íródik vissza (`ApplyCombatReward(Ammo, …)`),
+    /// NEM pontszám. A balance-modell „killRefund” tétele (difficulty-model.md 5.);
+    /// alapérték 1. A pontszám ettől független, az F5 `ScoringService` számolja.
     public int RewardValue { get; }        // >= 0
     public string PrefabKey { get; }       // Presentation oldja fel
+
+    // --- Fázis 5 (F5) bővítés — F1–F4-ben nem szerepel a konstruktorban ---
+    /// `Armored` páncélpontok (GAME_DESIGN.md 5.: 6). 0 ⇒ nincs páncél.
+    /// A tényleges hatást a session-szintű `ResourceType.EnemyArmor` pool skálázza.
+    public int ArmorPoints { get; }            // >= 0, alap 0           [F5]
+    /// Elölről érkező sebzés csökkentése (GAME_DESIGN.md 5.: 0.6 = 60%).
+    public float FrontalDamageReduction { get; }  // 0.0..0.9, alap 0    [F5]
+    /// `Splitter`: halálakor létrejövő ellenség azonosítója; null ⇒ nem osztódik.
+    public string SplitOnDeathEnemyId { get; }    // alap null           [F5]
+    public int SplitOnDeathCount { get; }         // 0..6, alap 0        [F5]
 }
 
 public sealed class WeaponDefinition      // spec 4.2
@@ -521,7 +677,10 @@ public sealed class WeaponDefinition      // spec 4.2
     public string VisualEffectKey { get; }
 }
 
-public enum TargetingMode { OwnLaneNearestOnly, OwnLaneThenAdjacent, GlobalNearest }
+public enum TargetingMode
+{
+    OwnLaneNearestOnly = 0, OwnLaneThenAdjacent = 1, GlobalNearest = 2
+}
 
 public sealed class WaveDefinition
 {
@@ -564,18 +723,71 @@ public sealed class LevelDefinition
     public int StartingHealth { get; }
     public int MaxHealth { get; }
     public int StartingShield { get; }
+    /// A pajzs-pool kapacitása. A spec 4.3 minden erőforrásra `aktuális + maximális`
+    /// párt ír elő, ezért a pajzs is kap sajátot — NEM vezethető le a
+    /// `StartingShield`-ből (a pajzs tipikusan 0-ról indul és kapukkal töltődik,
+    /// tehát `StartingShield == 0`, `MaxShield == 50`).
+    /// Alapérték a `LevelDefinitionSO`-ban: 50 (GAME_DESIGN.md 6.1).
+    public int MaxShield { get; }
     public float RequiredMathAccuracy { get; }   // 0 ⇒ nincs matek-minimum
     public string WeaponId { get; }
 }
+```
 
+**`LevelDefinition` validációs invariánsok (a konstruktor kényszeríti):**
+
+| # | Invariáns | Hiba |
+|---|---|---|
+| L1 | `2 <= LaneCount <= 4` | `ArgumentOutOfRangeException` |
+| L2 | `TargetDurationSeconds > 0` | `ArgumentOutOfRangeException` |
+| L3 | `MaxAmmo > 0`, `MaxHealth > 0` | `ArgumentOutOfRangeException` |
+| L4 | **`MaxShield >= 0`** — 0 megengedett (pajzs-mechanika nélküli pálya) | `ArgumentOutOfRangeException` |
+| L5 | `0 <= StartingAmmo <= MaxAmmo`, `0 <= StartingHealth <= MaxHealth`, **`0 <= StartingShield <= MaxShield`** | `ArgumentOutOfRangeException` |
+| L6 | `0 <= RequiredMathAccuracy <= 1` | `ArgumentOutOfRangeException` |
+
+**Konstruktor-paraméter sorrend (kötelező):** `… startingHealth, maxHealth, startingShield,
+maxShield, requiredMathAccuracy, weaponId` — azaz a `maxShield` közvetlenül a
+`startingShield` **után**, a többi `Starting*/Max*` pár mintájára.
+
+> **Megjegyzés a `ResourcePool.Max > 0` invariánshoz:** `MaxShield == 0` esetén a
+> `ResourceService.Initialize` **nem hoz létre** `Shield` poolt (a `ResourceState.GetCurrent`
+> ismeretlen típusra 0-t ad, ami pontosan a kívánt viselkedés). Kerülő megoldás
+> (`Max = max(StartingShield, 1)`) TILOS.
+
+```csharp
+/// Egy világ (tartalmi kapu). A világ NEM nehézségi szint (worlds.md 1.).
 public sealed class WorldDefinition
 {
     public WorldId Id { get; }
     public string DisplayNameKey { get; }
     public int OrderIndex { get; }
     public IReadOnlyList<LevelId> Levels { get; }
+    /// Mely készségek jelenhetnek meg EGYÁLTALÁN ebben a világban. A generátor
+    /// megengedett halmaza ennek és a `DifficultyProfile.UnlockedSkills`-nek a
+    /// METSZETE; üres metszet esetén a világ szűkebb halmaza nyer (worlds.md 1.).
     public IReadOnlyCollection<SkillTag> IntroducedSkills { get; }
-    public LevelId UnlockRequirementLevelId { get; }  // null ⇒ kezdettől nyitva
+    /// Mely kapucélok használhatók. W1: csak `Maximize`; `Minimize` W3-tól,
+    /// `ReachTarget` W2-től (a W2 boss `TargetValueSelection` feladatot ad).
+    public IReadOnlyCollection<GateGoal> EnabledGateGoals { get; }
+    /// Mely ellenség-archetípusok spawnolhatnak itt (vizuális/mechanikai tartalmi kapu).
+    public IReadOnlyCollection<EnemyType> IntroducedEnemyTypes { get; }
+    /// A világ feloldási feltétele. null ⇒ kezdettől nyitva (W1).
+    public WorldUnlockRequirement UnlockRequirement { get; }
+}
+
+/// Összetett feloldási feltétel (worlds.md 3.). MINDEN kitöltött tagnak teljesülnie kell (ÉS).
+/// A korábbi `UnlockRequirementLevelId` (egyetlen pálya) nem volt elegendő: a design
+/// csillag-arányt ÉS készség-előfeltételt is megkövetel (pl. W4 ⇐ `Multiplication: Practiced`).
+public sealed class WorldUnlockRequirement
+{
+    public WorldId RequiredWorldId { get; }              // default(WorldId) ⇒ nincs
+    /// A `RequiredWorldId` pályái közül legalább ekkora arány legyen >= 1 csillagos.
+    public float RequiredStarRatio { get; }              // 0.0..1.0, alap 0.6
+    /// Készség → minimálisan szükséges fokozat. Üres ⇒ nincs készség-előfeltétel.
+    public IReadOnlyDictionary<SkillTag, SkillMasteryLevel> RequiredSkills { get; }
+    /// Csak a W7 használja. 0 ⇒ nincs szint-előfeltétel (a világ ≠ kihívásszint elv miatt
+    /// ez a KIVÉTEL, nem a szabály — worlds.md 3./W7).
+    public int RequiredChallengeLevel { get; }           // 0..10
 }
 ```
 
@@ -587,6 +799,7 @@ public sealed class WorldDefinition
 |---|---|
 | `MonoBehaviour`, `ScriptableObject`, `Vector3`, `Transform` | Presentation / Infrastructure |
 | Feladatgenerálás algoritmusa | MathEngine |
-| Harci szimuláció, állapotgépek | GameLogic |
+| Harci szimuláció, állapotgépek, **futásidejű ellenség-/esemény-állapot** | GameLogic |
 | Mentés-szerializáció, fájl-IO | Infrastructure |
 | Magyar nyelvű felhasználói szöveg | `Resources/Strings/hu.json` (kulcs-alapú) |
+| Konkrét balance-ÉRTÉKEK (10 szint számai, jutalmak) | `docs/balance/*` → ScriptableObject assetek |

@@ -38,7 +38,7 @@ Utolsó frissítés: **2026-11-16** · Aktuális fázis: **ARCH kész + F0 (proj
 | `docs/balance/SIM-plan.md` | A balancing-szimuláció terve (Fázis 4-ben fut) |
 | `docs/TESTING.md` | Teszt-piramis, hibrid stack, 46 katalogizált teszteset, A–K leképezés |
 | `docs/backlog.md` | **91 feladat** 8 fázisban (F0 előkészítés + a spec 19. szakaszának 7 fázisa), függőségi gráffal |
-| `docs/decisions/ADR-001…007` | Unity-verzió, repó-elrendezés, hibrid teszt-stack, JSON-könyvtár, matek↔harc szinkronizáció, determinisztikus véletlen, nyelvi konvenció |
+| `docs/decisions/ADR-001…010` | Unity-verzió, repó-elrendezés, hibrid teszt-stack, JSON-könyvtár, matek↔harc szinkronizáció, determinisztikus véletlen, nyelvi konvenció, **ellenségtípus-taxonómia (008)**, **dokumentum-hierarchia és konzisztencia-kapu (009)**, **készség-mastery szintek (010)** |
 
 A gyár konfigurációja (`CLAUDE.md`, `.claude/agents`, `.claude/commands`,
 `.claude/skills`) szintén átállt a Unity/mobil stackre.

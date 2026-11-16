@@ -7,6 +7,14 @@
 >
 > Ez a dokumentum a spec **16. szakaszának MINDEN** kódváltoztatás nélkül módosítható
 > paraméterét lefedi. Ami itt nincs, az a kódban sem lehet beégetett „mágikus szám”.
+>
+> **Revízió r2 (2026-11-16, architect):** `EnemyType` 5 értékű (ADR-008); `EnemyDefinitionSO`
+> páncél-/osztódás-mezők (F5); `RewardValue` szemantika tisztázva; `LevelDefinitionSO.StartingAmmo`
+> alapértéke 60-ra javítva a lőszer-költségvetés szerint; `MathDifficultyTableSO` kiegészítve
+> (`MaxParenthesisDepth`, `UnknownOperandCount`, `LaneCount`, `MinGateGap`) és a
+> `BaseThinkTimeSeconds` alapértékek a `balance/difficulty-model.md` 3. táblázatára igazítva;
+> új assetek: `GameBalanceSO`, `TimePressureTableSO`, `CombatDifficultyTableSO`, `RewardTableSO`,
+> `AmmoBudgetSO`, `InLevelAssistSO`, `StarRatingSO`. Névmegfeleltetés: 0.1.
 
 ## 0. Konvenciók
 
@@ -15,11 +23,33 @@
 | Osztálynév | `<Téma>SO`, fájlnév = osztálynév, `[CreateAssetMenu(menuName = "MathHorde/...")]` |
 | Validáció | minden SO implementálja a `IValidatableConfig` interfészt: `IReadOnlyList<string> Validate()`; az `OnValidate()` ezt hívja és Editor-konzolra ír |
 | Tartomány | numerikus mezőn `[Range(min,max)]` vagy `[Min(x)]` attribútum — a lenti tartomány KÖTELEZŐ |
-| Szöveg | magyar szöveg **soha** nincs SO-ban; csak `...NameKey` string-tábla-kulcs (ADR-007) |
+| Szöveg | magyar szöveg **soha** nincs SO-ban; csak `...NameKey` / `...DescriptionKey` string-tábla-kulcs (ADR-007). `displayNameHu` jellegű mező TILOS. |
 | Azonosító | `string Id` mező, kisbetűs snake_case, assetnévvel egyező |
 | Hivatkozás | SO→SO hivatkozás direkt referenciával (nem string-gel), kivéve a runtime-feloldott `PrefabKey` |
+| Enum-mező | a hivatkozott Core-enumok értékei **explicit numerikusak** (core-domain.md 0.); új enum-érték csak a lista végére, különben a kész assetek jelentése csendben megváltozik |
 
 **Fázis-jelölés:** F1 = Fázis 1 … F7 = Fázis 7 (spec 19.).
+
+### 0.1. Névmegfeleltetés — KANONIKUS asset-nevek
+
+A `balance/difficulty-model.md`, a `balance/worlds.md` és a `balance/SIM-plan.md` korábbi
+revíziói saját, `*Config` végű munkaneveket használtak. **A kódban és az asset-nevekben
+kizárólag a bal oldali, kanonikus név létezik**; a jobb oldali nevek ugyanarra az assetre
+utaló, elavult hivatkozások (ADR-009).
+
+| Kanonikus (kód + asset) | Elavult hivatkozás a balance-/design-dokumentumokban |
+|---|---|
+| `GameBalanceSO` | `GameBalanceConfig` |
+| `MathDifficultyTableSO` | `ChallengeLevelTableConfig`, `ChallengeLevelDefinition[]` |
+| `TimePressureTableSO` | `TimePressureTableConfig`, `TimePressureDefinition[]` |
+| `CombatDifficultyTableSO` | `CombatDifficultyTableConfig`, `CombatDifficultyDefinition[]` |
+| `RewardTableSO` | `RewardTableConfig` |
+| `AmmoBudgetSO` | `LevelAmmoBudgetConfig` |
+| `AdaptiveDifficultyConfigSO` | `AdaptationRulesConfig`, `AdaptationRulesSO` |
+| `InLevelAssistSO` | `InLevelAssistConfig`, `AssistTierDefinition[]` |
+| `LevelDefinitionSO` | `LevelDefinition` (SO-értelemben), `levelId`/`targetDurationSec` mezőnevek |
+| `WorldDefinitionSO` | `WorldDefinition` (SO-értelemben), `UnlockRequirement` |
+| `EnemyDefinitionSO` | `EnemyDefinition` (SO-értelemben), `BossDefinition` (ld. 1.1) |
 
 ---
 
@@ -27,21 +57,38 @@
 
 `menuName: "MathHorde/Enemy Definition"`
 
-| Mező | Típus | Tartomány | Default | Megjegyzés |
-|---|---|---|---|---|
-| `Id` | `string` | nem üres | `"basic_bot"` | egyedi |
-| `DisplayNameKey` | `string` | nem üres | `"enemy.basic"` | string-tábla kulcs |
-| `Type` | `EnemyType` | enum | `Basic` | Basic/Fast/Armored/Boss |
-| `MaxHealth` | `int` | 1 – 10000 | 10 | |
-| `MovementSpeed` | `float` | 0.1 – 20.0 | 2.0 | világegység/mp |
-| `ContactDamage` | `int` | 0 – 1000 | 10 | |
-| `AttackCooldownSeconds` | `float` | 0.0 – 10.0 | 1.0 | |
-| `RewardValue` | `int` | 0 – 1000 | 1 | pontszám/drop-súly |
-| `Prefab` | `GameObject` | nem null | — | Presentation |
-| `TintColor` | `Color` | — | fehér | gyors vizuális megkülönböztetés |
-| `ScaleMultiplier` | `float` | 0.2 – 5.0 | 1.0 | |
+| Mező | Típus | Tartomány | Default | Fázis | Megjegyzés |
+|---|---|---|---|---|---|
+| `Id` | `string` | nem üres | `"basic_bot"` | F1 | egyedi |
+| `DisplayNameKey` | `string` | nem üres | `"enemy.basic"` | F1 | string-tábla kulcs |
+| `Type` | `EnemyType` | enum | `Basic` | F1 | **Basic/Fast/Armored/Boss/Swarmlet** (5 érték, ADR-008) |
+| `MaxHealth` | `int` | 1 – 10000 | 10 | F1 | |
+| `MovementSpeed` | `float` | 0.1 – 20.0 | 2.0 | F1 | világegység/mp |
+| `ContactDamage` | `int` | 0 – 1000 | 10 | F1 | átjutáskor okozott sebzés |
+| `AttackCooldownSeconds` | `float` | 0.0 – 10.0 | 1.0 | F1 | |
+| `RewardValue` | `int` | 0 – 1000 | **1** | F1 | **LŐSZER-visszatérítés kill-enként** (`ApplyCombatReward(Ammo, …, "KILL_REFUND")`), nem pontszám. A `difficulty-model.md` 5. `killRefund` tétele. |
+| `Prefab` | `GameObject` | nem null | — | F1 | Presentation |
+| `TintColor` | `Color` | — | fehér | F1 | gyors vizuális megkülönböztetés (**önmagában nem elég** — spec 12.) |
+| `ScaleMultiplier` | `float` | 0.2 – 5.0 | 1.0 | F1 | sziluett-méret |
+| `ArmorPoints` | `int` | 0 – 100 | 0 | **F5** | `Armored`: 6 (GAME_DESIGN 5.) |
+| `FrontalDamageReduction` | `float` | 0.0 – 0.9 | 0.0 | **F5** | `Armored`: 0.6 |
+| `SplitOnDeathEnemy` | `EnemyDefinitionSO` | lehet null | null | **F5** | `Splitter` (W4) |
+| `SplitOnDeathCount` | `int` | 0 – 6 | 0 | **F5** | |
+| `SpawnGroupSize` | `int` | 1 – 8 | 1 | **F1** | `Swarmlet`: 4 (kötelék-spawn, GAME_DESIGN 5.) |
 
-Validáció: `Type == Boss` ⇒ `MaxHealth >= 100`.
+**Validáció:**
+- `Type == Boss` ⇒ `MaxHealth >= 100`.
+- `Type == Swarmlet` ⇒ `MaxHealth <= 2` **és** `SpawnGroupSize >= 2` (a „tömeg” jelentése).
+- `FrontalDamageReduction > 0` vagy `ArmorPoints > 0` ⇒ `Type == Armored` (F5-ig mindkettő 0).
+- `SplitOnDeathCount > 0` ⇔ `SplitOnDeathEnemy != null`.
+
+### 1.1. A boss nem külön asset
+
+A `balance/worlds.md` 6. pontja egy `BossDefinition` assetet említ. **Ilyen asset nincs:**
+a boss egy `EnemyDefinitionSO`, amelynek `Type == Boss`; a fázisait az F5-ben bevezetendő
+`BossPhaseEntry` lista hordozza **ugyanezen** az assetben (`HpThreshold`, `ProblemType`,
+`DamageOnCorrect`, `PenaltyOnWrongSeconds`, `BehaviourFlags`). Így a boss is a szokásos
+ellenség-katalógusból oldódik fel (`IConfigurationProvider.GetEnemy`).
 
 ---
 
@@ -59,10 +106,14 @@ Validáció: `Type == Boss` ⇒ `MaxHealth >= 100`.
 | `AmmoPerShot` | `int` | 1 – 20 | 1 |
 | `ProjectileSpeed` | `float` | 0 – 200 (0 = hitscan) | 40.0 |
 | `TargetingMode` | `TargetingMode` | enum | `OwnLaneThenAdjacent` |
-| `AdjacentLanePenalty` | `float` | 0.0 – 1.0 | 0.0 | sebzés-szorzó szomszédos sávra |
+| `AdjacentLanePenalty` | `float` | 0.0 – 1.0 | 0.0 (sebzés-szorzó szomszédos sávra) |
 | `ProjectilePrefab` | `GameObject` | nem null, ha `ProjectileSpeed > 0` | — |
 | `MuzzleEffectKey` | `string` | — | `"vfx.muzzle.default"` |
 | `HitEffectKey` | `string` | — | `"vfx.hit.default"` |
+
+> **Balance-szabály (GAME_DESIGN 7.2):** a megszerezhető fegyverek **DPS-e azonos**
+> (`Damage × FireRate` ± 5%), csak a tüzelési minta más. A `Validate()` ezt a
+> `GameBalanceSO.ReferenceDps`-hez méri és figyelmeztetést ad eltérés esetén.
 
 ---
 
@@ -75,13 +126,14 @@ Validáció: `Type == Boss` ⇒ `MaxHealth >= 100`.
 | `Id` | `string` | `"w1-l01"` alak | — | F1 |
 | `World` | `WorldDefinitionSO` | nem null | — | F5 |
 | `DisplayNameKey` | `string` | nem üres | — | F1 |
+| `TemplateType` | `LevelTemplate` enum (`Tutorial=0, Standard=1, BossLevel=2`) | enum | `Standard` | F1 |
 | `LaneCount` | `int` | **2 – 4** | 3 | F1 |
 | `TargetDurationSeconds` | `float` | 60 – 600 | 240 | F1 |
 | `Waves` | `List<WaveDefinitionEntry>` | 1 – 50 elem | — | F1 |
-| `MathEvents` | `List<MathEventScheduleEntry>` | 0 – 40 (F3-tól **>= 10**) | — | F3 |
+| `MathEvents` | `List<MathEventScheduleEntry>` | 0 – 40 (F3-tól **>= 10**, `Tutorial` esetén **>= 8**) | — | F3 |
 | `BossEnemy` | `EnemyDefinitionSO` | lehet null | null | F5 |
 | `BossTriggerGameTime` | `float` | 0 – 600 | 200 | F5 |
-| `StartingAmmo` | `int` | 0 – 999 | 20 | F1 |
+| `StartingAmmo` | `int` | 0 – 999 | **60** | F1 |
 | `MaxAmmo` | `int` | 1 – 999 | 200 | F1 |
 | `StartingHealth` | `int` | 1 – 999 | 100 | F1 |
 | `MaxHealth` | `int` | 1 – 999 | 100 | F1 |
@@ -90,6 +142,15 @@ Validáció: `Type == Boss` ⇒ `MaxHealth >= 100`.
 | `RequiredMathAccuracy` | `float` | 0.0 – 1.0 (0 = nincs) | 0.0 | F3 |
 | `Weapon` | `WeaponConfigSO` | nem null | — | F1 |
 | `EnvironmentPrefab` | `GameObject` | nem null | — | F1 |
+
+**Validáció (a `LevelDefinition` L1–L6 invariánsainak SO-oldali tükre):**
+`StartingAmmo <= MaxAmmo`, `StartingHealth <= MaxHealth`, **`StartingShield <= MaxShield`**.
+`MaxShield == 0` megengedett ⇒ a pályán nincs pajzs-mechanika, és a `ResourceService`
+nem hoz létre `Shield` poolt (game-logic.md 2.2).
+
+> `MaxAmmo` **a** „soft cap”: a `difficulty-model.md` / `GAME_DESIGN.md` `ammoSoftCap`
+> fogalma ezzel a mezővel azonos (alap 200). A túlfolyás pontszámmá váltása F5
+> (`AmmoBudgetSO.OverflowScorePerAmmo`), nem a pool viselkedése — core-domain.md 5.
 
 ### 3.1. `WaveDefinitionEntry` (beágyazott `[Serializable]`)
 
@@ -118,11 +179,18 @@ Validáció: `Type == Boss` ⇒ `MaxHealth >= 100`.
 | `PreviewDurationSeconds` | `float` | 0.5 – 10.0 | 2.0 |
 | `ThinkTimeSecondsOverride` | `float` | 0 – 60 (0 = profilból) | 0 |
 | `RewardResource` | `ResourceType` | enum | `Ammo` |
-| `Goal` | `GateGoal` | enum | `Maximize` |
-| `RewardAmountOverride` | `int` | 0 – 500 (0 = balance-ből) | 0 |
+| `Goal` | `GateGoal` | enum (`Maximize`/`Minimize`/`ReachTarget`) | `Maximize` |
+| `RewardAmountOverride` | `int` | 0 – 500 (0 = `RewardTableSO`-ból) | 0 |
+| `TargetValueOverride` | `int` | 0 – 999 (0 = generált) | 0 |
 
-**Validáció:** `MathEvents` időpontjai között legalább `MathEventCooldownSeconds` (ld. 6.)
-legyen; `LaneCount` 2 ⇒ `ProblemType` lehet `ResourceOperationComparison`.
+**Validáció:**
+- `MathEvents` időpontjai között legalább `TimePressureTableSO.MinGapBetweenProblemsSeconds`
+  (a pálya CL-jéhez tartozó sor) legyen — a korábbi, globális
+  `MathEventConfigSO.MathEventCooldownSeconds` csak **alsó korlát** (hard floor).
+- `LaneCount == 2` ⇒ `ProblemType` bármelyik lehet (2 sáv 2 opcióval is érvényes).
+- `Goal == ReachTarget` ⇒ `ProblemType == TargetValueSelection`.
+- `Goal == Minimize` ⇒ `RewardResource == EnemyArmor` (az egyetlen értelmes csökkentendő).
+- Legfeljebb **2 egymást követő** azonos `ProblemType` (GAME_DESIGN 2.2).
 
 ---
 
@@ -135,14 +203,35 @@ legyen; `LaneCount` 2 ⇒ `ProblemType` lehet `ResourceOperationComparison`.
 | `OrderIndex` | `int` | 0 – 50 | 0 |
 | `Levels` | `List<LevelDefinitionSO>` | 1 – 30 | — |
 | `IntroducedSkills` | `List<SkillTag>` | 0 – 10 | üres |
-| `UnlockRequirementLevel` | `LevelDefinitionSO` | lehet null | null |
+| `EnabledGateGoals` | `List<GateGoal>` | 1 – 3 | `{ Maximize }` |
+| `IntroducedEnemyTypes` | `List<EnemyType>` | 1 – 5 | `{ Basic }` |
+| `Unlock` | `WorldUnlockRequirementEntry` | lehet null | null |
 | `ThemeColor` | `Color` | — | — |
+
+### 4.1. `WorldUnlockRequirementEntry` (beágyazott `[Serializable]`)
+
+A korábbi, egyetlen `UnlockRequirementLevel` referencia **nem** volt elegendő: a
+`balance/worlds.md` 3. pontja csillag-arányt ÉS készség-fokozatot is megkövetel.
+
+| Mező | Típus | Tartomány | Default |
+|---|---|---|---|
+| `RequiredWorld` | `WorldDefinitionSO` | lehet null | null |
+| `RequiredStarRatio` | `float` | 0.0 – 1.0 | **0.60** |
+| `RequiredSkills` | `List<SkillRequirementEntry>` | 0 – 5 | üres |
+| `RequiredChallengeLevel` | `int` | 0 – 10 (0 = nincs) | 0 |
+
+`SkillRequirementEntry`: `{ SkillTag Skill; SkillMasteryLevel MinLevel; }`
+(`SkillMasteryLevel`: `Locked=0, Introduced=1, Practiced=2, Mastered=3` — core-domain.md 4.)
+
+**Validáció:** a `RequiredWorld` gráf körmentes; `RequiredChallengeLevel > 0` legfeljebb
+**egy** világon (worlds.md W7 — a „világ ≠ kihívásszint” elv kivétele).
 
 ---
 
-## 5. `MathDifficultyTableSO` — **F2** (spec 7.2, 16. „Matematikai szintek”, „Engedélyezett operátorok”, „Operandustartományok”, „Feladatösszetettség”, „Válaszsávok száma”, „Gondolkodási idő”)
+## 5. `MathDifficultyTableSO` — **F2** (spec 7.2, 16. „Matematikai szintek”, „Engedélyezett operátorok”, „Operandustartományok”, „Feladatösszetettség”, „Válaszsávok száma”)
 
 > **Kötelezően 10 sor** — a spec 7.2 táblázata nem égethető a kódba.
+> Az értékek forrása: `balance/difficulty-model.md` 2. szakasz.
 
 `menuName: "MathHorde/Math Difficulty Table"` · mező: `List<MathDifficultyLevelEntry> Levels` (pontosan 10 elem)
 
@@ -151,54 +240,156 @@ legyen; `LaneCount` 2 ⇒ `ProblemType` lehet `ResourceOperationComparison`.
 | Mező | Típus | Tartomány | Default (szint 1 → 10) |
 |---|---|---|---|
 | `Level` | `int` | 1 – 10 | 1..10 |
-| `DescriptionKey` | `string` | nem üres | `"diff.l1"` … |
-| `AllowedOperators` | `List<BinaryOperator>` (flags-szerű lista) | nem üres | L1: {Add, Sub} → L10: mind |
-| `MinOperandValue` | `int` | 0 – 999 | 0 |
-| `MaxOperandValue` | `int` | 1 – 999 | L1: 10 → L10: 99 |
-| `MinOperandCount` | `int` | 2 – 5 | 2 |
-| `MaxOperandCount` | `int` | 2 – 5 | L1: 2 → L10: 5 |
+| `DescriptionKey` | `string` | nem üres | `"diff.l1"` … `"diff.l10"` |
+| `AllowedOperators` | `List<BinaryOperator>` | nem üres | L1–L2: {Add, Sub}; L3–L4: +{Mul, Div}; L5: +{Mod, DivRem}; L6+: mind |
+| `MinOperandValue` | `int` | 0 – 999 | 1 |
+| `MaxOperandValue` | `int` | 1 – 999 | L1: 10, L2: 20, L3: 20, L4: 50, L5: 100, L6: 100, L7: 50, L8: 60, L9: 99, L10: 99 |
+| `MaxResultValue` | `int` | 1 – 9999 | L1: 10, L2: 20, L3: 100, L4: 100, L5: 100, L6: 200, L7: 200, L8: 200, L9: 500, L10: 999 |
+| `MinOperandCount` | `int` | 2 – 5 | L1–L6: 2, L7–L8: 3, L9: 3, L10: 4 |
+| `MaxOperandCount` | `int` | 2 – 5 | L1–L5: 2, L6: 3, L7–L8: 3, L9: 4, L10: 5 |
 | `AllowParentheses` | `bool` | — | L1–L6: false, L7+: true |
+| `MaxParenthesisDepth` | `int` | 0 – 2 | L1–L6: 0, L7–L9: 1, L10: 2 |
 | `AllowUnknownOperand` | `bool` | — | L1–L7: false, L8+: true |
-| `AllowNegativeResults` | `bool` | — | false |
+| `UnknownOperandCount` | `int` | 0 – 1 | L1–L7: 0, L8+: 1 |
+| `UnknownPlacement` | `UnknownPlacement` enum | enum | L8–L9: `RightOperand`, L10: `EitherSide` |
+| `AllowNegativeResults` | `bool` | — | false (minden szinten) |
 | `AnswerOptionCount` | `int` | **2 – 4** | L1–L2: 2, L3–L5: 3, L6+: 4 |
-| `BaseThinkTimeSeconds` | `float` | 2.0 – 30.0 | L1: 12 → L10: 6 |
+| `LaneCount` | `int` | **2 – 4** | = `AnswerOptionCount` |
+| `MinGateGap` | `int` | 1 – 50 | L1–L3: **8**, L4+: **4** (GAME_DESIGN 3.5/1.) |
+| `BaseThinkTimeSeconds` | `float` | 2.0 – 30.0 | **L1: 14.0, L2: 13.0, L3: 11.5, L4: 10.0, L5: 8.0, L6: 7.5, L7: 7.0, L8: 6.5, L9: 5.5, L10: 4.5** |
 | `RequiredSkills` | `List<SkillTag>` | — | a szint által bevezetett készségek |
-| `MathComplexity` | `int` | 1 – 10 | = Level |
-| `TimePressure` | `int` | 1 – 10 | = Level |
-| `CombatDifficulty` | `int` | 1 – 10 | = Level |
+| `MathComplexity` | `int` | 1 – 10 | = `Level` |
+| `TimePressure` | `int` | 1 – 10 | = `Level` |
+| `CombatDifficulty` | `int` | 1 – 10 | = `Level` |
 
-**Validáció:** `MaxOperandValue > MinOperandValue`; `MaxOperandCount >= MinOperandCount`;
-`AllowUnknownOperand == true` ⇒ `AllowedOperators` tartalmaz `Addition`-t vagy
-`Multiplication`-t; a `Levels` szigorúan monoton `Level` szerint.
-A konkrét értékek a `docs/balance/` (balance-designer agent) felelőssége.
+**Validáció:**
+- `MaxOperandValue > MinOperandValue`; `MaxOperandCount >= MinOperandCount`.
+- `AllowParentheses == (MaxParenthesisDepth > 0)`;
+  `AllowUnknownOperand == (UnknownOperandCount > 0)` (core-domain.md 4. invariáns).
+- `AllowUnknownOperand == true` ⇒ `AllowedOperators` tartalmaz `Addition`-t vagy
+  `Multiplication`-t.
+- `LaneCount >= AnswerOptionCount` (több sáv lehet, mint opció; kevesebb nem).
+- `BaseThinkTimeSeconds` szigorúan monoton **csökkenő** a `Level` szerint.
+- A `Levels` szigorúan monoton `Level` szerint, pontosan 10 elem.
+
+A konkrét értékek forrása és indoklása: `docs/balance/difficulty-model.md` 2. szakasz
+(balance-designer agent felelőssége) — **ez a tábla az egyetlen kódbeli igazság**.
 
 ---
 
-## 6. `MathEventConfigSO` — **F3** (spec 16. „Matematikai feladatok gyakorisága”, „Jutalmak”)
+## 5.1. `TimePressureTableSO` — **F2** (spec 7.3, 16. „Gondolkodási idő”)
+
+> Kötelezően 10 sor. Értékek: `balance/difficulty-model.md` 3. táblázat.
+> A `MathDifficultyTableSO.BaseThinkTimeSeconds` és az itteni `ThinkTimeSeconds`
+> **ugyanaz a szám**; a kanonikus forrás ez a tábla, a `MathDifficultyTableSO` mezője
+> az `Validate()`-ben ellenőrzött tükörérték (eltérés ⇒ Error).
+
+`menuName: "MathHorde/Time Pressure Table"` · mező: `List<TimePressureLevelEntry> Levels` (10 elem)
+
+| Mező | Típus | Tartomány | Default (L1 → L10) |
+|---|---|---|---|
+| `Level` | `int` | 1 – 10 | 1..10 |
+| `ThinkTimeSeconds` | `float` | **4.0 – 30.0** | 14.0, 13.0, 11.5, 10.0, 8.0, 7.5, 7.0, 6.5, 5.5, 4.5 |
+| `GateApproachSeconds` | `float` | 3.0 – 30.0 | 12.0, 11.0, 10.0, 9.0, 8.0, 7.5, 7.0, 6.5, 6.0, 5.0 |
+| `AnswerSpawnDelaySeconds` | `float` | 0.5 – 5.0 | 2.5, 2.5, 2.0, 2.0, 1.5, 1.5, 1.5, 1.2, 1.0, 1.0 |
+| `GateApproachSpeed` | `float` | 0.5 – 20.0 | 1.2, 1.3, 1.5, 1.7, 1.9, 2.1, 2.3, 2.6, 2.9, 3.3 |
+| `MinGapBetweenProblemsSeconds` | `float` | **8.0** – 60.0 | 14, 13, 12, 11, 10, 10, 9, 9, 8, 8 |
+
+**Validáció:** `ThinkTimeSeconds >= 4.0` minden szinten (a 7 éves korosztály motoros
+sávváltási ideje ≈0,8 s — difficulty-model.md 3.); `MinGapBetweenProblemsSeconds >= 8.0`
+(GAME_DESIGN 2.2: legalább 8 s tiszta harc két döntés között);
+mindhárom időmező monoton csökkenő a `Level` szerint.
+
+Futásidejű szorzó: `timePressureScale` (0.70 – 1.60, alap 1.0) — **nem** SO-mező, hanem
+az `IAdaptiveDifficultyService` állapota; minden fenti időértékre hat (TimePressure
+dimenzió, spec 7.3).
+
+---
+
+## 6. `MathEventConfigSO` — **F3** (spec 16. „Matematikai feladatok gyakorisága”)
+
+> Pálya- és CL-független **globális** korlátok és geometria. Ami CL-függő
+> (gondolkodási idő, kapu-sebesség, minimális szünet), az az 5.1-es táblában van;
+> ütközés esetén a **szigorúbb** érvényesül.
 
 | Mező | Típus | Tartomány | Default |
 |---|---|---|---|
 | `MathEventIntervalSeconds` | `float` | 5 – 120 | 20 |
 | `MathEventIntervalJitter` | `float` | 0 – 0.5 | 0.15 |
-| `MathEventCooldownSeconds` | `float` | 2 – 60 | 6 |
+| `MathEventCooldownSecondsFloor` | `float` | 2 – 60 | 6 |
 | `MaxConcurrentMathEvents` | `int` | 1 – 3 | 1 |
-| `GateApproachSpeed` | `float` | 0.5 – 20.0 | 4.0 |
 | `GateSpawnDepth` | `float` | 5 – 60 | 30 |
 | `DecisionZoneDepth` | `float` | 0.5 – 10 | 3.0 |
 | `FeedbackDisplaySeconds` | `float` | 0.5 – 5.0 | 1.5 |
-| `AmmoRewardBase` | `int` | 1 – 500 | 30 |
-| `HealthRewardBase` | `int` | 0 – 200 | 15 |
-| `ShieldRewardBase` | `int` | 0 – 200 | 10 |
+| `GoalIconLeadSeconds` | `float` | 1.0 – 10.0 | 2.0 |
+| `MaxConsecutiveSameProblemType` | `int` | 1 – 3 | 2 |
+| `MaxConsecutiveSameGateSide` | `int` | 1 – 3 | 2 |
+| `NonObviousGatePairRatioMin` | `float` | 0.0 – 1.0 | **0.30** |
 | `IncorrectRewardAmount` | `int` | 0 – 100 | 0 |
-| `RewardScalePerChallengeLevel` | `float` | 0.0 – 0.3 | 0.05 |
 | `ResourceGateOperandMin` | `int` | 1 – 100 | 2 |
 | `ResourceGateOperandMax` | `int` | 2 – 200 | 50 |
 | `ResourceGateMultiplierMin` | `int` | 2 – 5 | 2 |
 | `ResourceGateMultiplierMax` | `int` | 2 – 10 | 4 |
 
+`GoalIconLeadSeconds`: a kapucél-ikon ennyivel a döntési pont előtt megjelenik
+(GAME_DESIGN 3.4: legalább 2 s). `NonObviousGatePairRatioMin`: pályánként legalább ennyi
+arányban olyan kapupár, ahol a **nagyobb operandus nem a jó választás**
+(GAME_DESIGN 3.5/4.) — a generátor ezt pályaszinten könyveli, a `SIM-plan.md` méri.
+
+---
+
+## 6.1. `RewardTableSO` — **F3** (spec 16. „Jutalmak”)
+
+> 10 sor. Értékek: `balance/difficulty-model.md` 5.3.
+
+| Mező | Típus | Tartomány | Default (L1 → L10) |
+|---|---|---|---|
+| `Level` | `int` | 1 – 10 | 1..10 |
+| `GateRewardBase` | `int` | 1 – 500 | 30, 34, 40, 50, 60, 70, 82, 96, 112, 130 |
+| `LaneRewardBase` | `int` | 1 – 500 | 20, 22, 26, 32, 38, 44, 52, 60, 70, 82 |
+| `MathDecisionCount` | `int` | 8 – 24 | 10, 11, 12, 13, 14, 14, 15, 15, 16, 16 |
+| `HealthRewardBase` | `int` | 0 – 200 | 15 (minden szinten) |
+| `ShieldRewardBase` | `int` | 0 – 200 | 10 (minden szinten) |
+| `EnemyArmorRewardBase` | `int` | 0 – 200 | 10 (minden szinten) |
+
+Globális mezők ugyanezen az asseten:
+
+| Mező | Típus | Tartomány | Default |
+|---|---|---|---|
+| `RewardScalePerChallengeLevel` | `float` | 0.0 – 0.3 | 0.0 (a tábla már CL-enkénti) |
+| `RescueWaveRewardMultiplier` | `float` | 1.0 – 3.0 | 2.0 |
+
+**Validáció:** `MathDecisionCount >= 10` az L1 kivételével (`Tutorial` sablon 8-at is
+engedhet, de a **pálya**, nem a tábla szintjén — ld. 3.);
+`GateRewardBase > LaneRewardBase` minden szinten (a kapu nagyobb tét).
+
+---
+
+## 6.2. `AmmoBudgetSO` — **F3** (spec 9.1)
+
+> A balance **központi invariánsa** (difficulty-model.md 5.). A `gameplay-dev` ebből
+> származtatja a jutalmakat, nem egymástól függetlenül.
+
+| Mező | Típus | Tartomány | Default |
+|---|---|---|---|
+| `OverkillFactor` | `float` | 1.0 – 1.5 | 1.15 |
+| `KillAmmoRefund` | `int` | 0 – 10 | 1 |
+| `CombatRewardShareMax` | `float` | 0.0 – 0.5 | **0.15** |
+| `TargetRequiredAccuracyMin` | `float` | 0.5 – 0.9 | 0.68 |
+| `TargetRequiredAccuracyMax` | `float` | 0.5 – 0.9 | 0.74 |
+| `OverflowScorePerAmmo` | `int` | 0 – 10 | 2 (F5 pontszámítás) |
+
+`KillAmmoRefund` a `EnemyDefinitionSO.RewardValue` **globális szorzója/alapértéke**:
+az effektív visszatérítés `RewardValue × KillAmmoRefund`.
+`CombatRewardShareMax`: a harci (nem matek) lőszer-hozam felső korlátja a tökéletes
+matek-hozam arányában (game-logic.md 7.).
+
 ---
 
 ## 7. `CombatBalanceSO` — **F1** (spec 16. „Ellenségek sebessége/életereje”, „Ellenséghullámok mérete”, „Lőszerfogyás”)
+
+> Globális szorzók és futásidejű korlátok. A **CL-függő** szorzókat a 7.1 tábla adja;
+> a kettő **összemultiplikálódik** (`effektív = CombatBalanceSO × CombatDifficultyTableSO[CL]`).
 
 | Mező | Típus | Tartomány | Default |
 |---|---|---|---|
@@ -214,34 +405,105 @@ A konkrét értékek a `docs/balance/` (balance-designer agent) felelőssége.
 | `MaxActiveEnemies` | `int` | 10 – 300 | 60 |
 | `EnemyPoolSize` | `int` | 10 – 400 | 80 |
 | `ProjectilePoolSize` | `int` | 20 – 500 | 120 |
-| `PerChallengeLevelSpeedStep` | `float` | 0.0 – 0.2 | 0.05 |
-| `PerChallengeLevelHealthStep` | `float` | 0.0 – 0.3 | 0.08 |
-| `PerChallengeLevelWaveSizeStep` | `float` | 0.0 – 0.3 | 0.07 |
+| `PerChallengeLevelSpeedStep` | `float` | 0.0 – 0.2 | 0.0 (a 7.1 tábla váltja ki) |
+| `PerChallengeLevelHealthStep` | `float` | 0.0 – 0.3 | 0.0 (ua.) |
+| `PerChallengeLevelWaveSizeStep` | `float` | 0.0 – 0.3 | 0.0 (ua.) |
+| `ShieldAbsorbsBeforeHealth` | `bool` | — | true (GAME_DESIGN 6.1) |
+
+> A `PerChallengeLevel*Step` mezők **megmaradnak**, de alapértékük 0: a CL-skálázás
+> kanonikus helye a 7.1 tábla. Két párhuzamos skálázási mechanizmus egyszerre bekapcsolva
+> duplán nehezítene — a `Validate()` figyelmeztet, ha a tábla és a step is nem-neutrális.
+
+---
+
+## 7.1. `CombatDifficultyTableSO` — **F1** (spec 7.3)
+
+> 10 sor. Értékek: `balance/difficulty-model.md` 4. táblázat.
+
+| Mező | Típus | Tartomány | Default (L1 → L10) |
+|---|---|---|---|
+| `Level` | `int` | 1 – 10 | 1..10 |
+| `WaveCount` | `int` | 3 – 20 | 5, 6, 6, 7, 8, 8, 9, 9, 10, 10 |
+| `EnemiesPerLevel` | `int` | 20 – 400 | 55, 65, 78, 92, 110, 126, 142, 160, 180, 205 |
+| `EnemySpeedMultiplier` | `float` | 0.5 – 2.0 | 0.70 … 1.42 |
+| `EnemyHealthMultiplier` | `float` | 0.5 – 2.0 | 0.70 … 1.60 |
+| `EnemyDamageMultiplier` | `float` | 0.5 – 2.0 | 0.60 … 1.42 |
+| `PeakSpawnRatePerSecond` | `float` | 0.2 – 4.0 | 0.6 … 1.8 |
+| `ArmoredRatio` | `float` | 0.0 – 0.5 | 0.00, 0.00, 0.05, 0.08, 0.12, 0.15, 0.18, 0.22, 0.25, 0.28 |
+| `SwarmletRatio` | `float` | 0.0 – 0.5 | 0.00, 0.10, 0.15, 0.18, 0.20, 0.22, 0.24, 0.25, 0.26, 0.28 |
+
+**Validáció:** `ArmoredRatio + SwarmletRatio <= 0.6`; `EnemiesPerLevel` és minden szorzó
+monoton nem csökkenő a `Level` szerint. A `SwarmletRatio > 0` szint **megköveteli**, hogy
+a pálya világa `IntroducedEnemyTypes`-ban tartalmazza a `Swarmlet`-et — ha nem, a hiányzó
+arány `Basic`-ra esik vissza (worlds.md: a `Swarmlet` a W3-ban jelenik meg; W1–W2-ben a
+tábla CL2+ „rajzó arány” sorai `Basic`/`Fast` arányként realizálódnak).
 
 ---
 
 ## 8. `AdaptiveDifficultyConfigSO` — **F4** (spec 7.4–7.6, 16. „Adaptációs küszöbök”)
 
+> Kanonikus név; a `difficulty-model.md` `AdaptationRulesConfig` és a game-logic.md
+> `AdaptationRulesSO` hivatkozása **ugyanerre** az assetre utal (0.1).
+> Pályák **közötti** adaptáció. A pályán belüli segítség: 8.1.
+
 | Mező | Típus | Tartomány | Default |
 |---|---|---|---|
 | `TargetAccuracyMin` | `float` | 0.5 – 0.95 | 0.75 |
 | `TargetAccuracyMax` | `float` | 0.5 – 0.99 | 0.85 |
+| `AccuracyDeadbandLow` | `float` | 0.3 – 0.9 | **0.65** |
+| `AccuracyDeadbandHigh` | `float` | 0.6 – 0.99 | **0.88** |
 | `ShortWindowSize` | `int` | 3 – 10 | 5 |
 | `LongWindowSize` | `int` | 10 – 100 | 40 |
+| `MinDecisionsBeforeChange` | `int` | 10 – 60 | 30 |
+| `DirectionChangeCooldownLevels` | `int` | 0 – 5 | 2 |
+| `MaxDimensionDeltaPerSession` | `int` | 1 – 3 | 2 |
 | `ConsecutiveErrorsForAssistance` | `int` | 2 – 6 | 3 |
 | `ConsecutiveTimeoutsForMoreTime` | `int` | 2 – 6 | 2 |
+| `TimeoutRatioForMoreTime` | `float` | 0.05 – 0.5 | 0.20 |
 | `MaxLevelChangePerSession` | `int` | 1 – 2 | 1 |
 | `HysteresisBandAccuracy` | `float` | 0.0 – 0.2 | 0.05 |
 | `MinSessionsBeforeAdjust` | `int` | 1 – 5 | 1 |
 | `ConsecutiveFailuresForDecrease` | `int` | 2 – 5 | 2 |
-| `AssistThinkTimeMultiplier` | `float` | 1.0 – 2.0 | 1.4 |
-| `AssistGateSpeedMultiplier` | `float` | 0.4 – 1.0 | 0.75 |
-| `AssistCombatMultiplier` | `float` | 0.4 – 1.0 | 0.8 |
-| `AssistDurationSeconds` | `float` | 5 – 120 | 30 |
-| `RescueWaveEnabled` | `bool` | — | true |
-| `LowResourceThresholdRatio` | `float` | 0.0 – 0.5 | 0.1 |
+| `TimePressureScaleMin` | `float` | 0.5 – 1.0 | 0.70 |
+| `TimePressureScaleMax` | `float` | 1.0 – 2.0 | 1.60 |
+| `TimePressureScaleStep` | `float` | 1.0 – 1.5 | 1.15 |
 | `MinChallengeLevel` | `int` | 1 – 10 | 1 |
 | `MaxChallengeLevel` | `int` | 1 – 10 | 10 |
+| `DisplayWeightMath` | `float` | 0.0 – 1.0 | **0.5** |
+| `DisplayWeightTime` | `float` | 0.0 – 1.0 | **0.2** |
+| `DisplayWeightCombat` | `float` | 0.0 – 1.0 | **0.3** |
+
+**Validáció:** `AccuracyDeadbandLow < TargetAccuracyMin <= TargetAccuracyMax <
+AccuracyDeadbandHigh` (a célsávban semmi nem történik — difficulty-model.md 6.3);
+`DisplayWeight*` összege pontosan 1.0 (a HUD 1–10 szintje súlyozott átlag).
+
+---
+
+## 8.1. `InLevelAssistSO` — **F4** (spec 7.5)
+
+`mező: List<AssistTierEntry> Tiers` (pontosan 4 elem) · értékek: difficulty-model.md 6.5
+
+| Mező | Típus | Tartomány | Default (T1 → T4) |
+|---|---|---|---|
+| `Tier` | `int` | 1 – 4 | 1..4 |
+| `TriggerType` | enum `AssistTrigger` (`ConsecutiveErrors=0, TimeoutsInWindow=1, AmmoBelowRatio=2, HealthDropRate=3`) | enum | `ConsecutiveErrors`, `ConsecutiveErrors`, `AmmoBelowRatio`, `HealthDropRate` |
+| `TriggerThreshold` | `float` | 0.0 – 10.0 | 2, 3, 0.20, 0.30 |
+| `ThinkTimeMultiplier` | `float` | 1.0 – 2.0 | 1.25, 1.25, 1.0, 1.0 |
+| `GateSpeedMultiplier` | `float` | 0.4 – 1.0 | 0.85, 0.85, 1.0, 1.0 |
+| `MathComplexityDelta` | `int` | -2 – 0 | 0, -1, -2, 0 |
+| `LaneCountOverride` | `int` | 0 – 4 (0 = nincs) | 0, 3, 2, 0 |
+| `SpawnDensityMultiplier` | `float` | 0.4 – 1.0 | 1.0, 1.0, 0.70, 0.75 |
+| `EnemySpeedMultiplier` | `float` | 0.4 – 1.0 | 1.0, 1.0, 1.0, 0.85 |
+| `EnemyDamageMultiplier` | `float` | 0.4 – 1.0 | 1.0, 1.0, 1.0, 0.80 |
+| `RescueWaveEnabled` | `bool` | — | false, false, true, false |
+| `MaxActivationsPerLevel` | `int` | 1 – 10 | 99, 99, **2**, 99 |
+| `DurationProblems` | `int` | 0 – 10 | 2, 3, 1, 0 |
+| `DurationSeconds` | `float` | 0 – 120 | 0, 0, 0, 25 |
+| `RecoveryCorrectAnswers` | `int` | 1 – 5 | 2 (mindegyik) |
+
+**Kötelező szabály:** a segítség **csak könnyíthet** és **csak az ezután létrejövő**
+feladatokra/hullámokra hat; minden multiplikátor-mező `<= 1.0`, kivéve a
+`ThinkTimeMultiplier`-t (`>= 1.0`). Nehezítő érték ⇒ `Validate()` Error.
 
 ---
 
@@ -253,15 +515,36 @@ Mező: `List<SkillPrerequisiteEntry> Entries`
 |---|---|---|---|
 | `Skill` | `SkillTag` | enum | — |
 | `Prerequisites` | `List<SkillTag>` | 0 – 5 | üres |
+| `PrerequisiteMinLevel` | `SkillMasteryLevel` | enum | `Practiced` |
 | `MasteryThreshold` | `float` | 0.5 – 1.0 | 0.8 |
+| `PracticedThreshold` | `float` | 0.2 – 0.8 | 0.5 |
 | `MinAttemptsForMastery` | `int` | 3 – 50 | 8 |
+| `MinSamplesForConfidence` | `int` | 3 – 50 | 8 |
 | `ReviewIntervalDays` | `float` | 0.5 – 30 | 3 |
 
-**Validáció:** az előfeltétel-gráf körmentes (DAG).
+**Validáció:** az előfeltétel-gráf körmentes (DAG); `PracticedThreshold < MasteryThreshold`.
+Ez az asset a `SkillMasteryLevel` küszöbeinek **egyetlen** forrása (core-domain.md 4.,
+ADR-010) — a kódban küszöb-literál TILOS.
 
 ---
 
-## 10. `ParentSettingsDefaultsSO` — **F6** (spec 11.5)
+## 10. `GameBalanceSO` — **F1** (spec 7.6, 9.1)
+
+> Egyetlen példány, `Resources/Config/`. A termék „alap-szigora”; játék közben NEM változik
+> (difficulty-model.md 1.).
+
+| Mező | Típus | Tartomány | Default |
+|---|---|---|---|
+| `TargetAccuracyMin` | `float` | 0.5 – 0.95 | 0.75 |
+| `TargetAccuracyMax` | `float` | 0.5 – 0.99 | 0.85 |
+| `TargetSuccessRate` | `float` | 0.3 – 0.95 | 0.70 |
+| `GuessingSuccessRateCap` | `float` | 0.0 – 0.3 | 0.15 |
+| `ReferenceDps` | `float` | 1 – 100 | 15.0 (`Damage 5 × FireRate 3.0`) |
+| `DefaultChallengeLevel` | `int` | 1 – 10 | 3 |
+
+---
+
+## 11. `ParentSettingsDefaultsSO` — **F6** (spec 11.5)
 
 | Mező | Típus | Tartomány | Default |
 |---|---|---|---|
@@ -274,12 +557,13 @@ Mező: `List<SkillPrerequisiteEntry> Entries`
 | `HapticsEnabled` | `bool` | — | true |
 | `TimePressureLimited` | `bool` | — | false |
 | `ThinkTimeBonusMultiplier` | `float` | 1.0 – 3.0 | 1.0 |
-| `BreakSuggestionMinutes` | `int` | 10 – 120 | 30 |
+| `BreakSuggestionMinutes` | `int` | 10 – 120 | **25** (GAME_DESIGN 8.) |
+| `HardStopMinutes` | `int` | 0 – 240 | 45 |
 | `ParentPinLength` | `int` | 4 – 8 | 4 |
 
 ---
 
-## 11. `DeveloperSettingsSO` — **F1** (spec 16. utolsó bekezdés)
+## 12. `DeveloperSettingsSO` — **F1** (spec 16. utolsó bekezdés)
 
 > Build-ben kikapcsolt (`EnableDevTools = false` release-ben, `#if DEVELOPMENT_BUILD` kapu).
 
@@ -300,7 +584,7 @@ Mező: `List<SkillPrerequisiteEntry> Entries`
 
 ---
 
-## 12. `AudioConfigSO` — **F7**
+## 13. `AudioConfigSO` — **F7**
 
 | Mező | Típus | Tartomány | Default |
 |---|---|---|---|
@@ -310,23 +594,41 @@ Mező: `List<SkillPrerequisiteEntry> Entries`
 
 ---
 
-## 13. Spec 16. ↔ SO megfeleltetés (teljességi ellenőrzés)
+## 14. `StarRatingSO` — **F5** (spec 10., GAME_DESIGN 7.1)
+
+| Mező | Típus | Tartomány | Default |
+|---|---|---|---|
+| `Star2MinAccuracy` | `float` | 0.0 – 1.0 | **0.70** |
+| `Star3MinAccuracy` | `float` | 0.0 – 1.0 | **0.90** |
+| `Star3MaxTimeouts` | `int` | 0 – 10 | **0** |
+| `WorldUnlockStarRatio` | `float` | 0.0 – 1.0 | 0.60 |
+| `ShardsPerStar` | `int` | 0 – 100 | 5 |
+| `SkinStarMilestones` | `List<int>` | 1 – 500 | 10, 25, 50, 100 |
+
+**Validáció:** `Star2MinAccuracy < Star3MinAccuracy`; **nincs** idő-/sebesség-alapú
+csillagfeltétel (spec 12.) — ilyen mező felvétele kontraktsértés.
+
+---
+
+## 15. Spec 16. ↔ SO megfeleltetés (teljességi ellenőrzés)
 
 | Spec 16. paraméter | SO | Mező |
 |---|---|---|
 | Matematikai szintek | `MathDifficultyTableSO` | `Levels[]` |
 | Engedélyezett operátorok | `MathDifficultyTableSO`, `ParentSettingsDefaultsSO` | `AllowedOperators` |
-| Operandustartományok | `MathDifficultyTableSO` | `Min/MaxOperandValue` |
-| Feladatösszetettség | `MathDifficultyTableSO` | `Min/MaxOperandCount`, `AllowParentheses`, `AllowUnknownOperand` |
+| Operandustartományok | `MathDifficultyTableSO` | `Min/MaxOperandValue`, `MaxResultValue` |
+| Feladatösszetettség | `MathDifficultyTableSO` | `Min/MaxOperandCount`, `AllowParentheses`, `MaxParenthesisDepth`, `AllowUnknownOperand`, `UnknownOperandCount` |
 | Válaszsávok száma | `MathDifficultyTableSO`, `LevelDefinitionSO` | `AnswerOptionCount`, `LaneCount` |
-| Gondolkodási idő | `MathDifficultyTableSO`, `MathEventScheduleEntry` | `BaseThinkTimeSeconds`, `ThinkTimeSecondsOverride` |
-| Ellenségek sebessége | `EnemyDefinitionSO`, `CombatBalanceSO` | `MovementSpeed`, `EnemySpeedMultiplier` |
-| Ellenségek életereje | `EnemyDefinitionSO`, `CombatBalanceSO` | `MaxHealth`, `EnemyHealthMultiplier` |
-| Ellenséghullámok mérete | `LevelDefinitionSO`, `CombatBalanceSO` | `Spawns[].Count`, `WaveSizeMultiplier` |
+| Gondolkodási idő | `TimePressureTableSO`, `MathEventScheduleEntry` | `ThinkTimeSeconds`, `ThinkTimeSecondsOverride` |
+| Ellenségek sebessége | `EnemyDefinitionSO`, `CombatBalanceSO`, `CombatDifficultyTableSO` | `MovementSpeed`, `EnemySpeedMultiplier` |
+| Ellenségek életereje | `EnemyDefinitionSO`, `CombatBalanceSO`, `CombatDifficultyTableSO` | `MaxHealth`, `EnemyHealthMultiplier` |
+| Ellenséghullámok mérete | `LevelDefinitionSO`, `CombatBalanceSO`, `CombatDifficultyTableSO` | `Spawns[].Count`, `WaveSizeMultiplier`, `EnemiesPerLevel` |
 | Lőszerfogyás | `WeaponConfigSO`, `CombatBalanceSO` | `AmmoPerShot`, `AmmoConsumptionMultiplier` |
-| Jutalmak | `MathEventConfigSO` | `*RewardBase`, `RewardScalePerChallengeLevel` |
-| Adaptációs küszöbök | `AdaptiveDifficultyConfigSO` | teljes |
-| Matematikai feladatok gyakorisága | `MathEventConfigSO` | `MathEventInterval*`, `MaxConcurrentMathEvents` |
+| Jutalmak | `RewardTableSO`, `AmmoBudgetSO` | `*RewardBase`, `KillAmmoRefund` |
+| Adaptációs küszöbök | `AdaptiveDifficultyConfigSO`, `InLevelAssistSO` | teljes |
+| Matematikai feladatok gyakorisága | `MathEventConfigSO`, `TimePressureTableSO` | `MathEventInterval*`, `MinGapBetweenProblemsSeconds` |
 | Pályahossz | `LevelDefinitionSO` | `TargetDurationSeconds`, `Waves[]` |
-| Főellenségparaméterek | `EnemyDefinitionSO` (Type=Boss), `LevelDefinitionSO` | `BossEnemy`, `BossTriggerGameTime` |
+| Főellenségparaméterek | `EnemyDefinitionSO` (Type=Boss, `BossPhaseEntry[]`), `LevelDefinitionSO` | `BossEnemy`, `BossTriggerGameTime` |
+| Csillag-/jutalomküszöbök | `StarRatingSO` | teljes |
+| Cél-pontossági sáv | `GameBalanceSO` | `TargetAccuracy*`, `GuessingSuccessRateCap` |
 | Fejlesztői beállítások | `DeveloperSettingsSO` | teljes |

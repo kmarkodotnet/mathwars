@@ -1,0 +1,49 @@
+# Sorvégek és merge-kezelés. A Unity-asszetek YAML-alapúak, de a git
+# alapértelmezett 3-way merge-e rosszul kezeli őket — ezért a Unity saját
+# UnityYAMLMerge eszközét jelöljük ki merge-driverként (ADR-002, CLAUDE.md).
+# A driver gépenként egyszer állítandó be:
+#   git config merge.unityyamlmerge.name "Unity YAML merge"
+#   git config merge.unityyamlmerge.driver '"C:/Program Files/Unity/Hub/Editor/6000.3.28f1/Editor/Data/Tools/UnityYAMLMerge.exe" merge -p %O %A %B %A'
+
+* text=auto
+
+# Szöveges forrás — LF a repóban, hogy a platformok között ne ugráljon
+*.cs      text diff=csharp eol=lf
+*.asmdef  text eol=lf
+*.json    text eol=lf
+*.md      text eol=lf
+*.xml     text eol=lf
+*.csproj  text eol=lf
+*.props   text eol=lf
+*.sln     text eol=crlf
+*.ps1     text eol=crlf
+
+# Unity YAML-asszetek — külön merge-driver
+*.unity       merge=unityyamlmerge eol=lf
+*.prefab      merge=unityyamlmerge eol=lf
+*.asset       merge=unityyamlmerge eol=lf
+*.mat         merge=unityyamlmerge eol=lf
+*.anim        merge=unityyamlmerge eol=lf
+*.controller  merge=unityyamlmerge eol=lf
+*.overrideController merge=unityyamlmerge eol=lf
+*.physicMaterial     merge=unityyamlmerge eol=lf
+*.meta        merge=unityyamlmerge eol=lf
+*.renderTexture      merge=unityyamlmerge eol=lf
+*.lighting    merge=unityyamlmerge eol=lf
+
+# Binárisok — ne diffelje, ne konvertálja
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.psd  binary
+*.fbx  binary
+*.obj  binary
+*.wav  binary
+*.mp3  binary
+*.ogg  binary
+*.ttf  binary
+*.otf  binary
+*.apk  binary
+*.aab  binary
+*.so   binary
+*.dll  binary

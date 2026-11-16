@@ -6,6 +6,12 @@
 > Mélység: **MÉLY** — ez a legkritikusabb kontrakt (Fázis 2).
 > Lefedi: spec 6.1 (műveletek), 6.2 (AST), 6.3 (metaadatok), 6.4 (distraktorok + validáció),
 > 6.5 (magyarázat, opcionális), 8. (készség-osztályozás), 17.1–17.2 (tesztelhetőség).
+>
+> **Revízió r2 (2026-11-16, architect):** `MaxParenthesisDepth` / `MaxResultValue` /
+> `MinGateGap` átvezetve a `DifficultyProfile`-ból; új validátor-kódok
+> (`GATE_GAP_TOO_SMALL`, `PARENTHESIS_DEPTH_EXCEEDED`, `UNKNOWN_COUNT_MISMATCH`,
+> `RESULT_RANGE_VIOLATION`); a készség-jogosultság `SkillMasteryLevel`-re cserélve (ADR-010);
+> az `EquationSolving` készség-leképezés tisztázva.
 
 ## 0. Tervezési alapelvek
 
@@ -17,6 +23,7 @@
 | P4 | **Hibajelzés `Result<T>`-vel**, nem kivétellel. Kivétel csak szerződésszegésnél (`null` argumentum). |
 | P5 | **Validálás kötelező.** A generátor a visszaadás előtt saját maga futtatja a `ProblemValidator`-t; invalid feladatot soha nem ad vissza, hanem újrapróbál (korlátozott iterációval), majd determinisztikusan egyszerűsít. |
 | P6 | Minden aritmetika `checked` kontextusban; túlcsordulás ⇒ `OVERFLOW` hibakód, nem `OverflowException` a hívó felé. |
+| P7 | Az engine **nem olvas konfigurációt**: minden korlát a `DifficultyProfile`-ból és a request mezőiből jön. ScriptableObject-hozzáférés itt nem létezik. |
 
 ---
 
@@ -43,6 +50,10 @@ public interface IExpressionEvaluator
 
     /// Hány UnknownNode van a fában (ProblemValidator használja).
     int CountUnknowns(ExpressionNode expression);
+
+    /// A megjelenítésben tényleges zárójelek maximális beágyazási mélysége.
+    /// 0 ⇒ nincs zárójel. A PARENTHESIS_DEPTH_EXCEEDED ellenőrzés használja.
+    int MeasureParenthesisDepth(ExpressionNode expression);
 }
 
 public sealed class EvaluationOptions
@@ -122,9 +133,15 @@ public sealed class ExpressionGenerationRequest
     public IReadOnlyCollection<BinaryOperator> AllowedOperators { get; init; } // nem üres
     public int MinOperandValue { get; init; }                  // >= 0 alapesetben
     public int MaxOperandValue { get; init; }                  // > MinOperandValue
+    /// A VÉGEREDMÉNY felső korlátja (DifficultyProfile-ból, CL10: 999).
+    /// Az operandus-tartománytól független: CL10-en tag <= 99, eredmény <= 999.
+    public int MaxResultValue { get; init; }
     public int MinOperandCount { get; init; }                  // >= 2
     public int MaxOperandCount { get; init; }                  // <= 5 (MVP)
     public bool AllowParentheses { get; init; }
+    /// 0..2. Ha `AllowParentheses == true`, ez korlátozza a beágyazást
+    /// (CL7–9: 1, CL10: 2). A generátor soha nem lép túl ezen.
+    public int MaxParenthesisDepth { get; init; }
     public bool RequireParentheses { get; init; }              // kényszerített zárójel-feladat
     public bool IncludeUnknown { get; init; }                  // MissingOperand/Equation
     public UnknownPlacement UnknownPlacement { get; init; }
@@ -134,7 +151,7 @@ public sealed class ExpressionGenerationRequest
     public int MaxAttempts { get; init; }                      // alap 64
 }
 
-public enum UnknownPlacement { None, LeftOperand, RightOperand, EitherSide }
+public enum UnknownPlacement { None = 0, LeftOperand = 1, RightOperand = 2, EitherSide = 3 }
 
 public sealed class GeneratedExpression
 {
@@ -158,13 +175,16 @@ public sealed class GeneratedExpression
 4. `AllowParentheses == false` ⇒ a fa **jobb oldali ága** nem tartalmazhat alacsonyabb
    precedenciájú operátort, azaz a lapos, balról építkező alak keletkezik.
 5. `RequireParentheses == true` ⇒ legalább egy `BinaryOperationNode` `ForceParentheses` vagy
-   precedencia miatt tényleges zárójelet kap a `ToDisplayString`-ben.
+   precedencia miatt tényleges zárójelet kap a `ToDisplayString`-ben; a mélység
+   `<= MaxParenthesisDepth`.
 6. `IncludeUnknown == true` ⇒ a generátor egy kész, ismeretlen nélküli fát épít, utána egy
    levelet `UnknownNode`-ra cserél, és `EqualityNode`-ot képez a maradék értékkel; a megoldást
-   `IEquationSolver.Solve` **verifikálja**.
+   `IEquationSolver.Solve` **verifikálja**. Pontosan **egy** `UnknownNode` keletkezik.
 7. Minden visszaadott kifejezést a `IExpressionEvaluator` kiértékel; sikertelenség ⇒ újrapróba
    `MaxAttempts`-ig; kimerülés ⇒ `Result.Fail("GENERATION_EXHAUSTED")`, amit a hívó
    fokozatos egyszerűsítéssel (operandusszám −1, tartomány felezése) kezel.
+8. A végeredmény `<= MaxResultValue`; túllépés ⇒ újrapróba (nem `OVERFLOW`, mert az a
+   `int`-tartományt jelenti).
 
 ---
 
@@ -251,7 +271,7 @@ public sealed class ValidationIssue
     public ValidationSeverity Severity { get; }
 }
 
-public enum ValidationSeverity { Warning, Error }
+public enum ValidationSeverity { Warning = 0, Error = 1 }
 ```
 
 **Kötelező ellenőrzések:**
@@ -261,14 +281,18 @@ public enum ValidationSeverity { Warning, Error }
 | `ANSWER_MISMATCH` | `CorrectAnswer` == `Evaluate(Expression)` | Error |
 | `NO_CORRECT_OPTION` / `MULTIPLE_CORRECT_OPTIONS` | pontosan egy `IsCorrect` | Error |
 | `DUPLICATE_OPTIONS` | minden opció értéke különböző | Error |
-| `OPTION_COUNT_OUT_OF_RANGE` | `2 <= Count <= 4` | Error |
+| `OPTION_COUNT_OUT_OF_RANGE` | `2 <= Count <= 4` és `== profile.AnswerOptionCount` | Error |
 | `DUPLICATE_LANE` / `LANE_OUT_OF_RANGE` | sávok egyediek, `0..Count-1` | Error |
 | `EMPTY_SKILL_TAGS` / `SKILL_TAG_MISMATCH` | a tagek tükrözik a fában lévő műveleteket | Error |
 | `SKILL_NOT_UNLOCKED` | minden `SkillTag` benne van a `DifficultyProfile.UnlockedSkills`-ben (spec 7.2) | Error |
 | `OPERATOR_NOT_ALLOWED` | a fában csak `AllowedOperators` szerepel | Error |
 | `DIVISION_BY_ZERO` / `NON_INTEGER_RESULT` / `OVERFLOW` | kiértékelési hibák | Error |
+| `RESULT_RANGE_VIOLATION` | a végeredmény `<= profile.MaxOperandValue`-ból származtatott `MaxResultValue` | Error |
 | `UNKNOWN_NOT_UNIQUE` | `MissingOperand`/`EquationSolving` esetén egyértelmű megoldás | Error |
+| `UNKNOWN_COUNT_MISMATCH` | `CountUnknowns(expr) == profile.UnknownOperandCount` | Error |
+| `PARENTHESIS_DEPTH_EXCEEDED` | `MeasureParenthesisDepth(expr) <= profile.MaxParenthesisDepth` | Error |
 | `GATE_TIE` | `ResourceOperationComparison`: a két kapu eredménye egyenlő | Error |
+| `GATE_GAP_TOO_SMALL` | `|A − B| < profile.MinGateGap` (CL1–3: 8, CL4+: 4 — GAME_DESIGN 3.5/1.) | Error |
 | `GATE_ORDER_INVERTED_BY_CAP` | a `ResourcePool.Max` vágás megfordítaná a `Goal` szerinti előnyt (spec 5.1 záró bekezdés) | Error |
 | `OPERAND_RANGE_VIOLATION` | operandusok a `[Min, Max]` tartományban | Error |
 | `THINK_TIME_NON_POSITIVE` | `ThinkTimeSeconds > 0` | Error |
@@ -280,6 +304,9 @@ válasz sávpozíciójának eloszlása egyenletes, khí-négyzet próba `p > 0.0
 Ugyanezen a mintán a helyes válasz nem lehet szisztematikusan a legnagyobb/legkisebb érték
 (spec 6.4/6.: nincs számolás nélküli nyerő stratégia) — a „mindig a legnagyobbat választom”
 heurisztika találati aránya ne haladja meg a `1/OptionCount + 10%` értéket.
+`ResourceOperationComparison` kapupárokon ugyanilyen mintán a „nagyobb operandust választom”
+heurisztika aránya legfeljebb `1 − MathEventConfigSO.NonObviousGatePairRatioMin` (0.70) —
+GAME_DESIGN 3.5/4.
 
 ---
 
@@ -300,6 +327,9 @@ public interface ISkillClassifier
     IReadOnlyCollection<SkillTag> GetPrerequisites(SkillTag skill);
 
     /// Taníthatja-e a profil jelenlegi állapotában ezt a készséget.
+    /// Implementáció: minden előfeltételre
+    ///   profile.GetMasteryLevel(prereq) >= SkillPrerequisiteSO.PrerequisiteMinLevel
+    /// (alap: Practiced) — ADR-010. Nyers MasteryEstimate-összehasonlítás TILOS.
     bool IsEligible(SkillTag skill, SkillProfile profile);
 }
 ```
@@ -320,6 +350,7 @@ public interface ISkillClassifier
 | tényleges zárójel a megjelenítésben | `+ Parentheses` |
 | tartalmaz `UnknownNode` | `+ MissingOperand` |
 | `ProblemType == ResourceOperationComparison` | `+ ResourceComparison` |
+| `ProblemType == EquationSolving` | `+ MissingOperand`, `+ MultiStepExpressions` — **nincs `SkillTag.EquationSolving`**, az egyenlet feladattípus, nem készség (core-domain.md 3.) |
 
 **Előfeltétel-gráf (alap, konfigból felülírható — `SkillPrerequisiteSO`):**
 `SingleDigitAddition → TwoDigitAddition → CrossingTen` ·
@@ -349,9 +380,13 @@ public sealed class ProblemGenerationRequest
 {
     public int Seed { get; init; }                      // kötelező, reprodukálhatóság
     public ProblemType Type { get; init; }
-    public DifficultyProfile Difficulty { get; init; }  // kötelező
+    /// Kötelező. MINDEN matematikai korlát innen jön: AllowedOperators, UnlockedSkills,
+    /// Min/MaxOperandValue, Min/MaxOperandCount, AllowParentheses + MaxParenthesisDepth,
+    /// AllowUnknownOperand + UnknownOperandCount, AnswerOptionCount, MinGateGap,
+    /// AllowNegativeResults. A request nem duplikálja ezeket.
+    public DifficultyProfile Difficulty { get; init; }
     public SkillProfile SkillProfile { get; init; }     // lehet null (Fázis 2-ben)
-    public int LaneCount { get; init; }                 // 2..4
+    public int LaneCount { get; init; }                 // 2..4; >= Difficulty.AnswerOptionCount
     public float ThinkTimeSeconds { get; init; }        // > 0
     public ResourceType RewardResource { get; init; }
     public RewardSpec Reward { get; init; }
@@ -368,13 +403,13 @@ public sealed class ProblemGenerationRequest
 **Generálási folyamat (kötelező lépéssorrend):**
 
 ```
-1. rng      = new SeededRandom(request.Seed)
+1. rng      = new DeterministicRandomSource(request.Seed)
 2. rngExpr  = rng.Derive("expression")
 3. rngDist  = rng.Derive("distractors")
 4. rngLane  = rng.Derive("lane-shuffle")
 5. kifejezés generálása a Difficulty + SkillProfile korlátaiból
 6. helyes válasz kiértékelése / egyenlet megoldása
-7. disztraktorok generálása (LaneCount - 1 darab)
+7. disztraktorok generálása (AnswerOptionCount - 1 darab)
 8. opciók összeállítása, sávokhoz rendelés rngLane-nel keverve
 9. SkillClassifier.Classify  →  SkillTags
 10. ProblemValidator.Validate  →  ha Error, vissza az 5. lépésre (max 16 kör),
@@ -383,24 +418,29 @@ public sealed class ProblemGenerationRequest
 
 ### 7.1. `ResourceOperationComparison` specialitásai (spec 5.1, 17.3)
 
-- A generátor **két** (`LaneCount == 2`) vagy több kapu-műveletet állít elő:
+- A generátor **két** (`AnswerOptionCount == 2`) vagy több kapu-műveletet állít elő:
   `AnswerOption.GateOperation` egy `BinaryOperationNode(op, UnknownNode, ConstantNode)` alak,
   ahol az `UnknownNode` a snapshot helye. `DisplayLabel` pl. `"×2"`, `"+25"`.
 - `Value` = `Evaluate(op alkalmazva ResourceSnapshotValue-ra)`.
 - `IsCorrect` = a `Goal` szerinti optimum (`Maximize` ⇒ legnagyobb, `Minimize` ⇒ legkisebb,
   `ReachTarget` ⇒ `TargetValue`-hoz legközelebbi; döntetlen tilos).
+- A kapueredmények közti eltérés `>= Difficulty.MinGateGap`, különben újragenerálás
+  (`GATE_GAP_TOO_SMALL`).
 - `ResourceCapacity` megadása esetén az **effektív** érték `min(Value, Capacity)` alapján kell
   eldönteni az optimumot; ha a vágás megfordítaná a sorrendet, a feladat érvénytelen és
   újragenerálódik.
+- `Goal == Minimize` esetén a `RewardResource` kötelezően `EnemyArmor` (GAME_DESIGN 3.4),
+  és a `RewardDelta` negatív — ez a kívánt viselkedés.
 - Referencia-eset (spec 17.3): snapshot = 20, bal `×2` ⇒ 40, jobb `+25` ⇒ 45,
   `Goal = Maximize` ⇒ a jobb kapu a helyes; `RewardSpec.UseSnapshotDelta = true`,
   így a jutalom `45 − 20 = +25`.
 
 ### 7.2. `AnswerLaneSelection` specialitásai (spec 5.2)
 
-- `LaneCount` darab opció, pontosan egy helyes, a maradék disztraktor.
+- `AnswerOptionCount` darab opció, pontosan egy helyes, a maradék disztraktor.
 - `DisplayExpression` a „`7 × 8 = ?`” alak; a `=` és a `?` a megjelenítéshez tartozik.
-- `RewardSpec.FlatAmount` adja a jutalmat (pl. +30 lőszer), `UseSnapshotDelta = false`.
+- `RewardSpec.FlatAmount` adja a jutalmat (a `RewardTableSO.LaneRewardBase` CL-enkénti értéke),
+  `UseSnapshotDelta = false`.
 
 ---
 
@@ -442,5 +482,6 @@ public sealed class ExplanationStep
 | Nincs `UnityEngine` | a `tests/` solution buildje Unity nélkül sikeres |
 | Teljesítmény | `Generate` átlagos ideje `< 2 ms` közepes nehézségen (prefetch miatt nem blokkoló) |
 | Hibaágak | `DIVISION_BY_ZERO`, `OVERFLOW`, `NO_INTEGER_SOLUTION`, `GENERATION_EXHAUSTED` mindegyikére explicit teszt |
+| Kapu-invariánsok | 10 000 generált kapupár: egyik sem sérti a `GATE_TIE`, `GATE_GAP_TOO_SMALL`, `GATE_ORDER_INVERTED_BY_CAP` szabályt (GAME_DESIGN 10./1.) |
 
 Részletek: `docs/TESTING.md` (qa-unity agent felelőssége).

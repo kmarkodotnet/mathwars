@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2703130405c4e3f419decf72e0b0b6c1, type: 3}
+  m_Name: EnemyVisualCatalog
+  m_EditorClassIdentifier: MathHorde.Presentation::MathHorde.Presentation.Enemies.EnemyVisualCatalogSO
+  _entries:
+  - EnemyId: basic_bot
+    VisualKey: basic
+    Prefab: {fileID: 9120452580623854927, guid: 7a5fa7471290dde45bbdee73cc0370c3, type: 3}
+    PrewarmCount: 6
+  - EnemyId: fast_bot
+    VisualKey: fast
+    Prefab: {fileID: 3285968455357314329, guid: 6ec5658ff34a55143bf4e8b807d508a1, type: 3}
+    PrewarmCount: 6
+  - EnemyId: armored_bot
+    VisualKey: armored
+    Prefab: {fileID: 8882192894357281397, guid: 2c640691dca4e4a4580e9674497c1f4a, type: 3}
+    PrewarmCount: 6
+  - EnemyId: boss_bot
+    VisualKey: boss
+    Prefab: {fileID: 1062326909828682348, guid: 923567d94841c3047b819f3f897a70b1, type: 3}
+    PrewarmCount: 6
+  - EnemyId: swarmlet_bot
+    VisualKey: swarmlet
+    Prefab: {fileID: 1293605779797050122, guid: 87df70f734f1afd469bd803c7b733216, type: 3}
+    PrewarmCount: 12
+  _fallback:
+    EnemyId: 
+    VisualKey: basic
+    Prefab: {fileID: 9120452580623854927, guid: 7a5fa7471290dde45bbdee73cc0370c3, type: 3}
+    PrewarmCount: 6

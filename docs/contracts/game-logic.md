@@ -5,6 +5,11 @@
 > **`noEngineReferences: true` — `using UnityEngine;` TILOS** (ADR-003, ARCHITECTURE 2.1).
 > A réteg headless futtatható: a balancing-szimuláció (spec 9.1) Unity nélkül pörgeti.
 > Mélység: **MÉLY** (Fázis 1–3). `IAdaptiveDifficultyService`: **vázlat** (Fázis 4).
+>
+> **Revízió r2 (2026-11-16, architect):** a `ResourceService.Initialize` pajzs-viselkedése
+> rögzítve (`MaxShield`); `EnemySnapshot` definíció/snapshot szétválasztása explicit;
+> `ApplyCombatReward` kill-refund szemantika; `CalculateStars` küszöbök SO-ból;
+> `LossDiagnosis` bevezetve az adaptációs bemenethez (ld. core-domain.md 6.).
 
 ## 0. Alapszabályok
 
@@ -16,6 +21,7 @@
 | G4 | `Tick`-ben nincs allokáció: előre allokált bufferek, `struct` eseménypayload, nincs LINQ. |
 | G5 | A `MathEventDirector` és a `WaveDirector` **nem hivatkozik egymásra** — sem fordításilag, sem futásidőben. Ezt a konstruktor-szignatúrák kényszerítik ki (egyiknek sincs a másikra mutató paramétere). |
 | G6 | Minden véletlen `IRandomSource`-ból (ADR-006). |
+| G7 | A GameLogic csak `*Definition` (statikus) és saját `*Snapshot`/`Active*` (futásidejű) típusokkal dolgozik. Futásidejű mezőt `*Definition`-re visszaírni TILOS — a definíció immutable és példányok között osztott (ADR-009). |
 
 ---
 
@@ -58,6 +64,7 @@ public interface IGameEvent { double GameTime { get; } }
 | `RewardApplied` | RewardService | `MathEventId EventId, ResourceType Resource, int AppliedDelta, double GameTime` |
 | `RewardSkipped` | RewardService | `MathEventId EventId, string ReasonCode, double GameTime` (`"INCORRECT"`, `"ALREADY_APPLIED"`, `"EXPIRED"`) |
 | `ChallengeLevelChanged` | AdaptiveDifficultyService | `int Previous, int New, string Reason, double GameTime` (Fázis 4) |
+| `AssistTierChanged` | AdaptiveDifficultyService | `int PreviousTier, int NewTier, string TriggerCode, double GameTime` (Fázis 4) |
 
 A Presentation réteg **kizárólag** ezekre az eseményekre és az olvasó property-kre
 támaszkodhat; a GameLogic belső mezőihez nem fér hozzá.
@@ -78,6 +85,7 @@ public interface IResourceService
     /// EGYETLEN módosítási út. Pozitív és negatív delta egyaránt.
     /// A [Min, Max] tartományra vág, soha nem dob kivételt.
     /// reasonCode: "WEAPON_FIRE" | "MATH_GATE" | "ENEMY_CONTACT" | "PICKUP" | "LEVEL_INIT"
+    ///           | "KILL_REFUND" | "BOSS_PHASE"
     ResourceChange ApplyDelta(ResourceType type, int delta, string reasonCode);
 
     /// Lefoglalás: csak akkor von le, ha a teljes mennyiség rendelkezésre áll.
@@ -103,8 +111,31 @@ public interface IResourceService
 | **Nincs publikus `SetCurrent(type, absoluteValue)`** | A kapu soha nem írhatja felül a harc által módosított tényleges értéket (spec 5.1, 17.3). |
 | `ApplyDelta` hívása a Presentation rétegből | A HUD csak olvas és `ResourceChanged` eseményre animál. |
 | `ResourcePool` közvetlen mutálása | `ResourceState` immutable. |
+| A `Max` levezetése a `Starting*` értékből | Minden erőforrásnak **saját** `Max` mezője van a `LevelDefinition`-ben (`MaxAmmo`, `MaxHealth`, `MaxShield`) — spec 4.3. |
 
-### 2.2. Kötelező referencia-viselkedés (spec 17.3 teszt)
+### 2.2. `Initialize` kötelező viselkedése
+
+A `LevelDefinition` három `Starting*`/`Max*` párjából **pontosan** három pool jön létre,
+azonos minta szerint; semmilyen erőforrásra nincs speciális eset:
+
+| Pool | `Current` | `Max` | Mikor jön létre |
+|---|---|---|---|
+| `Ammo` | `level.StartingAmmo` | `level.MaxAmmo` | mindig (`MaxAmmo > 0` invariáns) |
+| `Health` | `level.StartingHealth` | `level.MaxHealth` | mindig (`MaxHealth > 0` invariáns) |
+| `Shield` | `level.StartingShield` | `level.MaxShield` | **csak ha `level.MaxShield > 0`** |
+
+`MaxShield == 0` ⇒ a pajzs-pool **nem jön létre** (a `ResourcePool` invariánsa `Max > 0`),
+és a `GetCurrent(Shield)` / `GetMax(Shield)` 0-t ad — ez a pajzs-mechanika nélküli pálya
+helyes ábrázolása. A `Max = max(StartingShield, 1)` jellegű kerülő megoldás TILOS.
+
+`ResourceType.EnemyArmor` és `Energy` poolokat az `Initialize` **nem** hoz létre az
+F1–F4 fázisban (F5-től a `LevelDefinition` bővítése után).
+
+### 2.3. Kötelező referencia-viselkedés (spec 17.3 teszt)
+
+> Ez egy **unit-teszt-forgatókönyv**, nem pályaalapértelmezés. A `LevelDefinitionSO`
+> `StartingAmmo` alapértéke 60 (GAME_DESIGN.md 6.1, difficulty-model.md 5.1); az alábbi
+> 20-as kezdőérték azért szerepel, mert a spec 17.3 példája ezzel számol.
 
 ```
 Initialize: Ammo = 20 (Max 200)
@@ -143,15 +174,24 @@ public interface ICombatService
     void ApplyCombatModifiers(CombatModifiers modifiers);
 }
 
+/// Egy ÉLŐ ellenség-példány futásidejű állapota.
+///
+/// SZÁNDÉKOS SZÉTVÁLASZTÁS (ADR-009): a `CurrentHealth` / `Position` / `Lane` / `IsAlive`
+/// mezők ITT élnek, és NEM az `EnemyDefinition`-ön. Az `EnemyDefinition` statikus
+/// konfiguráció, amelynek egyetlen példánya a pálya összes azonos ellenségén osztódik;
+/// ha futásidejű mezőt tenne, két egyszerre élő „basic_bot” felülírná egymás életerejét.
+/// A spec 4.1 „aktuális és maximális életerő” követelményét ez a struct elégíti ki
+/// (`CurrentHealth` + `MaxHealth`, utóbbi a definícióból, a `CombatModifiers`-szel
+/// már megskálázva). A két típust összevonni TILOS.
 public readonly struct EnemySnapshot
 {
     public int InstanceId { get; }
-    public string EnemyId { get; }
+    public string EnemyId { get; }       // vissza a definícióra (katalógus-kulcs)
     public EnemyType Type { get; }
     public LaneIndex Lane { get; }
     public Vec2 Position { get; }
     public int CurrentHealth { get; }
-    public int MaxHealth { get; }
+    public int MaxHealth { get; }         // EnemyDefinition.MaxHealth × EnemyHealthMultiplier
     public bool IsAlive { get; }
 }
 
@@ -178,10 +218,15 @@ public readonly struct CombatModifiers
    a `CombatService` nem is látja őket; a `MathEventDirector` kezeli a pozíciójukat.
 5. Ellenség a játékos vonalát elérve `ContactDamage`-et okoz, majd `AttackCooldownSeconds`-ig
    nem sebez újra; a `PlayerHealth` `ApplyDelta(Health, -dmg, "ENEMY_CONTACT")`-on keresztül fogy.
+   **Pajzs-sorrend (GAME_DESIGN.md 6.1):** ha van `Shield` pool és `GetCurrent(Shield) > 0`,
+   a sebzés **először** a pajzsból fogy 1:1 arányban (`ApplyDelta(Shield, -x, "ENEMY_CONTACT")`),
+   és csak a maradék megy a `Health`-re. A pajzs tehát puffer, nem külön életerő.
 6. `Health <= 0` ⇒ `IsPlayerAlive = false` + `PlayerDamaged` majd a `GameSessionService`
    `SessionEnded(Defeat, HealthDepleted)`.
 7. Ellenség `CurrentHealth <= 0` ⇒ `EnemyKilled`, az instance a poolba kerül (az instance-id
-   nem használható újra ugyanabban a session-ben).
+   nem használható újra ugyanabban a session-ben). A `GameSessionService` ezután
+   `IRewardService.ApplyCombatReward(Ammo, definition.RewardValue, "KILL_REFUND")`-ot hív
+   (ld. 7. szakasz).
 
 ---
 
@@ -234,8 +279,11 @@ public readonly struct MathEventId : IEquatable<MathEventId>
     public static MathEventId Create(int sessionSeed, int eventIndex);
 }
 
-public enum MathEventState { Inactive, Preview, Approaching, AwaitingDecision,
-                             Resolving, Completed, Expired }
+public enum MathEventState
+{
+    Inactive = 0, Preview = 1, Approaching = 2, AwaitingDecision = 3,
+    Resolving = 4, Completed = 5, Expired = 6
+}
 
 public interface IMathEventDirector
 {
@@ -305,6 +353,16 @@ LaneSelected            : AwaitingDecision -> Resolving  (ResolveCommand sorba �
 RewardApplied           : Resolving -> Completed
 ```
 
+**Függetlenségi szerződés (spec 14., 23./4. — kikényszerített, nem csak leírt):**
+
+| Kikényszerítés | Hogyan |
+|---|---|
+| `IMathEventDirector` konstruktorában/`Initialize`-jában nincs `ICombatService` és nincs `IWaveDirector` paraméter | fordítási szinten lehetetlen a hívás |
+| `ICombatService`/`IWaveDirector` konstruktorában nincs `IMathEventDirector` | ua. |
+| A matek-állapotgép nem hívhat `IGameClock.Pause()`-t | a `IGameClock` mutáló metódusait csak a `GameSessionService` kapja meg |
+| A `CombatService` entitáslistája nem tartalmaz `GateCarrier`-t | külön lista, külön típus (3. szakasz 4. szabály) |
+| Teszt-kapu | `MathEventDirectorIndependenceTests`: `MathEventDirector` 10 000 Tick-en végigfut `ICombatService` példány NÉLKÜL; `CombatService` ugyanígy `IMathEventDirector` nélkül |
+
 > `IsCorrect` a `GateCarrier`-ben **csak a feloldás után** használható fel vizuálisan.
 > Döntés előtt a Presentation nem jeleníthet meg semmit belőle (spec 5.1: „A két kapu
 > eredményét a döntés előtt ne jelenítsd meg”). Ezt a code-reviewer ellenőrzi.
@@ -342,7 +400,10 @@ public readonly struct GateResolution
     public MathAnswer Answer { get; }           // az Analytics/QuestionAttempt számára
 }
 
-public enum GateResolutionOutcome { CorrectRewarded, IncorrectNoReward, Expired, Duplicate }
+public enum GateResolutionOutcome
+{
+    CorrectRewarded = 0, IncorrectNoReward = 1, Expired = 2, Duplicate = 3
+}
 ```
 
 **Feloldási szabályok:**
@@ -367,7 +428,11 @@ public interface IRewardService
     /// Bármely további hívás: AlreadyApplied, erőforrás-változás NÉLKÜL.
     RewardApplication ApplyReward(in GateResolution resolution);
 
-    /// Nem matematikai jutalom (ellenség kill, pickup) — nem idempotencia-köteles.
+    /// Nem matematikai jutalom — nem idempotencia-köteles, mert nincs esemény-azonosítója.
+    /// Két kötelező használata:
+    ///  - KILL_REFUND: minden `EnemyKilled` után `EnemyDefinition.RewardValue` LŐSZER
+    ///    (difficulty-model.md 5.: `killRefund`, alap +1/kill — a matek-hozam ~10%-a).
+    ///  - BOSS_PHASE: boss-fázisok közti életerő-jóváírás (GAME_DESIGN.md 6.1: +15 HP).
     ResourceChange ApplyCombatReward(ResourceType type, int amount, string reasonCode);
 
     IReadOnlyCollection<Guid> AppliedRewardEventIds { get; }
@@ -383,8 +448,17 @@ public readonly struct RewardApplication
     public ResourceType Resource { get; }
 }
 
-public enum RewardApplicationStatus { Applied, AlreadyApplied, SkippedIncorrect, SkippedExpired }
+public enum RewardApplicationStatus
+{
+    Applied = 0, AlreadyApplied = 1, SkippedIncorrect = 2, SkippedExpired = 3
+}
 ```
+
+**Matek-hozam vs. harci hozam aránya (balance-invariáns, spec 1.: „a lőszer a matek jutalma”):**
+a `ApplyCombatReward(Ammo, …)` összege egy pályán **nem haladhatja meg** a tökéletes
+matek-hozam (`MathRewardPerfect`, difficulty-model.md 5.3) 15%-át. Ezt a
+balancing-szimuláció (`SIM-plan.md`) ellenőrzi; sérülés esetén a `RewardValue` csökken,
+nem a matek-jutalom nő.
 
 ---
 
@@ -443,7 +517,9 @@ EvaluateVictoryOrDefeat(t);
 - Győzelem: `WaveDirector.AllWavesCompleted && !IsBossActive && Health > 0 &&
   MathAccuracy >= LevelDefinition.RequiredMathAccuracy`.
 - Vereség: `Health <= 0` ⇒ `Defeat / HealthDepleted`.
-- **A lőszer kifogyása önmagában nem vereség** (spec 1.3).
+- **A lőszer kifogyása önmagában nem vereség** (spec 1.3) — ezért nincs `FailureReason`
+  értéke. A lőszerhiány mint ok a `GameSessionRecord.LossDiagnosis = AmmoStarvation`
+  mért diagnózisban jelenik meg (core-domain.md 6.), amit a `Finalize` számol ki.
 
 ---
 
@@ -454,11 +530,25 @@ public interface ILevelProgressionService
 {
     PlayerProgress RegisterSessionResult(PlayerProgress progress, GameSessionRecord session);
     bool IsLevelUnlocked(PlayerProgress progress, LevelId levelId);
+    /// A WorldDefinition.UnlockRequirement MINDEN kitöltött tagját ellenőrzi (ÉS-kapcsolat):
+    /// csillag-arány + készség-fokozat (SkillProfile.GetMasteryLevel) + opcionális CL.
     bool IsWorldUnlocked(PlayerProgress progress, WorldId worldId);
-    int CalculateStars(GameSessionRecord session, LevelDefinition level);  // 0..3
+    /// 0..3 csillag. A küszöbök NEM kódba égetettek: `StarRatingSO`
+    /// (scriptable-object-schema.md 14.), GAME_DESIGN.md 7.1 értékeivel.
+    int CalculateStars(GameSessionRecord session, LevelDefinition level);
     IReadOnlyList<string> GrantRewards(PlayerProgress progress, GameSessionRecord session);
 }
 ```
+
+**Csillag-szabályok (GAME_DESIGN.md 7.1, `StarRatingSO`-ból):**
+
+| Csillag | Feltétel |
+|---|---|
+| ★1 | `Result == Victory` |
+| ★2 | ★1 **és** `MathAccuracy >= Star2MinAccuracy` (alap 0.70) |
+| ★3 | ★2 **és** `MathAccuracy >= Star3MinAccuracy` (alap 0.90) **és** `TimedOutQuestions <= Star3MaxTimeouts` (alap 0) |
+
+Sebességtől függő csillag **nincs** (spec 12.).
 
 ---
 
@@ -486,9 +576,11 @@ public interface IAdaptiveDifficultyService
 
 public readonly struct InLevelAssistance
 {
+    public int Tier { get; }                      // 0 = nincs segítség, 1..4
     public float ThinkTimeMultiplier { get; }     // 1.0 .. 1.8
     public float GateSpeedMultiplier { get; }     // 0.6 .. 1.0
     public int MathComplexityDelta { get; }       // -2 .. 0
+    public int LaneCountOverride { get; }         // 0 = nincs felülírás, egyébként 2..4
     public CombatModifiers CombatModifiers { get; }
     public bool TriggerRescueWave { get; }
 }
@@ -504,13 +596,16 @@ public readonly struct InLevelAssistance
 | további 2 egymást követő bukás | ismét `−1` |
 | mindig | `1 <= ChallengeLevel <= 10` |
 | 3 egymást követő hibás matek-válasz | `InLevelAssistance` aktiválódik |
-| matematikailag jó, de harcban bukik | csak `CombatDifficulty` csökken |
-| jól számol, de lassan | csak `TimePressure` csökken (több idő) |
-| globális szint emelkedik | **nem** old fel nem tanult készséget (`SkillClassifier.IsEligible`) |
+| `LossDiagnosis == EnemyBreakthrough` és pontosság >= 80% | csak `CombatDifficulty` csökken |
+| `LossDiagnosis == AmmoStarvation` és pontosság >= 80% | jutalomérték +10% és balance-log jelzés (modellhiba gyanú), `MathComplexity` változatlan |
+| jól számol, de lassan (timeout-arány > 20%) | csak `TimePressure` csökken (több idő) |
+| globális szint emelkedik | **nem** old fel nem tanult készséget (`SkillProfile.GetMasteryLevel(tag) >= Introduced` kötelező) |
 | minden változtatás | `DifficultyAdjustment` naplóba kerül (visszakövethetőség, spec 7.6) |
 
 Hiszterézis: a `ChallengeLevel` legfeljebb `±1` egy pálya után, és a `Recalculate` a három
 dimenziót pályánként legfeljebb `±1`-gyel mozdítja (spec 7.6 „lassan változzon”).
+A konkrét számértékek: `balance/difficulty-model.md` 6. szakasz; a konfiguráció helye
+`AdaptationRulesSO` + `InLevelAssistSO` (scriptable-object-schema.md 8.1, 8.2).
 
 ---
 
@@ -549,6 +644,6 @@ Implementáció: `LocalSaveRepository`, `GameConfigurationRepository` (Infrastru
 | A. Folyamatos harc | `ICombatService.Tick`, `IWaveDirector.Tick` |
 | B. Erőforrás-kapu | `IGateResolutionService` + `IResourceService.CaptureSnapshot/ApplyDelta` |
 | C. Eredményválasztó sávok | `IMathEventDirector` + `AnswerLaneSelection` |
-| F. Valós idejű működés | `IGameSessionService.Tick` sorrend (8. szakasz), G5 szabály |
+| F. Valós idejű működés | `IGameSessionService.Tick` sorrend (8. szakasz), G5 szabály, 5. szakasz függetlenségi táblázata |
 | G. Erőforráshiány | `WeaponDryFire`, `TryConsume == false` ág |
 | H. Adaptív nehézség | `IAdaptiveDifficultyService` (Fázis 4) |

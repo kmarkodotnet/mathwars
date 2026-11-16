@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6c5b7ede40d8eb4785498c396c23f2d, type: 3}
+  m_Name: ArenaConfig
+  m_EditorClassIdentifier: MathHorde.Presentation::MathHorde.Presentation.Arena.ArenaConfigSO
+  _laneCount: 3
+  _laneWidth: 2.2
+  _arenaLength: 24
+  _laneDividerWidth: 0.18
+  _spawnZoneDepthRatio: 0.18
+  _playerZoneDepthRatio: 0.15
+  _cameraHeight: 7.5
+  _cameraBackOffset: 4.5
+  _cameraFieldOfView: 55
+  _cameraLookAtDepthRatio: 0.55
+  _cameraLookAtHeight: 0.5
+  _sunRotationEuler: {x: 55, y: -35, z: 0}
+  _sunIntensity: 1.15
+  _sunColor: {r: 1, g: 0.96, b: 0.88, a: 1}

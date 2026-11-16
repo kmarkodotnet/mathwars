@@ -314,13 +314,17 @@ foreach ($s in $script:steps) {
 }
 Write-Host "====================================================" -ForegroundColor Cyan
 
-$failedSteps = $script:steps | Where-Object { $_.Status -in @("FAILED", "ERROR") }
+# FIGYELEM: a @(...) burkolas KOTELEZO. A Where-Object egyetlen talalat eseten
+# magat az objektumot adja vissza (nem tombot), annak pedig nincs .Count
+# property-je -> a felteteI csendben hamis lett, es a szkript ZOLD vegeredmenyt
+# adott egy BUKOTT lepes mellett is. Ez mar a masodik hamis-zold hiba itt.
+$failedSteps = @($script:steps | Where-Object { $_.Status -in @("FAILED", "ERROR") })
 if ($failedSteps.Count -gt 0) {
     Write-Host "[test.ps1] VEGEREDMENY: BUKOTT ($($failedSteps.Count) lepes hibas/hibazott)." -ForegroundColor Red
     exit 1
 }
 
-$warningSteps = $script:steps | Where-Object { $_.Status -eq "WARNING" }
+$warningSteps = @($script:steps | Where-Object { $_.Status -eq "WARNING" })
 if ($warningSteps.Count -gt 0) {
     Write-Host "[test.ps1] VEGEREDMENY: ZOLD, DE FIGYELMEZTETESSEL ($($warningSteps.Count) lepes 0 tesztet futtatott -- lasd fent)." -ForegroundColor Yellow
 } else {
