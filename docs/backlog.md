@@ -1,6 +1,6 @@
 # Math Horde — Feladatlista (backlog index)
 
-> **Állapot (2026-11-17): 24 kész / 92 feladat (68 nyitott).**
+> **Állapot (2026-11-17): 25 kész / 92 feladat (67 nyitott).**
 >
 > Ez a fájl **generált index**. Minden feladat önálló fájlban él, és a fájl
 > HELYE jelzi az állapotát:
@@ -50,11 +50,11 @@
 | [F1-18](backlog/done/F1-18.md) | Harci EditMode + PlayMode tesztek (spec 17.4) | `qa-unity` | F1-17 | SZEKV | M | A, F, G | ✅ **KÉSZ** |
 | [F1-19](backlog/done/F1-19.md) | TextMeshPro betűtípus és magyar glyph-lefedettség | `ui-dev` | F1-16 | PAR | S | K | ✅ **KÉSZ** |
 
-## Fázis 2 — Matematikai alapmotor  ·  0/13 kész
+## Fázis 2 — Matematikai alapmotor  ·  1/13 kész
 
 | ID | Feladat | Agent | Függ | Mód | Becs. | Krit. | Állapot |
 |---|---|---|---|---|---|---|---|
-| [F2-01](backlog/F2-01.md) | Core Expressions | `math-engine-dev` | F0-02 | SZEKV | M | D | ⬜ nyitott |
+| [F2-01](backlog/done/F2-01.md) | Core Expressions | `math-engine-dev` | F0-02 | SZEKV | M | D | ✅ **KÉSZ** |
 | [F2-02](backlog/F2-02.md) | Core Problems | `math-engine-dev` | F2-01 | SZEKV | M | D | ⬜ nyitott |
 | [F2-03](backlog/F2-03.md) | IExpressionEvaluator + a 6 operátor szabályai, EvaluationOptions,… | `math-engine-dev` | F2-01 | SZEKV | M | D | ⬜ nyitott |
 | [F2-04](backlog/F2-04.md) | IEquationSolver | `math-engine-dev` | F2-03 | SZEKV | L | E | ⬜ nyitott |
