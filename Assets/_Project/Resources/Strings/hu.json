@@ -7,5 +7,10 @@
   "hud.pause": "Szünet",
   "hud.challengeLevel": "Kihívásszint: {0}",
   "result.gameOver": "Játék vége",
-  "result.retry": "Újrakezdés"
+  "result.gameOverEncouragement": "Egyre jobban megy! Próbáld meg újra.",
+  "result.victory": "Pálya teljesítve!",
+  "result.victoryEncouragement": "Szép munka, ügyes voltál!",
+  "result.retry": "Újrakezdés",
+  "result.nextLevel": "Következő pálya",
+  "result.backToWorlds": "Vissza a világokhoz"
 }

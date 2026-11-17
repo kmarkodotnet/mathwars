@@ -1,6 +1,6 @@
 # Math Horde — Feladatlista (backlog index)
 
-> **Állapot (2026-11-16): 20 kész / 91 feladat (71 nyitott).**
+> **Állapot (2026-11-17): 21 kész / 91 feladat (70 nyitott).**
 >
 > Ez a fájl **generált index**. Minden feladat önálló fájlban él, és a fájl
 > HELYE jelzi az állapotát:
@@ -26,7 +26,7 @@
 | [F0-04](backlog/done/F0-04.md) | .gitignore, scripts/build.ps1, scripts/test.ps1, gyökér README.md a… | `mobile-build-engineer` | F0-01 | PAR | S | — | ✅ **KÉSZ** |
 | [F0-05](backlog/done/F0-05.md) | Resources/Strings/hu.json váz + ILocalizationService kulcsfeloldó | `ui-dev` | F0-02 | PAR | S | — | ✅ **KÉSZ** |
 
-## Fázis 1 — Játszható harci alap  ·  15/18 kész
+## Fázis 1 — Játszható harci alap  ·  16/18 kész
 
 | ID | Feladat | Agent | Függ | Mód | Becs. | Krit. | Állapot |
 |---|---|---|---|---|---|---|---|
@@ -45,7 +45,7 @@
 | [F1-13](backlog/done/F1-13.md) | PlayerController + InputAdapter | `ui-dev` | F1-12, F1-11 | PAR | M | K | ✅ **KÉSZ** |
 | [F1-14](backlog/done/F1-14.md) | EnemyPresenter + ObjectPool<T> ellenséghez, lövedékhez, effekthez | `ui-dev` | F1-12 | PAR | M | A | ✅ **KÉSZ** |
 | [F1-15](backlog/done/F1-15.md) | Alap GameplayHUD | `ui-dev` | F0-05, F1-04 | PAR | M | K | ✅ **KÉSZ** |
-| [F1-16](backlog/F1-16.md) | GameOver / LevelResultScreen minimál változat | `ui-dev` | F1-11 | PAR | S | A | ⬜ nyitott |
+| [F1-16](backlog/done/F1-16.md) | GameOver / LevelResultScreen minimál változat | `ui-dev` | F1-11 | PAR | S | A | ✅ **KÉSZ** |
 | [F1-17](backlog/F1-17.md) | Gameplay scene összeállítása Editor-eszközzel (reprodukálható, nem kézi) | `gameplay-dev` | F1-08, F1-13, F1-14, F1-15 | SZEKV | M | A, K | ⬜ nyitott |
 | [F1-18](backlog/F1-18.md) | Harci EditMode + PlayMode tesztek (spec 17.4) | `qa-unity` | F1-17 | SZEKV | M | A, F, G | ⬜ nyitott |
 

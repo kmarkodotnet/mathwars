@@ -5,7 +5,9 @@
 // Key convention (documented here so every layer follows the same scheme):
 //   "<area>.<item>" in lowerCamelCase segments, e.g.:
 //     hud.health, hud.ammo, hud.shield, hud.wave, hud.level,
-//     hud.pause, hud.challengeLevel, result.gameOver, result.retry
+//     hud.pause, hud.challengeLevel, result.gameOver,
+//     result.gameOverEncouragement, result.victory, result.victoryEncouragement,
+//     result.retry, result.nextLevel, result.backToWorlds
 // Parameterized entries use positional placeholders ("{0}", "{1}", ...) with
 // string.Format semantics, e.g. hud.wave = "{0}. hullám".
 namespace MathHorde.Core.Common
