@@ -130,51 +130,33 @@ public static class GameplaySceneBuilder
     /// under -nographics) — observed to fail Unity Test Framework's
     /// UnityLogCheckDelegatingCommand regardless of
     /// LogAssert.ignoreFailingMessages (that flag does not cover this
-    /// path). Importing the essentials for real, once, removes the
-    /// condition that schedules the check at all — the correct fix, not a
-    /// test-only workaround, since every future player-facing TMP text in
-    /// this project was silently missing its default resources too.
+    /// path).
+    ///
+    /// UPDATE (F1-19): the original fix here (a hand-rolled, minimal
+    /// TMP_Settings ScriptableObject at Assets/_Project/Resources/) only
+    /// silenced the delayed-prompt symptom — it left m_defaultFontAsset
+    /// empty AND, as F1-19 discovered, the project was ALSO entirely
+    /// missing TMP's runtime shaders (com.unity.ugui does not ship them;
+    /// they are exclusively part of the TMP Essential Resources package),
+    /// so every TMP text would have rendered with a broken/missing
+    /// material regardless of font. F1-19 replaced the hand-rolled
+    /// TMP_Settings.asset with the REAL package contents (shaders, the
+    /// stock LiberationSans SDF + TTF + TMP Settings.asset, same GUIDs),
+    /// versioned directly at the canonical "Assets/TextMesh Pro/..." path
+    /// (see that task's Napló / TmpHungarianFontSetup.cs header comment for
+    /// why direct versioning was chosen over AssetDatabase.ImportPackage).
+    /// Only the Hungarian-glyph-coverage default-font override still needs
+    /// an idempotent Editor step, which is what remains here.
     /// </summary>
-    private const string TmpSettingsAssetPath = "Assets/_Project/Resources/TMP Settings.asset";
-
     private static void EnsureTmpEssentialResourcesImported()
     {
-        // TMPro.TMP_Settings.LoadDefaultSettings() just does
-        // Resources.Load<TMP_Settings>("TMP Settings") — it does not care
-        // WHICH Resources/ folder the asset lives in, so placing a minimal
-        // one here avoids TMP_PackageResourceImporter.ImportResources(...)
-        // entirely (that API extracts a .unitypackage via
-        // AssetDatabase.ImportPackage, which is asynchronous and was
-        // observed to not finish before a single -batchmode -quit
-        // -executeMethod call exits — the asset never materialized and the
-        // delayed importer-prompt kept firing on every subsequent run).
-        // A plain CreateInstance+CreateAsset has no such timing dependency.
-        if (AssetDatabase.LoadAssetAtPath<TMPro.TMP_Settings>(TmpSettingsAssetPath) != null)
-        {
-            return;
-        }
-
-        EnsureFolder("Assets/_Project/Resources");
-        var settings = ScriptableObject.CreateInstance<TMPro.TMP_Settings>();
-
-        // TMP_Settings.instance ALSO re-triggers the delayed importer-prompt
-        // whenever the internal "assetVersion" string field doesn't match
-        // TMP_Settings.s_CurrentAssetVersion ("2" in this package version) —
-        // a plain CreateInstance leaves it at its serialized default (empty),
-        // which still counted as "needs reimport". Both fields are
-        // `internal`/non-public, so set it through SerializedObject (works
-        // off Unity's serialization metadata, not C# accessibility).
-        var so = new SerializedObject(settings);
-        SerializedProperty assetVersionProp = so.FindProperty("assetVersion");
-        if (assetVersionProp != null)
-        {
-            assetVersionProp.stringValue = "2";
-            so.ApplyModifiedPropertiesWithoutUndo();
-        }
-
-        AssetDatabase.CreateAsset(settings, TmpSettingsAssetPath);
-        AssetDatabase.SaveAssets();
-        AssetDatabase.Refresh();
+        // A kanonikus TMP Essential Resources fa (shaderek, gyári
+        // LiberationSans SDF/.ttf, TMP Settings.asset) a repóban közvetlenül
+        // verziózva van (Assets/TextMesh Pro/...) — nincs mit "importálni"
+        // futásidőben. Ami idempotens Editor-lépést igényel, az a magyar
+        // ékezetkészlettel (ő/ű is) ellátott SAJÁT alapértelmezett
+        // betűtípus biztosítása — lásd TmpHungarianFontSetup.EnsureAll().
+        TmpHungarianFontSetup.EnsureAll();
     }
 
     /// <summary>
