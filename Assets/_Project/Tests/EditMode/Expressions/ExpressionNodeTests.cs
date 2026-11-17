@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using MathHorde.Core.Expressions;
 using NUnit.Framework;
 
