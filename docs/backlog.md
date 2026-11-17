@@ -1,6 +1,6 @@
 # Math Horde — Feladatlista (backlog index)
 
-> **Állapot (2026-11-17): 28 kész / 92 feladat (64 nyitott).**
+> **Állapot (2026-11-17): 29 kész / 92 feladat (63 nyitott).**
 >
 > Ez a fájl **generált index**. Minden feladat önálló fájlban él, és a fájl
 > HELYE jelzi az állapotát:
@@ -50,7 +50,7 @@
 | [F1-18](backlog/done/F1-18.md) | Harci EditMode + PlayMode tesztek (spec 17.4) | `qa-unity` | F1-17 | SZEKV | M | A, F, G | ✅ **KÉSZ** |
 | [F1-19](backlog/done/F1-19.md) | TextMeshPro betűtípus és magyar glyph-lefedettség | `ui-dev` | F1-16 | PAR | S | K | ✅ **KÉSZ** |
 
-## Fázis 2 — Matematikai alapmotor  ·  4/13 kész
+## Fázis 2 — Matematikai alapmotor  ·  5/13 kész
 
 | ID | Feladat | Agent | Függ | Mód | Becs. | Krit. | Állapot |
 |---|---|---|---|---|---|---|---|
@@ -58,7 +58,7 @@
 | [F2-02](backlog/done/F2-02.md) | Core Problems | `math-engine-dev` | F2-01 | SZEKV | M | D | ✅ **KÉSZ** |
 | [F2-03](backlog/done/F2-03.md) | IExpressionEvaluator + a 6 operátor szabályai, EvaluationOptions,… | `math-engine-dev` | F2-01 | SZEKV | M | D | ✅ **KÉSZ** |
 | [F2-04](backlog/done/F2-04.md) | IEquationSolver | `math-engine-dev` | F2-03 | SZEKV | L | E | ✅ **KÉSZ** |
-| [F2-05](backlog/F2-05.md) | IExpressionGenerator | `math-engine-dev` | F2-03, F1-03 | SZEKV | L | D, E | ⬜ nyitott |
+| [F2-05](backlog/done/F2-05.md) | IExpressionGenerator | `math-engine-dev` | F2-03, F1-03 | SZEKV | L | D, E | ✅ **KÉSZ** |
 | [F2-06](backlog/F2-06.md) | ISkillClassifier | `math-engine-dev` | F2-02 | PAR | M | I | ⬜ nyitott |
 | [F2-07](backlog/F2-07.md) | IDistractorGenerator | `math-engine-dev` | F2-03, F2-06 | SZEKV | L | D | ⬜ nyitott |
 | [F2-08](backlog/F2-08.md) | IProblemValidator | `math-engine-dev` | F2-02, F2-03 | SZEKV | M | D | ⬜ nyitott |
