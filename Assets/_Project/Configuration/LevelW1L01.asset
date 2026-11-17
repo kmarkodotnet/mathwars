@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa694d45a6c364b488ebf170647c78b9, type: 3}
+  m_Name: LevelW1L01
+  m_EditorClassIdentifier: MathHorde.Infrastructure::MathHorde.Infrastructure.Configuration.LevelDefinitionSO
+  _id: w1-l01
+  _displayNameKey: level.w1l01.name
+  _templateType: 1
+  _laneCount: 3
+  _targetDurationSeconds: 150
+  _waves:
+  - _waveIndex: 0
+    _startGameTime: 0
+    _durationSeconds: 60
+    _spawns:
+    - _enemy: {fileID: 11400000, guid: 5e96af01c3b49b94ba9a560ede27a0f0, type: 2}
+      _count: 10
+      _spawnIntervalSeconds: 1.2
+      _allowedLanes: 
+  - _waveIndex: 1
+    _startGameTime: 60
+    _durationSeconds: 60
+    _spawns:
+    - _enemy: {fileID: 11400000, guid: b0c8647f1a7b5c445ac2b8e8b604f947, type: 2}
+      _count: 8
+      _spawnIntervalSeconds: 1
+      _allowedLanes: 
+    - _enemy: {fileID: 11400000, guid: 8279c0ede7cffb14da38ce3e2dfb40f7, type: 2}
+      _count: 4
+      _spawnIntervalSeconds: 2
+      _allowedLanes: 
+  _startingAmmo: 60
+  _maxAmmo: 200
+  _startingHealth: 100
+  _maxHealth: 100
+  _startingShield: 0
+  _maxShield: 0
+  _weapon: {fileID: 11400000, guid: 0b89f75d1a684d84393446b8e73b6fca, type: 2}
+  _environmentPrefab: {fileID: 7025003356192807735, guid: f2d41b9ad558e364c998705c2eed7919, type: 3}

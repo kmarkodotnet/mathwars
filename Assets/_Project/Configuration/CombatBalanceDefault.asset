@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6115b97c97f1ace43932d6452664eade, type: 3}
+  m_Name: CombatBalanceDefault
+  m_EditorClassIdentifier: MathHorde.Infrastructure::MathHorde.Infrastructure.Configuration.CombatBalanceSO
+  _enemySpeedMultiplier: 1
+  _enemyHealthMultiplier: 1
+  _enemyDamageMultiplier: 1
+  _waveSizeMultiplier: 1
+  _spawnRateMultiplier: 1
+  _ammoConsumptionMultiplier: 1
+  _maxWaveGapSeconds: 2
+  _playerLaneChangeSpeed: 10
+  _enemyDespawnDepth: -2
+  _maxActiveEnemies: 60
+  _enemyPoolSize: 80
+  _projectilePoolSize: 120
+  _perChallengeLevelSpeedStep: 0
+  _perChallengeLevelHealthStep: 0
+  _perChallengeLevelWaveSizeStep: 0
+  _shieldAbsorbsBeforeHealth: 1

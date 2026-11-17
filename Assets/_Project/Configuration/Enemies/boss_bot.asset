@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f3caeb744301f584492ad30bd4e670cb, type: 3}
+  m_Name: boss_bot
+  m_EditorClassIdentifier: MathHorde.Infrastructure::MathHorde.Infrastructure.Configuration.EnemyDefinitionSO
+  _id: boss_bot
+  _displayNameKey: enemy.boss_bot
+  _type: 3
+  _maxHealth: 150
+  _movementSpeed: 1
+  _contactDamage: 25
+  _attackCooldownSeconds: 1
+  _rewardValue: 10
+  _prefab: {fileID: 4195685913782134092, guid: 923567d94841c3047b819f3f897a70b1, type: 3}
+  _tintColor: {r: 1, g: 1, b: 1, a: 1}
+  _scaleMultiplier: 1
+  _spawnGroupSize: 1
