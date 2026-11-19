@@ -6,7 +6,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using MathHorde.Core.Levels;
+using MathHorde.Core.Problems;
 using MathHorde.Core.Progress;
+using MathHorde.Core.Skills;
 using MathHorde.Infrastructure.Configuration;
 using MathHorde.Tests.PlayMode.TestSupport;
 using NUnit.Framework;
@@ -384,6 +386,150 @@ namespace MathHorde.Tests.PlayMode.Configuration
                 () => new GameConfigurationRepository(
                     new[] { enemySo }, new[] { weaponSo }, new[] { levelSo },
                     combatBalance: null, developerSettings: devSettings),
+                Throws.TypeOf<ConfigurationValidationException>());
+        }
+
+        // --- F2-10: MathDifficultyTableSO -> Core.Skills.DifficultyProfile ---
+
+        private MathDifficultyTableSO CreateValidMathDifficultyTable()
+        {
+            // CreateInstance already carries the designed 10 rows (the SO's field
+            // default is the contract's "Default (szint 1 -> 10)" column).
+            var table = ScriptableObject.CreateInstance<MathDifficultyTableSO>();
+            _created.Add(table);
+            return table;
+        }
+
+        private GameConfigurationRepository CreateRepositoryWithDifficultyTable(
+            MathDifficultyTableSO table)
+        {
+            EnemyDefinitionSO enemySo = CreateValidEnemy();
+            WeaponConfigSO weaponSo = CreateValidWeapon();
+            LevelDefinitionSO levelSo = CreateValidLevel("w1-l01", weaponSo, enemySo);
+
+            return new GameConfigurationRepository(
+                new[] { enemySo }, new[] { weaponSo }, new[] { levelSo },
+                combatBalance: null, developerSettings: null, mathDifficultyTable: table);
+        }
+
+        [Test]
+        public void GetDifficultyForLevel_TranslatesTheRowIntoACoreDifficultyProfile()
+        {
+            MathDifficultyTableSO table = CreateValidMathDifficultyTable();
+            GameConfigurationRepository repository = CreateRepositoryWithDifficultyTable(table);
+            MathDifficultyTableSO.MathDifficultyLevelEntry row = table.GetLevel(8);
+
+            DifficultyProfile profile = repository.GetDifficultyForLevel(8);
+
+            Assert.That(profile.ChallengeLevel, Is.EqualTo(8));
+            Assert.That(profile.MathComplexity, Is.EqualTo(row.MathComplexity));
+            Assert.That(profile.TimePressure, Is.EqualTo(row.TimePressure));
+            Assert.That(profile.CombatDifficulty, Is.EqualTo(row.CombatDifficulty));
+            Assert.That(profile.AllowedOperators.Count, Is.EqualTo(row.AllowedOperators.Count));
+            Assert.That(profile.MinOperandValue, Is.EqualTo(row.MinOperandValue));
+            Assert.That(profile.MaxOperandValue, Is.EqualTo(row.MaxOperandValue));
+            Assert.That(profile.MaxResultValue, Is.EqualTo(row.MaxResultValue));
+            Assert.That(profile.MinOperandCount, Is.EqualTo(row.MinOperandCount));
+            Assert.That(profile.MaxOperandCount, Is.EqualTo(row.MaxOperandCount));
+            Assert.That(profile.AllowParentheses, Is.EqualTo(row.AllowParentheses));
+            Assert.That(profile.MaxParenthesisDepth, Is.EqualTo(row.MaxParenthesisDepth));
+            Assert.That(profile.AllowUnknownOperand, Is.EqualTo(row.AllowUnknownOperand));
+            Assert.That(profile.UnknownOperandCount, Is.EqualTo(row.UnknownOperandCount));
+            Assert.That(profile.AllowNegativeResults, Is.EqualTo(row.AllowNegativeResults));
+            Assert.That(profile.AnswerOptionCount, Is.EqualTo(row.AnswerOptionCount));
+            Assert.That(profile.BaseThinkTimeSeconds, Is.EqualTo(row.BaseThinkTimeSeconds));
+            Assert.That(profile.MinGateGap, Is.EqualTo(row.MinGateGap));
+            Assert.That(profile.AutoAdaptationEnabled, Is.True);
+        }
+
+        [Test]
+        public void GetDifficultyForLevel_UnlockedSkillsIsTheCumulativeUnionUpToThatLevel()
+        {
+            MathDifficultyTableSO table = CreateValidMathDifficultyTable();
+            GameConfigurationRepository repository = CreateRepositoryWithDifficultyTable(table);
+
+            DifficultyProfile level1 = repository.GetDifficultyForLevel(1);
+            DifficultyProfile level3 = repository.GetDifficultyForLevel(3);
+
+            // Level 1's own skills are still there at level 3 (nothing is forgotten) ...
+            foreach (SkillTag tag in level1.UnlockedSkills)
+            {
+                Assert.That(level3.IsSkillUnlocked(tag), Is.True);
+            }
+
+            // ... and level 3's newly introduced skills are NOT present at level 1.
+            Assert.That(level1.IsSkillUnlocked(SkillTag.Multiplication), Is.False);
+            Assert.That(level3.IsSkillUnlocked(SkillTag.Multiplication), Is.True);
+            Assert.That(level3.UnlockedSkills.Count, Is.GreaterThan(level1.UnlockedSkills.Count));
+        }
+
+        [Test]
+        public void GetDifficultyForLevel_EveryLevelOneToTenTranslates()
+        {
+            MathDifficultyTableSO table = CreateValidMathDifficultyTable();
+            GameConfigurationRepository repository = CreateRepositoryWithDifficultyTable(table);
+
+            for (int level = 1; level <= MathDifficultyTableSO.RequiredLevelCount; level++)
+            {
+                DifficultyProfile profile = repository.GetDifficultyForLevel(level);
+                Assert.That(profile.ChallengeLevel, Is.EqualTo(level));
+            }
+        }
+
+        [Test]
+        public void GetDifficultyForLevel_UsesEditedAssetValuesAndSnapshotsThem()
+        {
+            MathDifficultyTableSO table = CreateValidMathDifficultyTable();
+            MathDifficultyTableSO.MathDifficultyLevelEntry row = table.GetLevel(3);
+            ConfigTestReflection.SetField(row, "_maxOperandValue", 35);
+            ConfigTestReflection.SetField(row, "_maxResultValue", 15);
+            ConfigTestReflection.SetField(row, "_mathComplexity", 2);
+            ConfigTestReflection.SetField(row, "_timePressure", 1);
+            ConfigTestReflection.SetField(row, "_combatDifficulty", 4);
+            GameConfigurationRepository repository = CreateRepositoryWithDifficultyTable(table);
+
+            ConfigTestReflection.SetField(row, "_maxOperandValue", 999);
+            ConfigTestReflection.SetField(row, "_requiredSkills", null);
+            DifficultyProfile profile = repository.GetDifficultyForLevel(3);
+
+            Assert.That(profile.MaxOperandValue, Is.EqualTo(35));
+            Assert.That(profile.MaxResultValue, Is.EqualTo(15));
+            Assert.That(profile.MathComplexity, Is.EqualTo(2));
+            Assert.That(profile.TimePressure, Is.EqualTo(1));
+            Assert.That(profile.CombatDifficulty, Is.EqualTo(4));
+            Assert.That(profile.IsSkillUnlocked(SkillTag.Multiplication), Is.True);
+        }
+
+        [Test]
+        public void GetDifficultyForLevel_WithoutATable_ThrowsInvalidOperation()
+        {
+            GameConfigurationRepository repository = CreateRepositoryWithDifficultyTable(null);
+
+            Assert.That(
+                () => repository.GetDifficultyForLevel(1),
+                Throws.TypeOf<System.InvalidOperationException>());
+        }
+
+        [Test]
+        public void GetDifficultyForLevel_WithLevelOutsideTheTable_ThrowsKeyNotFound()
+        {
+            MathDifficultyTableSO table = CreateValidMathDifficultyTable();
+            GameConfigurationRepository repository = CreateRepositoryWithDifficultyTable(table);
+
+            Assert.That(
+                () => repository.GetDifficultyForLevel(11),
+                Throws.TypeOf<KeyNotFoundException>());
+        }
+
+        [Test]
+        public void Constructor_InvalidMathDifficultyTable_ThrowsConfigurationValidationException()
+        {
+            MathDifficultyTableSO table = CreateValidMathDifficultyTable();
+            ConfigTestReflection.SetField(
+                table, "_levels", new List<MathDifficultyTableSO.MathDifficultyLevelEntry>());
+
+            Assert.That(
+                () => CreateRepositoryWithDifficultyTable(table),
                 Throws.TypeOf<ConfigurationValidationException>());
         }
     }

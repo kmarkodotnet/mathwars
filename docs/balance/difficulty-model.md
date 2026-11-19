@@ -89,6 +89,37 @@ vezeti be (`WorldDefinition.IntroducedSkills`, lásd `worlds.md`).
 
 A `MinGateGap` szintenként: **CL1–3: 8**, **CL4–10: 4** (GAME_DESIGN.md 3.5/1.).
 
+### 2.1. `RequiredSkills` szintenként (F2-10)
+
+A 2. táblázat szöveges tartalmát a `MathDifficultyLevelEntry.RequiredSkills` lista képezi le
+`SkillTag`-ekre. A mező jelentése: **a szint által bevezetett vagy ott először elvárt
+készségek**. A `GameConfigurationRepository.GetDifficultyForLevel(CL)` ezek **kumulatív unióját**
+(1..CL sorok) adja a `DifficultyProfile.UnlockedSkills`-be — ez a tábla szerinti **felső korlát**;
+a tényleges feloldás ennek és a `SkillProfile` legalább `Introduced` fokozatú készségeinek a
+metszete a világban bevezetett készségekkel (spec 7.2/7.4, ADR-010), amit a
+`DifficultyProfile.WithUnlockedSkillsFrom(skills, introducedWorldSkills)` végez.
+A hívó a világprogresszióból adja át a bevezetett készségeket; a táblából kapott profil
+önmagában még csak tartalmi felső korlát, nem egy gyermek végleges feloldott készségkészlete.
+Erre azért is szükség van, mert a `SkillProfile` F1–F3 fallbackje a még nem próbált
+készséget is `Introduced` fokozatúnak tekinti. A végleges bekötés F4/F5 feladat.
+
+| CL | `RequiredSkills` | Indoklás |
+|---|---|---|
+| 1 | `Addition`, `Subtraction`, `SingleDigitAddition`, `ResourceComparison` | 10-ig összeadás/kivonás; a `ResourceComparison` már az 1. szinten kell, mert **mindkét** feladattípus kötelező a kezdetektől (spec 23/3., kritérium B–C) |
+| 2 | `TwoDigitAddition`, `CrossingTen`, `SubtractionWithBorrowing` | 20-ig, tízesátlépéssel és kölcsönzéssel |
+| 3 | `Multiplication`, `Division`, `TimesTable2`, `TimesTable3`, `TimesTable5`, `TimesTable10` | szorzótábla-bevezetés a „könnyű” táblákkal (2, 3, 5, 10) |
+| 4 | `TimesTable4`, `TimesTable6`, `TimesTable7`, `TimesTable8`, `TimesTable9` | a teljes szorzótábla kiegészítése |
+| 5 | `Remainder`, `DivisionWithRemainder` | `mod` és `divrem` megjelenése |
+| 6 | `TwoDigitMultiplication` | kétjegyű × egyjegyű |
+| 7 | `OperatorPrecedence`, `Parentheses`, `MultiStepExpressions` | vegyes műveletek, egyszerű zárójel, 3 operandus |
+| 8 | `MissingOperand` | hiányzó operandus / egyenlet alak |
+| 9 | `TwoDigitMultiplication` | ugyanaz a készség, nehezebb sávban (11–25 × 11–19) — új `SkillTag` nem indokolt |
+| 10 | `MultiStepExpressions` | 4–5 operandus, beágyazott zárójel; szerkezeti, nem új művelet |
+
+Új `SkillTag` bevezetése ehhez a táblához nem volt szükséges: a CL9 és a CL10 **szerkezeti**
+bonyolódás ugyanazokon a készségeken (lásd a skála meredekségéről szóló bekezdést), ezért ott
+a már bevezetett tag ismétlődik. A kumulatív unió miatt az ismétlés nem duplikál.
+
 ---
 
 ## 3. TimePressure szintenként

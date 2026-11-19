@@ -1,0 +1,310 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f3c81d24be74a1ab0e5c6d790a84157, type: 3}
+  m_Name: MathDifficultyTable
+  m_EditorClassIdentifier: MathHorde.Infrastructure::MathHorde.Infrastructure.Configuration.MathDifficultyTableSO
+  _levels:
+  - _level: 1
+    _descriptionKey: diff.l1
+    _allowedOperators:
+    - 0
+    - 1
+    _minOperandValue: 1
+    _maxOperandValue: 10
+    _maxResultValue: 10
+    _minOperandCount: 2
+    _maxOperandCount: 2
+    _allowParentheses: 0
+    _maxParenthesisDepth: 0
+    _allowUnknownOperand: 0
+    _unknownOperandCount: 0
+    _unknownPlacement: 0
+    _allowNegativeResults: 0
+    _answerOptionCount: 2
+    _laneCount: 2
+    _minGateGap: 8
+    _baseThinkTimeSeconds: 14
+    _requiredSkills:
+    - 0
+    - 1
+    - 10
+    - 9
+    _mathComplexity: 1
+    _timePressure: 1
+    _combatDifficulty: 1
+  - _level: 2
+    _descriptionKey: diff.l2
+    _allowedOperators:
+    - 0
+    - 1
+    _minOperandValue: 1
+    _maxOperandValue: 20
+    _maxResultValue: 20
+    _minOperandCount: 2
+    _maxOperandCount: 2
+    _allowParentheses: 0
+    _maxParenthesisDepth: 0
+    _allowUnknownOperand: 0
+    _unknownOperandCount: 0
+    _unknownPlacement: 0
+    _allowNegativeResults: 0
+    _answerOptionCount: 2
+    _laneCount: 2
+    _minGateGap: 8
+    _baseThinkTimeSeconds: 13
+    _requiredSkills:
+    - 11
+    - 12
+    - 13
+    _mathComplexity: 2
+    _timePressure: 2
+    _combatDifficulty: 2
+  - _level: 3
+    _descriptionKey: diff.l3
+    _allowedOperators:
+    - 0
+    - 1
+    - 2
+    - 3
+    _minOperandValue: 1
+    _maxOperandValue: 20
+    _maxResultValue: 100
+    _minOperandCount: 2
+    _maxOperandCount: 2
+    _allowParentheses: 0
+    _maxParenthesisDepth: 0
+    _allowUnknownOperand: 0
+    _unknownOperandCount: 0
+    _unknownPlacement: 0
+    _allowNegativeResults: 0
+    _answerOptionCount: 3
+    _laneCount: 3
+    _minGateGap: 8
+    _baseThinkTimeSeconds: 11.5
+    _requiredSkills:
+    - 2
+    - 3
+    - 14
+    - 15
+    - 17
+    - 22
+    _mathComplexity: 3
+    _timePressure: 3
+    _combatDifficulty: 3
+  - _level: 4
+    _descriptionKey: diff.l4
+    _allowedOperators:
+    - 0
+    - 1
+    - 2
+    - 3
+    _minOperandValue: 1
+    _maxOperandValue: 50
+    _maxResultValue: 100
+    _minOperandCount: 2
+    _maxOperandCount: 2
+    _allowParentheses: 0
+    _maxParenthesisDepth: 0
+    _allowUnknownOperand: 0
+    _unknownOperandCount: 0
+    _unknownPlacement: 0
+    _allowNegativeResults: 0
+    _answerOptionCount: 3
+    _laneCount: 3
+    _minGateGap: 4
+    _baseThinkTimeSeconds: 10
+    _requiredSkills:
+    - 16
+    - 18
+    - 19
+    - 20
+    - 21
+    _mathComplexity: 4
+    _timePressure: 4
+    _combatDifficulty: 4
+  - _level: 5
+    _descriptionKey: diff.l5
+    _allowedOperators:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    _minOperandValue: 1
+    _maxOperandValue: 100
+    _maxResultValue: 100
+    _minOperandCount: 2
+    _maxOperandCount: 2
+    _allowParentheses: 0
+    _maxParenthesisDepth: 0
+    _allowUnknownOperand: 0
+    _unknownOperandCount: 0
+    _unknownPlacement: 0
+    _allowNegativeResults: 0
+    _answerOptionCount: 3
+    _laneCount: 3
+    _minGateGap: 4
+    _baseThinkTimeSeconds: 8
+    _requiredSkills:
+    - 4
+    - 24
+    _mathComplexity: 5
+    _timePressure: 5
+    _combatDifficulty: 5
+  - _level: 6
+    _descriptionKey: diff.l6
+    _allowedOperators:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    _minOperandValue: 1
+    _maxOperandValue: 100
+    _maxResultValue: 200
+    _minOperandCount: 2
+    _maxOperandCount: 3
+    _allowParentheses: 0
+    _maxParenthesisDepth: 0
+    _allowUnknownOperand: 0
+    _unknownOperandCount: 0
+    _unknownPlacement: 0
+    _allowNegativeResults: 0
+    _answerOptionCount: 4
+    _laneCount: 4
+    _minGateGap: 4
+    _baseThinkTimeSeconds: 7.5
+    _requiredSkills:
+    - 23
+    _mathComplexity: 6
+    _timePressure: 6
+    _combatDifficulty: 6
+  - _level: 7
+    _descriptionKey: diff.l7
+    _allowedOperators:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    _minOperandValue: 1
+    _maxOperandValue: 50
+    _maxResultValue: 200
+    _minOperandCount: 3
+    _maxOperandCount: 3
+    _allowParentheses: 1
+    _maxParenthesisDepth: 1
+    _allowUnknownOperand: 0
+    _unknownOperandCount: 0
+    _unknownPlacement: 0
+    _allowNegativeResults: 0
+    _answerOptionCount: 4
+    _laneCount: 4
+    _minGateGap: 4
+    _baseThinkTimeSeconds: 7
+    _requiredSkills:
+    - 5
+    - 6
+    - 8
+    _mathComplexity: 7
+    _timePressure: 7
+    _combatDifficulty: 7
+  - _level: 8
+    _descriptionKey: diff.l8
+    _allowedOperators:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    _minOperandValue: 1
+    _maxOperandValue: 60
+    _maxResultValue: 200
+    _minOperandCount: 3
+    _maxOperandCount: 3
+    _allowParentheses: 1
+    _maxParenthesisDepth: 1
+    _allowUnknownOperand: 1
+    _unknownOperandCount: 1
+    _unknownPlacement: 2
+    _allowNegativeResults: 0
+    _answerOptionCount: 4
+    _laneCount: 4
+    _minGateGap: 4
+    _baseThinkTimeSeconds: 6.5
+    _requiredSkills:
+    - 7
+    _mathComplexity: 8
+    _timePressure: 8
+    _combatDifficulty: 8
+  - _level: 9
+    _descriptionKey: diff.l9
+    _allowedOperators:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    _minOperandValue: 1
+    _maxOperandValue: 99
+    _maxResultValue: 500
+    _minOperandCount: 3
+    _maxOperandCount: 4
+    _allowParentheses: 1
+    _maxParenthesisDepth: 1
+    _allowUnknownOperand: 1
+    _unknownOperandCount: 1
+    _unknownPlacement: 2
+    _allowNegativeResults: 0
+    _answerOptionCount: 4
+    _laneCount: 4
+    _minGateGap: 4
+    _baseThinkTimeSeconds: 5.5
+    _requiredSkills:
+    - 23
+    _mathComplexity: 9
+    _timePressure: 9
+    _combatDifficulty: 9
+  - _level: 10
+    _descriptionKey: diff.l10
+    _allowedOperators:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    _minOperandValue: 1
+    _maxOperandValue: 99
+    _maxResultValue: 999
+    _minOperandCount: 4
+    _maxOperandCount: 5
+    _allowParentheses: 1
+    _maxParenthesisDepth: 2
+    _allowUnknownOperand: 1
+    _unknownOperandCount: 1
+    _unknownPlacement: 3
+    _allowNegativeResults: 0
+    _answerOptionCount: 4
+    _laneCount: 4
+    _minGateGap: 4
+    _baseThinkTimeSeconds: 4.5
+    _requiredSkills:
+    - 8
+    _mathComplexity: 10
+    _timePressure: 10
+    _combatDifficulty: 10

@@ -1,6 +1,18 @@
 # IMPLEMENTATION_STATUS.md — Math Horde
 
-Utolsó frissítés: **2026-11-16** · Aktuális fázis: **ARCH kész + F0 (projektváz) kész; F1 (játszható harci alap) következik**
+Utolsó frissítés: **2026-11-19** · Aktuális fázis: **F2 — matematikai alapmotor, folyamatban**
+
+Az aktuális feladatonkénti állapotot a [generált backlog](backlog.md) tartalmazza.
+A megszakadt **F2-10 elkészült**: szerkeszthető tízszintes nehézségtábla,
+immutable Core `DifficultyProfile`, repository-fordítás és készségszűrés.
+A teljes `scripts/test.ps1 -Full` kapu eredménye: **.NET 530/530,
+Unity EditMode 529/529, Unity PlayMode 225/225**, mindenütt 0 hiba.
+Részletes bizonyíték: [F2-10 napló](backlog/done/F2-10.md);
+döntések és fennmaradó integrációs feladatok: [ADR-012](decisions/ADR-012.md).
+
+> Az alábbi 0–7. szakasz a **2026-11-16-i F0-átadás történeti pillanatképe**.
+> Az ottani feladatszámok, hiánylisták és következő lépések nem a jelenlegi
+> fejlesztési állapotot írják le; az aktuális állapot forrása a fenti backlog.
 
 > Ez a fájl a spec 22. szakasza által kötelezően előírt állapotkövetés.
 > Szabály: **a dokumentáció soha nem helyettesíti az implementációt** — itt

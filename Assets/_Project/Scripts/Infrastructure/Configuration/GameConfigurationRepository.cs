@@ -19,13 +19,18 @@
 // currently defines a target shape for it (no consumer exists yet in Phase 1),
 // and inventing one here would be scope creep beyond this task's brief.
 //
+// F2-10 UPDATE: Core.Skills.DifficultyProfile and MathDifficultyTableSO now
+// exist, so GetDifficultyForLevel(int) is implemented below (contract
+// game-logic.md 11.) — the table asset is an OPTIONAL constructor argument so
+// every Phase 1 call site keeps working unchanged. GetWorld/GetAllWorlds and
+// GetBalanceSection<T> are still missing (WorldDefinition is F5 scope), so the
+// interface itself remains unimplemented; the note below still applies to them.
+//
 // CONTRACT GAP (flagged, not silently resolved — see F1-10's closing report):
 // this class does not implement the contract's IConfigurationProvider
 // interface (game-logic.md 11.). That interface's GetWorld/GetAllWorlds
-// return Core.Levels.WorldDefinition and GetDifficultyForLevel returns
-// Core.Skills.DifficultyProfile — NEITHER TYPE EXISTS IN CODE YET
-// (WorldDefinition is F5 scope; DifficultyProfile needs F2's
-// MathDifficultyTableSO). Materializing the full interface is left to
+// return Core.Levels.WorldDefinition — THAT TYPE DOES NOT EXIST IN CODE YET
+// (F5 scope). Materializing the full interface is left to
 // whichever F2/F5 task introduces those Core types; until then this class
 // exposes plain public methods for exactly what F1 needs (and what
 // GameSessionService.StartSession already consumes: LevelDefinition,
@@ -36,7 +41,9 @@ using System.Collections.Generic;
 using System.Linq;
 using MathHorde.Core.Common;
 using MathHorde.Core.Levels;
+using MathHorde.Core.Problems;
 using MathHorde.Core.Progress;
+using MathHorde.Core.Skills;
 using MathHorde.GameLogic;
 
 namespace MathHorde.Infrastructure.Configuration
@@ -48,13 +55,15 @@ namespace MathHorde.Infrastructure.Configuration
         private readonly Dictionary<string, LevelDefinition> _levels;
         private readonly CombatModifiers _combatModifiers;
         private readonly bool _hasCombatModifiers;
+        private readonly Dictionary<int, DifficultyProfile> _difficultyProfiles;
 
         public GameConfigurationRepository(
             IReadOnlyList<EnemyDefinitionSO> enemyAssets,
             IReadOnlyList<WeaponConfigSO> weaponAssets,
             IReadOnlyList<LevelDefinitionSO> levelAssets,
             CombatBalanceSO combatBalance = null,
-            DeveloperSettingsSO developerSettings = null)
+            DeveloperSettingsSO developerSettings = null,
+            MathDifficultyTableSO mathDifficultyTable = null)
         {
             if (enemyAssets == null)
             {
@@ -87,6 +96,11 @@ namespace MathHorde.Infrastructure.Configuration
                 CollectAssetErrors(errors, developerSettings, developerSettings.name, "DeveloperSettingsSO");
             }
 
+            if (mathDifficultyTable != null)
+            {
+                CollectAssetErrors(errors, mathDifficultyTable, mathDifficultyTable.name, "MathDifficultyTableSO");
+            }
+
             if (errors.Count > 0)
             {
                 throw new ConfigurationValidationException(errors);
@@ -95,6 +109,7 @@ namespace MathHorde.Infrastructure.Configuration
             _enemies = enemies;
             _weapons = weapons;
             _levels = levels;
+            _difficultyProfiles = mathDifficultyTable == null ? null : BuildDifficultyProfiles(mathDifficultyTable);
 
             if (combatBalance != null)
             {
@@ -164,6 +179,92 @@ namespace MathHorde.Infrastructure.Configuration
             }
 
             return _combatModifiers;
+        }
+
+        /// <summary>
+        /// Contract game-logic.md 11. IConfigurationProvider.GetDifficultyForLevel(int):
+        /// translates one row of MathDifficultyTableSO (scriptable-object-schema.md 5.)
+        /// into the engine-free Core.Skills.DifficultyProfile the MathEngine and the
+        /// GameLogic consume (math-engine.md P7 — "az engine nem olvas konfigurációt").
+        /// </summary>
+        /// <remarks>
+        /// Two fields of the profile cannot come from a single table row, and are
+        /// filled as documented here rather than invented silently:
+        ///
+        /// * <c>UnlockedSkills</c> — the contract defines the final set as the
+        ///   intersection of WorldDefinition.IntroducedSkills and the SkillProfile's
+        ///   at-least-Introduced skills (core-domain.md 4., worlds.md 1.), and this
+        ///   signature receives neither. What the TABLE can state is the cumulative
+        ///   union of RequiredSkills over rows 1..challengeLevel — the designed UPPER
+        ///   BOUND of what this level may ask for. Narrowing it to the actual child is
+        ///   DifficultyProfile.WithUnlockedSkillsFrom(skills, introducedWorldSkills), called by the
+        ///   adaptive-difficulty service (Phase 4). This keeps spec 7.2/7.4 intact:
+        ///   the set can only ever shrink from here, so raising the global level can
+        ///   never unlock an untaught operation.
+        /// * <c>AutoAdaptationEnabled</c> — a parent setting
+        ///   (ParentSettingsDefaultsSO, scriptable-object-schema.md, Phase 6), which
+        ///   does not exist in code yet. Defaulted to true, matching spec 7.: adaptive
+        ///   difficulty is the product's default behaviour, not an opt-in.
+        ///
+        /// The row's UnknownPlacement column is NOT part of DifficultyProfile (Core
+        /// may not reference the MathEngine enum — see DifficultyProfile's CONTRACT
+        /// NOTE 2); read it from MathDifficultyTableSO.GetLevel(level).UnknownPlacement.
+        /// </remarks>
+        public DifficultyProfile GetDifficultyForLevel(int challengeLevel)
+        {
+            if (_difficultyProfiles == null)
+            {
+                throw new InvalidOperationException(
+                    "No MathDifficultyTableSO was supplied to this GameConfigurationRepository; GetDifficultyForLevel() is unavailable without one.");
+            }
+
+            if (!_difficultyProfiles.TryGetValue(challengeLevel, out DifficultyProfile profile))
+            {
+                throw new KeyNotFoundException($"No difficulty profile for challenge level {challengeLevel}.");
+            }
+
+            return profile;
+        }
+
+        private static Dictionary<int, DifficultyProfile> BuildDifficultyProfiles(MathDifficultyTableSO table)
+        {
+            var profiles = new Dictionary<int, DifficultyProfile>();
+            var unlockedSkills = new HashSet<SkillTag>();
+
+            // The constructor has validated the ordered ten rows. Compile once,
+            // just like enemies/levels: later asset edits cannot invalidate a
+            // running session's configuration or mutate an existing Core profile.
+            foreach (MathDifficultyTableSO.MathDifficultyLevelEntry row in table.Levels)
+            {
+                foreach (SkillTag tag in row.RequiredSkills)
+                {
+                    unlockedSkills.Add(tag);
+                }
+
+                profiles.Add(row.Level, new DifficultyProfile(
+                    challengeLevel: row.Level,
+                    mathComplexity: row.MathComplexity,
+                    timePressure: row.TimePressure,
+                    combatDifficulty: row.CombatDifficulty,
+                    allowedOperators: row.AllowedOperators.ToArray(),
+                    unlockedSkills: unlockedSkills,
+                    minOperandValue: row.MinOperandValue,
+                    maxOperandValue: row.MaxOperandValue,
+                    maxResultValue: row.MaxResultValue,
+                    minOperandCount: row.MinOperandCount,
+                    maxOperandCount: row.MaxOperandCount,
+                    allowParentheses: row.AllowParentheses,
+                    maxParenthesisDepth: row.MaxParenthesisDepth,
+                    allowUnknownOperand: row.AllowUnknownOperand,
+                    unknownOperandCount: row.UnknownOperandCount,
+                    allowNegativeResults: row.AllowNegativeResults,
+                    answerOptionCount: row.AnswerOptionCount,
+                    baseThinkTimeSeconds: row.BaseThinkTimeSeconds,
+                    minGateGap: row.MinGateGap,
+                    autoAdaptationEnabled: true));
+            }
+
+            return profiles;
         }
 
         private static Dictionary<string, EnemyDefinition> BuildEnemyCatalog(
