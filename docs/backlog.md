@@ -1,6 +1,6 @@
 # Math Horde — Feladatlista (backlog index)
 
-> **Állapot (2026-11-19): 35 kész / 92 feladat (57 nyitott).**
+> **Állapot (2026-11-19): 36 kész / 92 feladat (56 nyitott).**
 >
 > Ez a fájl **generált index**. Minden feladat önálló fájlban él, és a fájl
 > HELYE jelzi az állapotát:
@@ -50,7 +50,7 @@
 | [F1-18](backlog/done/F1-18.md) | Harci EditMode + PlayMode tesztek (spec 17.4) | `qa-unity` | F1-17 | SZEKV | M | A, F, G | ✅ **KÉSZ** |
 | [F1-19](backlog/done/F1-19.md) | TextMeshPro betűtípus és magyar glyph-lefedettség | `ui-dev` | F1-16 | PAR | S | K | ✅ **KÉSZ** |
 
-## Fázis 2 — Matematikai alapmotor  ·  11/13 kész
+## Fázis 2 — Matematikai alapmotor  ·  12/13 kész
 
 | ID | Feladat | Agent | Függ | Mód | Becs. | Krit. | Állapot |
 |---|---|---|---|---|---|---|---|
@@ -65,7 +65,7 @@
 | [F2-09](backlog/done/F2-09.md) | IMathProblemGenerator | `math-engine-dev` | F2-05, F2-07, F2-08 | SZEKV | L | C, D, E | ✅ **KÉSZ** |
 | [F2-10](backlog/done/F2-10.md) | MathDifficultyTableSO (10 sor) + Core DifficultyProfile fordítás | `balance-designer` | F2-02, F1-10 | PAR | M | — | ✅ **KÉSZ** |
 | [F2-11](backlog/done/F2-11.md) | Spec 17.1 pontérték-tesztek (7×8, 29÷4, (6+4)×3, 8+4×6−7, 7+?=3×8,… | `qa-unity` | F2-04 | PAR | M | D, E | ✅ **KÉSZ** |
-| [F2-12](backlog/F2-12.md) | 10 000 seedelt fuzz-teszt + válaszopció-invariánsok (17.2) +… | `qa-unity` | F2-09 | SZEKV | M | D | ⬜ nyitott |
+| [F2-12](backlog/done/F2-12.md) | 10 000 seedelt fuzz-teszt + válaszopció-invariánsok (17.2) +… | `qa-unity` | F2-09 | SZEKV | M | D | ✅ **KÉSZ** |
 | [F2-13](backlog/F2-13.md) | ProblemExplanationService null-implementációja + kontrakt-váz | `math-engine-dev` | F2-02 | PAR | S | — | ⬜ nyitott |
 
 ## Fázis 3 — Mindkét matematikai kaputípus  ·  0/14 kész

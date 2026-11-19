@@ -213,19 +213,27 @@ A 17.1 további hibaágait az Evaluator
 `Evaluate_TrueIntOverflow_FailsWithOverflow`, valamint a Solver
 `SolveForTarget_MultiplicationByTwo_OddTarget_FailsWithNoIntegerSolution` és
 `Solve_MultipleUnknowns_FailsWithMultipleUnknowns` tesztjei fedik.
-A teljes kapu a meglévő `MathProblemGeneratorFuzzTests` öt, egyenként
+A teljes kapu a `MathProblemGeneratorFuzzTests` tizenöt, egyenként
 10 000 seedelt feladatot ellenőrző körét is futtatja (seed: `209000 + i`,
-`i = 0..9999`, feladattípusonként); minden feladaton ellenőrzi többek között
-a validitást, az egyetlen helyes választ, a különböző opciókat és a 2–4-es
-opciószámot, mintánként pedig a sávpozíciók eloszlását.
+`i = 0..9999`, mind az öt feladattípusra, külön 2/3/4 opcióval).
+Minden feladaton ellenőrzi többek között a validitást, az egyetlen helyes
+választ, a különböző opciókat, a 2–4-es opciószámot, a seed/típus/nehézség
+metaadatokat és a mintán belüli egyedi, nem üres azonosítót. Minden teljes,
+10 000-es csoporton külön vizsgálja a helyes sáv khí-négyzet statisztikáját.
+A további 10 000 modulo-/maradékos feladat (`2120000 + i`) és a 10 000
+vegyes műveletű kapupár (`2091000 + i`) mellett ez összesen 170 000
+generált feladat a fixture 17 tesztesetében.
 A D és E kritérium matematikai rétegét ez igazolja; a játékbeli megjelenés
 és választás teljes integrációja a Fázis 3 feladata.
 
 #### 3.1.1 A 10 000 seedelt fuzz-teszt
 
-- **Mesterszeed:** rögzített, dokumentált érték (pl. `42`). A `k`-adik
-  feladat seedje `masterSeed + k` (`k = 0..9999`), így a teszt teljes
-  egészében reprodukálható.
+- **Mesterszeed:** `209000`, a modulo-/maradékos kiegészítő mintánál
+  `2120000`, a vegyes kapupár-mintánál `2091000`. A `k`-adik feladat
+  seedje `masterSeed + k` (`k = 0..9999`), így a teszt teljes egészében
+  reprodukálható. Egy bukó esethez a seed mellett a típus/opciószám és
+  kapunál a cél, illetve a kiegészítő mintánál az operátor is szerepel
+  az assertion üzenetében. A generálási hibát nem hagyjuk ki a mintából.
 - **Ellenőrzött invariánsok** minden egyes generált feladatra:
   1. A kifejezésfa gyökere matematikailag érvényes (nincs nullával
      osztás, nincs érvénytelen tartomány, nincs túlcsordulás — 6.2.).
@@ -240,7 +248,7 @@ A D és E kritérium matematikai rétegét ez igazolja; a játékbeli megjelené
   7. A feladat `Id`-je, seedje és nehézségi szintje konzisztensen
      visszaolvasható a feladat objektumból.
 - **Bukás reprodukálása:** bukásnál a teszt kiírja a hibás feladat
-  pontos seedjét és a sérült invariáns sorszámát (`Assert.Fail($"seed={seed}, invariant=#{n}")`).
+  pontos seedjét, kérésparamétereit és a sérült invariáns megnevezését.
   Ebből egyetlen `[TestCase(seed)]`-es minimál-reprodukcióval a bug
   izolálható kód nélkül is a `factory-docs/bugs/`-ba írható.
 - **Futásidő-korlát:** a 10 000 iteráció `dotnet test` alatt célzottan
@@ -248,9 +256,9 @@ A D és E kritérium matematikai rétegét ez igazolja; a játékbeli megjelené
   nincs Unity-boot). Ha egy jövőbeli módosítás ezt számottevően (pl.
   30s fölé) növeli, az külön ADR-t igényel, mert veszélyezteti a
   "gyors visszacsatolás" célt (1.1. szakasz).
-- A teszt `[Category("Fuzz")]` alatt fut, hogy a `make test-fast` és a
-  `@smoke` csomag külön szabályozhassa a futtatását, de a teljes
-  `dotnet test` és a teljes `make test` MINDIG lefuttatja mind a 10 000
+- A fixture `[Category("Fuzz")]` alatt fut, célzott futtatása:
+  `dotnet test tests/MathHorde.Tests.sln --filter FullyQualifiedName~MathProblemGeneratorFuzzTests`.
+  A teljes `scripts/test.ps1 -Full` MINDIG lefuttatja mind a 10 000
   esetet — mintavételezés vagy csonkítás tilos a release-kapuban.
 
 ### 3.2 Válaszopció-tesztek (17.2. szakasz)
@@ -268,13 +276,37 @@ rögzített `k` válaszopció-számú (külön `k=2`, `k=3`, `k=4` csoport)
 feladatot egy rögzített seedtartományból, és végezz khí-négyzet
 illeszkedésvizsgálatot a helyes válasz pozíciójának megfigyelt
 gyakoriságára a `1/k` egyenletes eloszláshoz képest. Elfogadási
-kritérium: a khí-négyzet statisztika `p-érték ≥ 0.01` (azaz nem
+kritérium: a khí-négyzet statisztika `p-érték > 0.01` (azaz nem
 utasítjuk el az egyenletes eloszlás nullhipotézisét 1%-os
 szignifikanciaszinten). A khí-négyzetet (nem egyszerű toleranciasávot)
 azért javasolt választani, mert `k` csoportonként eltérő a várható
 cellaszám, és a khí-négyzet ezt korrekt módon súlyozza; egy fix
 százalékos tolerancia `k=2`-nél túl szigorú, `k=4`-nél túl engedékeny
 lenne ugyanakkora `N` mellett.
+
+**Megvalósított T-OPT-001–005:**
+[`MathProblemGeneratorFuzzTests`](../Assets/_Project/Tests/EditMode/MathEngine/MathProblemGeneratorFuzzTests.cs)
+`Generate_TenThousandSeedsPerTypeAndOptionCount_ValidAndNoAnswerPositionStrategy`
+esetei fedik az öt típust és a három opciószámot. A statisztikai határok
+`df=1/2/3` mellett rendre `6.634896601`, `9.210340372`, `11.344866730`;
+a megfigyelt sávgyakoriságok, a khí-négyzet és a minimum/maximum-helyes
+válasz arányok a tesztkimenetben és a Unity-eredmény-XML-ben is szerepelnek.
+Az eredményválasztóknál a legnagyobb/legkisebb válasz választása legfeljebb
+`1/k + 0.10` találati arányt adhat. Kapuknál a cél szerinti optimum lehet
+szándékosan szélsőérték; ott a külön kapupárteszt a nagyobb operandusra
+épülő heurisztika `0.70` felső korlátját ellenőrzi.
+
+A teszt saját, egész aritmetikát szélesített köztes értékekkel számoló
+AST-orákuluma a production evaluator/solver/validator nélkül újraszámolja
+a kifejezést és minden felkínált válasz igazságát. Ismeretlenes feladatnál
+minden opciót behelyettesít az egyenlet mindkét oldalára; kapunál a
+snapshotból újraszámolja az összes opció nyers eredményét. A külön
+modulo-/maradékos kör a teljes `(hányados, maradék)` választ hasonlítja
+össze, így az azonos hányadosú, eltérő maradékú opciók nem olvadnak össze.
+A helyes értelmezést az AST műveleti sorrendje és a kontrakt egész
+aritmetikája adja; hibás sorrend vagy kerekítés eredménye disztraktor
+lehet, nem második helyes válasz. A D/E kritérium itt a matematikai
+rétegre igazolt; a játékbeli sávválasztás és jutalmazás Fázis 3 hatóköre.
 
 ### 3.3 Erőforrás-kapu teszt (17.3. szakasz)
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using MathHorde.Core.Expressions;
 using MathHorde.Core.Problems;
@@ -8,30 +9,40 @@ using NUnit.Framework;
 namespace MathHorde.Tests.EditMode.MathEngine
 {
     [TestFixture]
+    [Category("Fuzz")]
     public class MathProblemGeneratorFuzzTests
     {
         private const int Samples = 10000;
+        private const int MasterSeed = 209000;
 
-        [TestCase(ProblemType.ResourceOperationComparison)]
-        [TestCase(ProblemType.AnswerLaneSelection)]
-        [TestCase(ProblemType.MissingOperand)]
-        [TestCase(ProblemType.EquationSolving)]
-        [TestCase(ProblemType.TargetValueSelection)]
-        public void Generate_TenThousandSeedsPerType_ValidReproducibleAndNoAnswerPositionStrategy(ProblemType type)
+        [TestCase(ProblemType.ResourceOperationComparison, 2)]
+        [TestCase(ProblemType.ResourceOperationComparison, 3)]
+        [TestCase(ProblemType.ResourceOperationComparison, 4)]
+        [TestCase(ProblemType.AnswerLaneSelection, 2)]
+        [TestCase(ProblemType.AnswerLaneSelection, 3)]
+        [TestCase(ProblemType.AnswerLaneSelection, 4)]
+        [TestCase(ProblemType.MissingOperand, 2)]
+        [TestCase(ProblemType.MissingOperand, 3)]
+        [TestCase(ProblemType.MissingOperand, 4)]
+        [TestCase(ProblemType.EquationSolving, 2)]
+        [TestCase(ProblemType.EquationSolving, 3)]
+        [TestCase(ProblemType.EquationSolving, 4)]
+        [TestCase(ProblemType.TargetValueSelection, 2)]
+        [TestCase(ProblemType.TargetValueSelection, 3)]
+        [TestCase(ProblemType.TargetValueSelection, 4)]
+        public void Generate_TenThousandSeedsPerTypeAndOptionCount_ValidAndNoAnswerPositionStrategy(ProblemType type, int count)
         {
             var generator = new MathProblemGenerator();
             var evaluator = new ExpressionEvaluator();
             var solver = new EquationSolver(evaluator);
             var validator = new ProblemValidator();
-            var lanes = new[] { new int[2], new int[3], new int[4] };
-            var largest = new int[3];
-            var smallest = new int[3];
-            var totals = new int[3];
+            var lanes = new int[count];
+            var ids = new HashSet<MathProblemId>();
+            int largest = 0, smallest = 0;
             for (int i = 0; i < Samples; i++)
             {
-                int count = 2 + i % 3;
-                var goal = type == ProblemType.ResourceOperationComparison ? (GateGoal)(i / 3 % 3) : GateGoal.Maximize;
-                var request = MathProblemGeneratorTests.Request(seed: 209000 + i, type: type, count: count, goal: goal,
+                var goal = type == ProblemType.ResourceOperationComparison ? (GateGoal)(i % 3) : GateGoal.Maximize;
+                var request = MathProblemGeneratorTests.Request(seed: MasterSeed + i, type: type, count: count, goal: goal,
                     capacity: type == ProblemType.ResourceOperationComparison ? 40 + i % 100 : 1000);
                 var result = generator.Generate(request);
                 string context = "type " + type + " seed " + request.Seed + " count " + count + " goal " + goal;
@@ -39,6 +50,12 @@ namespace MathHorde.Tests.EditMode.MathEngine
                 var p = result.Value;
                 var report = validator.Validate(p, request.Difficulty);
                 Assert.That(report.IsValid, Is.True, context + ": " + string.Join(",", report.Issues.Select(issue => issue.Code)));
+                Assert.That(p.Seed, Is.EqualTo(request.Seed), context + " metadata seed");
+                Assert.That(p.Type, Is.EqualTo(type), context + " metadata type");
+                Assert.That(p.DifficultyLevel, Is.EqualTo(request.Difficulty.ChallengeLevel), context + " metadata difficulty");
+                Assert.That(p.Id.Value, Is.Not.EqualTo(Guid.Empty), context + " metadata id");
+                Assert.That(ids.Add(p.Id), Is.True, context + " duplicate id");
+                Assert.That(p.Options.Count, Is.InRange(2, 4), context + " option count bounds");
                 Assert.That(p.Options.Count, Is.EqualTo(count), context);
                 Assert.That(p.Options.Count(o => o.IsCorrect), Is.EqualTo(1), context);
                 Assert.That(p.Options.Select(o => o.Value).Distinct().Count(), Is.EqualTo(count), context);
@@ -48,10 +65,10 @@ namespace MathHorde.Tests.EditMode.MathEngine
                 Assert.That(p.Options.All(o => o.GateOperation != null || o.IsCorrect || o.DistractorErrorModel.HasValue), Is.True, context);
                 var correct = p.Options.Single(o => o.IsCorrect);
                 Assert.That(correct.Value, Is.EqualTo(p.CorrectAnswer), context);
-                lanes[count - 2][correct.Lane.Value]++;
-                totals[count - 2]++;
-                if (p.CorrectAnswer.Value == p.Options.Max(o => o.Value.Value)) largest[count - 2]++;
-                if (p.CorrectAnswer.Value == p.Options.Min(o => o.Value.Value)) smallest[count - 2]++;
+                lanes[correct.Lane.Value]++;
+                if (p.CorrectAnswer.Value == p.Options.Max(o => o.Value.Value)) largest++;
+                if (p.CorrectAnswer.Value == p.Options.Min(o => o.Value.Value)) smallest++;
+                AssertOptionOracle(p, context);
                 if (type == ProblemType.ResourceOperationComparison)
                 {
                     AssertGateOracle(p, request.ResourceSnapshotValue.Value, request.Difficulty.MinGateGap, evaluator, context);
@@ -72,15 +89,38 @@ namespace MathHorde.Tests.EditMode.MathEngine
                     Assert.That(MathProblemGeneratorTests.Signature(generator.Generate(request).Value), Is.EqualTo(MathProblemGeneratorTests.Signature(p)), context);
             }
 
-            for (int count = 2; count <= 4; count++)
+            double expected = (double)Samples / count;
+            double chiSquared = lanes.Sum(n => (n - expected) * (n - expected) / expected);
+            // Upper-tail 1% quantiles, df = count - 1. No statistical dependency.
+            double critical = count == 2 ? 6.634896601 : count == 3 ? 9.210340372 : 11.344866730;
+            TestContext.WriteLine(type + " count=" + count + " N=" + Samples + " seeds=" + MasterSeed + ".." + (MasterSeed + Samples - 1)
+                + " lanes=[" + string.Join(",", lanes) + "] chiSquared=" + chiSquared + " critical=" + critical
+                + " largestRate=" + (double)largest / Samples + " smallestRate=" + (double)smallest / Samples);
+            Assert.That(lanes.Sum(), Is.EqualTo(Samples), type + " complete statistical sample");
+            Assert.That(chiSquared, Is.LessThan(critical), type + " lane chi-square, count " + count);
+            if (type == ProblemType.ResourceOperationComparison) return; // goal-based extrema are intentional
+            Assert.That((double)largest / Samples, Is.LessThanOrEqualTo(1.0 / count + .10), type + " largest, count " + count);
+            Assert.That((double)smallest / Samples, Is.LessThanOrEqualTo(1.0 / count + .10), type + " smallest, count " + count);
+        }
+
+        [Test]
+        public void Generate_TenThousandModuloAndRemainderProblems_OptionsMatchIndependentArithmetic()
+        {
+            var generator = new MathProblemGenerator();
+            for (int i = 0; i < Samples; i++)
             {
-                double expected = (double)totals[count - 2] / count;
-                double chiSquared = lanes[count - 2].Sum(n => (n - expected) * (n - expected) / expected);
-                double critical = count == 2 ? 6.635 : count == 3 ? 9.210 : 11.345; // p > .01, df = count - 1
-                Assert.That(chiSquared, Is.LessThan(critical), type + " lane chi-square, count " + count);
-                if (type == ProblemType.ResourceOperationComparison) continue; // goal-based extrema are intentional
-                Assert.That((double)largest[count - 2] / totals[count - 2], Is.LessThanOrEqualTo(1.0 / count + .10), type + " largest, count " + count);
-                Assert.That((double)smallest[count - 2] / totals[count - 2], Is.LessThanOrEqualTo(1.0 / count + .10), type + " smallest, count " + count);
+                var op = i % 2 == 0 ? BinaryOperator.Modulo : BinaryOperator.IntegerDivisionWithRemainder;
+                var profile = ProblemValidatorTests.Profile(count: 2 + i % 3, depth: 0, maxOperand: 30, operators: new[] { op });
+                var request = MathProblemGeneratorTests.Request(seed: 2120000 + i, profile: profile);
+                var result = generator.Generate(request);
+                string context = "seed " + request.Seed + " operator " + op + " count " + profile.AnswerOptionCount;
+                Assert.That(result.IsSuccess, Is.True, context + ": " + result.ErrorCode);
+                Assert.That(new ProblemValidator().IsValid(result.Value, profile), Is.True, context);
+                Assert.That(result.Value.Options.Count, Is.EqualTo(profile.AnswerOptionCount), context);
+                Assert.That(result.Value.Options.Count(o => o.IsCorrect), Is.EqualTo(1), context);
+                Assert.That(result.Value.Options.Select(o => o.Value).Distinct().Count(), Is.EqualTo(profile.AnswerOptionCount), context);
+                Assert.That(result.Value.CorrectAnswer.Remainder.HasValue, Is.EqualTo(op == BinaryOperator.IntegerDivisionWithRemainder), context);
+                AssertOptionOracle(result.Value, context);
             }
         }
 
@@ -119,6 +159,9 @@ namespace MathHorde.Tests.EditMode.MathEngine
             for (int i = 0; i < p.Options.Count; i++)
             {
                 Assert.That(evaluator.EvaluateWith(p.Options[i].GateOperation, snapshot, EvaluationOptions.Default).Value, Is.EqualTo(p.Options[i].Value), context);
+                EvaluationResult independent;
+                Assert.That(TryEvaluate(p.Options[i].GateOperation, snapshot, out independent), Is.True, context + " gate arithmetic");
+                Assert.That(independent, Is.EqualTo(p.Options[i].Value), context + " gate arithmetic value");
                 for (int j = i + 1; j < p.Options.Count; j++)
                     Assert.That(Math.Abs((long)effective[i] - effective[j]), Is.GreaterThanOrEqualTo(gap), context);
             }
@@ -132,6 +175,65 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That(effectiveScores.Count(v => v == effectiveScores.Min()), Is.EqualTo(1), context);
             Assert.That(rawWinner, Is.EqualTo(effectiveWinner), context);
             Assert.That(p.Options[rawWinner].IsCorrect, Is.True, context);
+        }
+
+        // The option oracle deliberately does not use the production evaluator,
+        // solver or validator: two components sharing a defect cannot certify it.
+        private static void AssertOptionOracle(MathProblem p, string context)
+        {
+            if (p.Type == ProblemType.ResourceOperationComparison) return;
+            var equation = p.Expression as EqualityNode;
+            if (equation != null)
+            {
+                foreach (var option in p.Options)
+                {
+                    EvaluationResult left, right;
+                    bool matches = !option.Value.Remainder.HasValue
+                        && TryEvaluate(equation.Left, option.Value.Value, out left)
+                        && TryEvaluate(equation.Right, option.Value.Value, out right) && left == right;
+                    Assert.That(matches, Is.EqualTo(option.IsCorrect), context + " substituted option " + option.OptionIndex);
+                }
+                return;
+            }
+
+            EvaluationResult answer;
+            Assert.That(TryEvaluate(p.Expression, 0, out answer), Is.True, context + " expression arithmetic");
+            Assert.That(p.CorrectAnswer, Is.EqualTo(answer), context + " independent answer");
+            foreach (var option in p.Options)
+                Assert.That(option.Value == answer, Is.EqualTo(option.IsCorrect), context + " option truth " + option.OptionIndex);
+        }
+
+        private static bool TryEvaluate(ExpressionNode node, int unknown, out EvaluationResult result)
+        {
+            result = default(EvaluationResult);
+            if (node is ConstantNode constant) { result = new EvaluationResult(constant.Value); return true; }
+            if (node is UnknownNode) { result = new EvaluationResult(unknown); return true; }
+            var binary = node as BinaryOperationNode;
+            EvaluationResult left, right;
+            if (binary == null || !TryEvaluate(binary.Left, unknown, out left) || !TryEvaluate(binary.Right, unknown, out right)
+                || left.Remainder.HasValue || right.Remainder.HasValue) return false;
+            long a = left.Value, b = right.Value, value;
+            int? remainder = null;
+            switch (binary.Operator)
+            {
+                case BinaryOperator.Addition: value = a + b; break;
+                case BinaryOperator.Subtraction: value = a - b; break;
+                case BinaryOperator.Multiplication: value = a * b; break;
+                case BinaryOperator.Division:
+                    if (b == 0 || a % b != 0) return false;
+                    value = a / b; break;
+                case BinaryOperator.Modulo:
+                    if (b <= 0) return false;
+                    value = (a % b + b) % b; break;
+                case BinaryOperator.IntegerDivisionWithRemainder:
+                    if (b == 0) return false;
+                    remainder = (int)((a % Math.Abs(b) + Math.Abs(b)) % Math.Abs(b));
+                    value = (a - remainder.Value) / b; break;
+                default: return false;
+            }
+            if (value < int.MinValue || value > int.MaxValue) return false;
+            result = new EvaluationResult((int)value, remainder);
+            return true;
         }
     }
 }
