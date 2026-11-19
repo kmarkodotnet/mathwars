@@ -1,5 +1,5 @@
 // MathEventIndependencePlayModeTests.cs
-// F1-18 — audit-identified gap fill for math-horde.md 17.4 / criterion F
+// F1-18 / F3-01 — math-horde.md 17.4 / criterion F
 // ("Matematikai feladat közben is fut a harci szimuláció").
 //
 // GameSessionServiceTests (EditMode) already proves the Tick ORDER
@@ -11,24 +11,12 @@
 // does any work, so it cannot demonstrate that a math step with actual
 // internal state fails to stall combat.
 //
-// This test closes that gap the honest way: F3's real IGateResolutionService
-// / AwaitingDecision state machine does not exist yet (game-logic.md 5.,
-// 6. are still contract-only — grep confirms no implementation), and
-// GameplaySessionBootstrap hard-wires NullMathEventDirector with no
-// injection seam (Phase-1 scope, not this task's to change — a DI seam
-// there would be a composition-root/contract change, out of scope for
-// F1-18). So instead of faking the not-yet-built state machine, this test
-// wires the REAL GameLogic services (WaveDirector, CombatService,
-// ResourceService, GameSessionService) directly — same as
-// GameSessionServiceTests does — but drives them across REAL Unity engine
-// frames (yield return null, real Time.deltaTime) with a math-event
-// director stand-in that does non-trivial, observable work every tick.
-// It proves two things no existing test proves together: (1) the math step
-// actually runs every real engine frame (TickCount keeps pace with frame
-// count), and (2) combat (ammo depletion, enemy damage) is completely
-// unaffected by it, under real frame timing rather than synthetic Tick()
-// calls. When F3-14 lands the real state machine, this test's director
-// stand-in should be replaced with the genuine AwaitingDecision scenario.
+// F3-01 replaces the original busy counter with the production per-event
+// lifecycle. The test driver supplies semantic inputs while the real
+// session/wave/combat/resource services run across Unity frames. It holds
+// AwaitingDecision open long enough to observe continuing ammo consumption.
+// Scheduling, carriers, actual gate resolution and rewards belong to later
+// F3 tickets; the driver deliberately does not simulate those services.
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -48,28 +36,39 @@ namespace MathHorde.Tests.PlayMode.Integration
     public class MathEventIndependencePlayModeTests
     {
         /// <summary>
-        /// Stands in for an active math event ("AwaitingDecision"): does
-        /// real, observable bookkeeping every Tick (not a no-op like
-        /// NullMathEventDirector), yet structurally cannot touch combat —
-        /// the contract (game-logic.md 5.) gives it no reference to any
-        /// other service, only a gameTime double.
+        /// Supplies semantic lifecycle inputs to the production state machine,
+        /// using only the shared game time, with no combat/clock reference.
         /// </summary>
-        private sealed class BusyMathEventDirector : IMathEventDirector
+        private sealed class LifecycleDriver : IMathEventDirector
         {
             public int TickCount { get; private set; }
-            private double _busyForSeconds;
+            public MathEventStateMachine Machine { get; } = new MathEventStateMachine(MathEventId.Create(7, 0));
+            private double _decisionOpenedAt;
 
             public void Tick(double gameTime)
             {
                 TickCount++;
-                // Non-trivial internal state, deliberately never read by
-                // anything outside this class — this is the point: even
-                // "the math event is still open after N seconds" cannot
-                // leak into combat through this interface.
-                _busyForSeconds = gameTime;
+                switch (Machine.State)
+                {
+                    case MathEventState.Inactive:
+                        Machine.Fire(MathEventTrigger.Schedule, gameTime);
+                        break;
+                    case MathEventState.Preview:
+                        Machine.Fire(MathEventTrigger.PreviewElapsed, gameTime);
+                        break;
+                    case MathEventState.Approaching:
+                        Machine.Fire(MathEventTrigger.DecisionZoneEntered, gameTime);
+                        _decisionOpenedAt = gameTime;
+                        break;
+                    case MathEventState.AwaitingDecision:
+                        if (gameTime - _decisionOpenedAt >= 0.25)
+                            Machine.Fire(MathEventTrigger.LaneSelected, gameTime);
+                        break;
+                    case MathEventState.Resolving:
+                        Machine.Fire(MathEventTrigger.RewardApplied, gameTime);
+                        break;
+                }
             }
-
-            public double LastSeenGameTime => _busyForSeconds;
         }
 
         private static LevelDefinition BuildLevel(IReadOnlyList<WaveDefinition> waves)
@@ -94,7 +93,7 @@ namespace MathHorde.Tests.PlayMode.Integration
         }
 
         [UnityTest]
-        public IEnumerator CombatKeepsRunning_AcrossRealEngineFrames_WhileMathEventDirectorIsBusyEveryTick()
+        public IEnumerator CombatKeepsRunning_AcrossRealEngineFrames_WhileActualMathLifecycleAdvances()
         {
             var waves = new List<WaveDefinition>
             {
@@ -113,18 +112,25 @@ namespace MathHorde.Tests.PlayMode.Integration
             var resourceService = new ResourceService(sink, clock);
             var waveDirector = new WaveDirector();
             var combatService = new CombatService(resourceService, sink);
-            var mathEventDirector = new BusyMathEventDirector();
+            var mathEventDirector = new LifecycleDriver();
             var session = new GameSessionService(clock, waveDirector, combatService, mathEventDirector, resourceService, sink);
 
             session.StartSession(level, weapon, catalog, seed: 7);
             int startingAmmo = resourceService.GetCurrent(ResourceType.Ammo);
 
             int framesRun = 0;
+            int ammoAtDecisionOpen = -1;
+            int ammoAtResolution = -1;
             float deadline = Time.realtimeSinceStartup + 5f;
             while (Time.realtimeSinceStartup < deadline
-                   && (resourceService.GetCurrent(ResourceType.Ammo) >= startingAmmo || combatService.ActiveEnemies.Count == 0))
+                   && (mathEventDirector.Machine.State != MathEventState.Completed
+                       || resourceService.GetCurrent(ResourceType.Ammo) >= startingAmmo || combatService.ActiveEnemies.Count == 0))
             {
                 session.Tick(Time.deltaTime);
+                if (mathEventDirector.Machine.State == MathEventState.AwaitingDecision && ammoAtDecisionOpen < 0)
+                    ammoAtDecisionOpen = resourceService.GetCurrent(ResourceType.Ammo);
+                if (mathEventDirector.Machine.State == MathEventState.Resolving)
+                    ammoAtResolution = resourceService.GetCurrent(ResourceType.Ammo);
                 framesRun++;
                 yield return null;
             }
@@ -139,6 +145,12 @@ namespace MathHorde.Tests.PlayMode.Integration
             Assert.That(combatService.ActiveEnemies.Count, Is.GreaterThan(0),
                 "Legalább egy ellenségnek életben kellett maradnia / spawn-olnia a mérési ablakban.");
             Assert.That(session.IsRunning, Is.True, "A session nem állhat meg csak attól, hogy a matek-direktor minden frame-ben dolgozik.");
+            Assert.That(mathEventDirector.Machine.State, Is.EqualTo(MathEventState.Completed));
+            Assert.That(ammoAtDecisionOpen, Is.GreaterThan(0));
+            Assert.That(ammoAtResolution, Is.GreaterThanOrEqualTo(0));
+            Assert.That(ammoAtResolution, Is.LessThan(ammoAtDecisionOpen),
+                "Combat must keep firing while the actual lifecycle is AwaitingDecision.");
+            Assert.That(clock.IsPaused, Is.False);
         }
     }
 }

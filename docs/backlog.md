@@ -1,6 +1,6 @@
 # Math Horde — Feladatlista (backlog index)
 
-> **Állapot (2026-11-19): 37 kész / 92 feladat (55 nyitott).**
+> **Állapot (2026-11-19): 38 kész / 92 feladat (54 nyitott).**
 >
 > Ez a fájl **generált index**. Minden feladat önálló fájlban él, és a fájl
 > HELYE jelzi az állapotát:
@@ -68,11 +68,11 @@
 | [F2-12](backlog/done/F2-12.md) | 10 000 seedelt fuzz-teszt + válaszopció-invariánsok (17.2) +… | `qa-unity` | F2-09 | SZEKV | M | D | ✅ **KÉSZ** |
 | [F2-13](backlog/done/F2-13.md) | ProblemExplanationService null-implementációja + kontrakt-váz | `math-engine-dev` | F2-02 | PAR | S | — | ✅ **KÉSZ** |
 
-## Fázis 3 — Mindkét matematikai kaputípus  ·  0/14 kész
+## Fázis 3 — Mindkét matematikai kaputípus  ·  1/14 kész
 
 | ID | Feladat | Agent | Függ | Mód | Becs. | Krit. | Állapot |
 |---|---|---|---|---|---|---|---|
-| [F3-01](backlog/F3-01.md) | MathEventId + matek-esemény-állapotgép (Inactive→…→Completed/Expired) | `gameplay-dev` | F1-08, F2-09 | SZEKV | L | F | ⬜ nyitott |
+| [F3-01](backlog/done/F3-01.md) | MathEventId + matek-esemény-állapotgép (Inactive→…→Completed/Expired) | `gameplay-dev` | F1-08, F2-09 | SZEKV | L | F | ✅ **KÉSZ** |
 | [F3-02](backlog/F3-02.md) | IMathEventDirector | `gameplay-dev` | F3-01 | SZEKV | L | B, C, F | ⬜ nyitott |
 | [F3-03](backlog/F3-03.md) | IGateResolutionService | `gameplay-dev` | F3-02 | SZEKV | M | B | ⬜ nyitott |
 | [F3-04](backlog/F3-04.md) | IRewardService | `gameplay-dev` | F3-03 | SZEKV | M | B | ⬜ nyitott |
