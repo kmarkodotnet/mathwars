@@ -3,11 +3,18 @@
 Utolsó frissítés: **2026-11-19** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
 
 Az aktuális feladatonkénti állapotot a [generált backlog](backlog.md) tartalmazza.
+**F3-03 elkészült**: `IGateResolutionService`, nyers snapshot-delta és fix
+sávjutalom, struct válaszadat, timeout, idempotens feloldás és napló-visszaállítás.
+Az előre lefoglalt napló mellett mindkét feladattípus 10 000 első feloldása és
+10 000 ismétlése 0 bájtot allokál. A szolgáltatás nem módosít erőforrást;
+a jutalomkönyvelés F3-04, a session teljes integrációja F3-12.
+A teljes `scripts/test.ps1 -Full` kapu eredménye: **.NET 774/774,
+Unity EditMode 773/773, Unity PlayMode 227/227**, mindenütt 0 hiba.
+Részletes bizonyíték: [F3-03 napló](backlog/done/F3-03.md).
+
 **F3-02 elkészült**: determinisztikus `MathEventDirector`, külső Prepare,
 snapshotfüggő és allokációmentes resource Bind, carrier-mozgás, deadline,
 idempotens feloldási parancs és jutalomfeldolgozási visszajelzés.
-A teljes `scripts/test.ps1 -Full` kapu eredménye: **.NET 750/750,
-Unity EditMode 749/749, Unity PlayMode 227/227**, mindenütt 0 hiba.
 Tízezer resource gate 110 000 bindingja átment az offline validátoron;
 a két valódi directoros PlayMode teszt alatt a harc folyamatos maradt.
 Részletes bizonyíték: [F3-02 napló](backlog/done/F3-02.md),
