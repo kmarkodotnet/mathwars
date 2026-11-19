@@ -174,6 +174,53 @@ nélkül), **PlayMode** (kizárólag Unity PlayMode).
 | T-MATH-017 | Generált, zárójelet tartalmazó feladatok nagy mintán | a zárójelezett részkifejezés mindig előbb értékelődik ki | dotnet |
 | T-MATH-FUZZ-001 | **10 000 seedelt generált feladat** (ld. 3.1.1) | minden invariáns teljesül minden iterációban | dotnet |
 
+**A tíz rögzített példa végrehajtható leképezése (F2-11):** a tesztek a
+`Spec17_1` kategóriával külön is kiválaszthatók:
+`dotnet test tests/MathHorde.Tests.sln --filter TestCategory=Spec17_1`.
+Ugyanezek a források Unity EditMode-ban is futnak (ADR-003); a kategória
+pontos darabszáma 10, új tesztmásolat nélkül.
+
+Az alábbi metódusok helye: **Evaluator** =
+[`ExpressionEvaluatorTests.cs`](../Assets/_Project/Tests/EditMode/MathEngine/ExpressionEvaluatorTests.cs),
+**Solver** =
+[`EquationSolverTests.cs`](../Assets/_Project/Tests/EditMode/MathEngine/EquationSolverTests.cs).
+
+| ID | Forrás | Végrehajtott tesztmetódus |
+|---|---|---|
+| T-MATH-001 | Evaluator | `Evaluate_Multiplication_7x8_Is56` |
+| T-MATH-002 | Evaluator | `Evaluate_Addition_37plus28_Is65` |
+| T-MATH-003 | Evaluator | `Evaluate_Subtraction_83minus47_Is36` |
+| T-MATH-004 | Evaluator | `Evaluate_Division_72div9_Is8` |
+| T-MATH-005 | Evaluator | `Evaluate_IntegerDivisionWithRemainder_29divr4_Is7Remainder1` |
+| T-MATH-006 | Evaluator | `Evaluate_Modulo_29mod4_Is1` |
+| T-MATH-007 | Evaluator | `Evaluate_ForceParentheses_6plus4TimesThree_Is30` |
+| T-MATH-008 | Evaluator | `Evaluate_OperatorPrecedence_8plus4times6minus7_Is25` |
+| T-MATH-009 | Solver | `Solve_7plusUnknown_EqualsThreeTimesEight_Is17` |
+| T-MATH-010 | Solver | `Solve_NestedEquationExample_Is5` |
+
+Mindegyik példa a numerikus eredmény mellett a megjelenítést is ellenőrzi;
+a maradékos osztás az AST-kontrakt szerinti `29 ÷r 4` jelölést és a
+`7 maradék 1` eredményszöveget használja. A skalár eredménynek nincs maradéka.
+A két egyenletnél pontosan egy ismeretlen, egyértelmű egész megoldás és a
+megoldó/ellenőrző egyezése is kötelező: a helyes értéket elfogadja, a két
+szomszédos egész választ elutasítja.
+
+A 17.1 további hibaágait az Evaluator
+`Evaluate_DivisionByZero_FailsWithDivisionByZero`,
+`Evaluate_DivisionWithNonIntegerResult_FailsWithNonIntegerResult`,
+`Evaluate_SubtractionNegativeResult_DefaultOptions_FailsWithNegativeResultNotAllowed`,
+`Evaluate_SubtractionNegativeResult_AllowNegativeResult_Succeeds` és
+`Evaluate_TrueIntOverflow_FailsWithOverflow`, valamint a Solver
+`SolveForTarget_MultiplicationByTwo_OddTarget_FailsWithNoIntegerSolution` és
+`Solve_MultipleUnknowns_FailsWithMultipleUnknowns` tesztjei fedik.
+A teljes kapu a meglévő `MathProblemGeneratorFuzzTests` öt, egyenként
+10 000 seedelt feladatot ellenőrző körét is futtatja (seed: `209000 + i`,
+`i = 0..9999`, feladattípusonként); minden feladaton ellenőrzi többek között
+a validitást, az egyetlen helyes választ, a különböző opciókat és a 2–4-es
+opciószámot, mintánként pedig a sávpozíciók eloszlását.
+A D és E kritérium matematikai rétegét ez igazolja; a játékbeli megjelenés
+és választás teljes integrációja a Fázis 3 feladata.
+
 #### 3.1.1 A 10 000 seedelt fuzz-teszt
 
 - **Mesterszeed:** rögzített, dokumentált érték (pl. `42`). A `k`-adik

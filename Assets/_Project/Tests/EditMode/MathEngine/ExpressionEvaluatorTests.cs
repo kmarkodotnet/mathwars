@@ -22,52 +22,59 @@ namespace MathHorde.Tests.EditMode.MathEngine
 
         // --- Kötelező smoke-értékek (spec 17.1 / math-engine.md 1.) --------
 
-        [Test]
+        [Test, Category("Spec17_1")]
         public void Evaluate_Multiplication_7x8_Is56()
         {
             var expr = new BinaryOperationNode(BinaryOperator.Multiplication, new ConstantNode(7), new ConstantNode(8));
 
             var result = _evaluator.Evaluate(expr, EvaluationOptions.Default);
 
+            Assert.That(expr.ToDisplayString(), Is.EqualTo("7 × 8"));
             Assert.That(result.IsSuccess, Is.True);
             Assert.That(result.Value.Value, Is.EqualTo(56));
             Assert.That(result.Value.Remainder, Is.Null);
         }
 
-        [Test]
+        [Test, Category("Spec17_1")]
         public void Evaluate_Addition_37plus28_Is65()
         {
             var expr = new BinaryOperationNode(BinaryOperator.Addition, new ConstantNode(37), new ConstantNode(28));
 
             var result = _evaluator.Evaluate(expr, EvaluationOptions.Default);
 
+            Assert.That(expr.ToDisplayString(), Is.EqualTo("37 + 28"));
             Assert.That(result.IsSuccess, Is.True);
             Assert.That(result.Value.Value, Is.EqualTo(65));
+            Assert.That(result.Value.Remainder, Is.Null);
         }
 
-        [Test]
+        [Test, Category("Spec17_1")]
         public void Evaluate_Subtraction_83minus47_Is36()
         {
             var expr = new BinaryOperationNode(BinaryOperator.Subtraction, new ConstantNode(83), new ConstantNode(47));
 
             var result = _evaluator.Evaluate(expr, EvaluationOptions.Default);
 
+            Assert.That(expr.ToDisplayString(), Is.EqualTo("83 − 47"));
             Assert.That(result.IsSuccess, Is.True);
             Assert.That(result.Value.Value, Is.EqualTo(36));
+            Assert.That(result.Value.Remainder, Is.Null);
         }
 
-        [Test]
+        [Test, Category("Spec17_1")]
         public void Evaluate_Division_72div9_Is8()
         {
             var expr = new BinaryOperationNode(BinaryOperator.Division, new ConstantNode(72), new ConstantNode(9));
 
             var result = _evaluator.Evaluate(expr, EvaluationOptions.Default);
 
+            Assert.That(expr.ToDisplayString(), Is.EqualTo("72 ÷ 9"));
             Assert.That(result.IsSuccess, Is.True);
             Assert.That(result.Value.Value, Is.EqualTo(8));
+            Assert.That(result.Value.Remainder, Is.Null);
         }
 
-        [Test]
+        [Test, Category("Spec17_1")]
         public void Evaluate_IntegerDivisionWithRemainder_29divr4_Is7Remainder1()
         {
             var expr = new BinaryOperationNode(
@@ -75,24 +82,29 @@ namespace MathHorde.Tests.EditMode.MathEngine
 
             var result = _evaluator.Evaluate(expr, EvaluationOptions.Default);
 
+            // The AST contract uses ÷r to distinguish remainder division
+            // from exact division; the answer retains both components.
+            Assert.That(expr.ToDisplayString(), Is.EqualTo("29 ÷r 4"));
             Assert.That(result.IsSuccess, Is.True);
             Assert.That(result.Value.Value, Is.EqualTo(7));
             Assert.That(result.Value.Remainder, Is.EqualTo(1));
             Assert.That(result.Value.ToDisplayString(), Is.EqualTo("7 maradék 1"));
         }
 
-        [Test]
+        [Test, Category("Spec17_1")]
         public void Evaluate_Modulo_29mod4_Is1()
         {
             var expr = new BinaryOperationNode(BinaryOperator.Modulo, new ConstantNode(29), new ConstantNode(4));
 
             var result = _evaluator.Evaluate(expr, EvaluationOptions.Default);
 
+            Assert.That(expr.ToDisplayString(), Is.EqualTo("29 mod 4"));
             Assert.That(result.IsSuccess, Is.True);
             Assert.That(result.Value.Value, Is.EqualTo(1));
+            Assert.That(result.Value.Remainder, Is.Null);
         }
 
-        [Test]
+        [Test, Category("Spec17_1")]
         public void Evaluate_ForceParentheses_6plus4TimesThree_Is30()
         {
             var sum = new BinaryOperationNode(
@@ -104,9 +116,10 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That(expr.ToDisplayString(), Is.EqualTo("(6 + 4) × 3"));
             Assert.That(result.IsSuccess, Is.True);
             Assert.That(result.Value.Value, Is.EqualTo(30));
+            Assert.That(result.Value.Remainder, Is.Null);
         }
 
-        [Test]
+        [Test, Category("Spec17_1")]
         public void Evaluate_OperatorPrecedence_8plus4times6minus7_Is25()
         {
             // 8 + 4 × 6 − 7  ==  8 + (4×6) − 7  ==  8 + 24 − 7  ==  25
@@ -120,6 +133,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That(expr.ToDisplayString(), Is.EqualTo("8 + 4 × 6 − 7"));
             Assert.That(result.IsSuccess, Is.True);
             Assert.That(result.Value.Value, Is.EqualTo(25));
+            Assert.That(result.Value.Remainder, Is.Null);
         }
 
         // --- Hibaágak ------------------------------------------------------

@@ -12,17 +12,19 @@ namespace MathHorde.Tests.EditMode.MathEngine
     [TestFixture]
     public class EquationSolverTests
     {
+        private ExpressionEvaluator _evaluator;
         private EquationSolver _solver;
 
         [SetUp]
         public void SetUp()
         {
-            _solver = new EquationSolver(new ExpressionEvaluator());
+            _evaluator = new ExpressionEvaluator();
+            _solver = new EquationSolver(_evaluator);
         }
 
         // --- Kötelező smoke-értékek (math-engine.md 2.) ------------------------
 
-        [Test]
+        [Test, Category("Spec17_1")]
         public void Solve_7plusUnknown_EqualsThreeTimesEight_Is17()
         {
             // 7 + ? = 3 × 8  ⇒  17
@@ -30,13 +32,10 @@ namespace MathHorde.Tests.EditMode.MathEngine
             var right = new BinaryOperationNode(BinaryOperator.Multiplication, new ConstantNode(3), new ConstantNode(8));
             var equation = new EqualityNode(left, right);
 
-            var result = _solver.Solve(equation, EvaluationOptions.Default);
-
-            Assert.That(result.IsSuccess, Is.True);
-            Assert.That(result.Value, Is.EqualTo(17));
+            AssertSpecEquation(equation, 17, "7 + ? = 3 × 8");
         }
 
-        [Test]
+        [Test, Category("Spec17_1")]
         public void Solve_NestedEquationExample_Is5()
         {
             // (? + 17) × 3 = 6 × (14 − 3)  ⇒  5
@@ -46,10 +45,28 @@ namespace MathHorde.Tests.EditMode.MathEngine
             var right = new BinaryOperationNode(BinaryOperator.Multiplication, new ConstantNode(6), innerDiff);
             var equation = new EqualityNode(left, right);
 
-            var result = _solver.Solve(equation, EvaluationOptions.Default);
+            AssertSpecEquation(equation, 5, "(? + 17) × 3 = 6 × (14 − 3)");
+        }
 
-            Assert.That(result.IsSuccess, Is.True);
-            Assert.That(result.Value, Is.EqualTo(5));
+        // Spec 17.1 / criterion E: the visible task, solver and answer checker
+        // must agree; accepting only the expected value also rules out a
+        // checker that unconditionally accepts any submitted answer.
+        private void AssertSpecEquation(EqualityNode equation, int expected, string display)
+        {
+            Assert.That(equation.ToDisplayString(), Is.EqualTo(display));
+            Assert.That(_evaluator.CountUnknowns(equation), Is.EqualTo(1));
+
+            var solution = _solver.Solve(equation, EvaluationOptions.Default);
+            Assert.That(solution.IsSuccess, Is.True, solution.ErrorCode);
+            Assert.That(solution.Value, Is.EqualTo(expected));
+            Assert.That(_solver.HasUniqueIntegerSolution(equation, 0, 100, EvaluationOptions.Default), Is.True);
+
+            for (int candidate = expected - 1; candidate <= expected + 1; candidate++)
+            {
+                var check = _evaluator.CheckEquality(equation, candidate, EvaluationOptions.Default);
+                Assert.That(check.IsSuccess, Is.True, "candidate " + candidate + ": " + check.ErrorCode);
+                Assert.That(check.Value, Is.EqualTo(candidate == expected), "candidate " + candidate);
+            }
         }
 
         [Test]
