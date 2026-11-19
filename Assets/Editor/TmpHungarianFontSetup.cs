@@ -80,6 +80,7 @@ public static class TmpHungarianFontSetup
         }
 
         sb.Append(HungarianAccentedCharacters);
+        sb.Append("×÷−"); // Core expression notation; needed by the question HUD.
         return sb.ToString();
     }
 
@@ -103,6 +104,18 @@ public static class TmpHungarianFontSetup
         TMP_FontAsset existing = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontAssetPath);
         if (existing != null)
         {
+            // Extend the existing asset in place so every prefab keeps its font GUID.
+            string required = BuildRequiredCharacterSet();
+            if (!existing.HasCharacters(required, out uint[] _, searchFallbacks: false, tryAddCharacter: false))
+            {
+                existing.atlasPopulationMode = AtlasPopulationMode.Dynamic;
+                bool added = existing.TryAddCharacters(required, out string missing);
+                existing.atlasPopulationMode = AtlasPopulationMode.Static;
+                if (!added) throw new InvalidOperationException("Required TMP glyphs missing: " + missing);
+                EditorUtility.SetDirty(existing);
+                foreach (var atlas in existing.atlasTextures) EditorUtility.SetDirty(atlas);
+                AssetDatabase.SaveAssets();
+            }
             return existing;
         }
 

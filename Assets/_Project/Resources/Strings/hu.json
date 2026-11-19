@@ -21,5 +21,9 @@
   "gate.goal.maximize": "Legtöbb",
   "gate.goal.minimize": "Legkevesebb",
   "gate.goal.target": "Cél: {0}",
-  "gate.snapshot": "{0}: {1}\n{2}"
+  "gate.snapshot": "{0}: {1}\n{2}",
+  "question.resourcePreview": "{0}\n{1}",
+  "question.preview": "Készülj!",
+  "question.approaching": "Közeledik",
+  "question.time": "{0} mp"
 }
