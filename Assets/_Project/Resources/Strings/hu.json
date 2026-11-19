@@ -12,5 +12,14 @@
   "result.victoryEncouragement": "Szép munka, ügyes voltál!",
   "result.retry": "Újrakezdés",
   "result.nextLevel": "Következő pálya",
-  "result.backToWorlds": "Vissza a világokhoz"
+  "result.backToWorlds": "Vissza a világokhoz",
+  "gate.resource.Health": "Életerő",
+  "gate.resource.Ammo": "Lőszer",
+  "gate.resource.Shield": "Pajzs",
+  "gate.resource.EnemyArmor": "Páncél",
+  "gate.resource.Energy": "Energia",
+  "gate.goal.maximize": "Legtöbb",
+  "gate.goal.minimize": "Legkevesebb",
+  "gate.goal.target": "Cél: {0}",
+  "gate.snapshot": "{0}: {1}\n{2}"
 }
