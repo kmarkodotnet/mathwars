@@ -11,6 +11,11 @@
 > `SkillMasteryLevel` bevezetve (ADR-010); `WorldDefinition` feloldási feltétele
 > kibővítve; a definíció/snapshot szétválasztás explicit megjegyzéssel rögzítve.
 > A dokumentum-hierarchia (kontrakt > design-dokumentum) ADR-009.
+>
+> **Revízió r3 (2026-11-19, architect, ADR-013):** a `MathProblem` megőrzi az
+> erőforrás-kapacitást; a kapuk nyers és kapacitással vágott optimuma egyaránt
+> egyértelmű; `ReachTarget` erőforrás-kapu is hordozhat célértéket. Az ADR-012-ben
+> már rögzített, önálló `DifficultyProfile.MaxResultValue` mező átvezetve.
 
 ## 0. Általános szabályok
 
@@ -274,10 +279,27 @@ public sealed class MathProblem
     public RewardSpec Reward { get; }
     public int Seed { get; }                       // reprodukálhatóság (6.3)
     public GateGoal Goal { get; }                  // kapu célja, ikonhoz
-    public int? TargetValue { get; }               // csak TargetValueSelection
+    public int? TargetValue { get; }               // TargetValueSelection vagy ReachTarget erőforrás-kapu
+    public int? ResourceCapacity { get; }          // ResourceOperationComparison: rögzített ResourcePool.Max (> 0); máskor null
     public string Explanation { get; }             // opcionális, lehet null (6.5)
 }
 ```
+
+**A kapacitás bemeneti szerződése (ADR-013):** a `ResourceCapacity` a
+`Reward.Resource` pooljának a feladat létrehozásakor rögzített `Max` értéke,
+nem nehézségtábla-adat és nem élő erőforrás-lekérdezés. `ResourceOperationComparison`
+esetén kötelező és pozitív; minden más feladattípusnál `null`. A nullable típus
+az eltérő feladattípusokat és a validálandó jelölteket szolgálja, nem jelent
+„korlátlan erőforrást”. A hiányzó/érvénytelen kapacitás üzleti validációs hiba
+(`GATE_CAPACITY_INVALID`), nem konstruktor-kivétel.
+
+A meglévő `MathProblem` konstruktor végére opcionális `int? resourceCapacity = null`
+paraméter kerül: a jelenlegi forrásszintű hívások továbbra is fordulnak. A régi,
+kapacitás nélküli erőforrás-kapujelölt azonban nem válik automatikusan érvényessé.
+A `TargetValue` eddigi konstruktor-őrét ki kell bővíteni: megadható
+`TargetValueSelection`-nél, illetve `ResourceOperationComparison` + `ReachTarget`
+esetén; más kombinációban továbbra is programozói hiba. `ReachTarget`
+erőforrás-kapunál a hiányzó célértéket a validátor jelzi (`GATE_TARGET_MISSING`).
 
 **MathProblem-invariánsok (a `ProblemValidator` kényszeríti, spec 6.4):**
 
@@ -292,7 +314,7 @@ public sealed class MathProblem
 | I7 | minden részkifejezés és a végeredmény `int` tartományban marad (`checked` ellenőrzés) |
 | I8 | `MissingOperand`/`EquationSolving` esetén az ismeretlen **egyértelmű** (pontosan egy egész megoldás) |
 | I9 | a helyes válasz sávpozíciója az `IRandomSource`-ból sorsolt, hosszú távon egyenletes |
-| I10 | `ResourceOperationComparison` esetén a két kapu eredménye **különböző**, a különbség legalább `MinGateGap` (ld. `MathDifficultyTableSO`), és a `Goal` szerinti sorrend egyértelmű (nincs döntetlen), figyelembe véve a `ResourcePool.Max` vágást |
+| I10 | `ResourceOperationComparison` esetén pozitív `ResourceCapacity` kötelező. Minden kapupár nyers és effektív (`min(Value.Value, ResourceCapacity)`) eredménye különböző, az effektív különbség legalább `MinGateGap`. A `Goal` szerinti nyers és effektív optimum egyaránt egyértelmű, és ugyanaz az opció; `ReachTarget` esetén a megadott `TargetValue`-tól vett távolság dönt (math-engine.md 5., 7.1.) |
 | I11 | negatív végeredmény csak akkor engedett, ha a `DifficultyProfile.AllowNegativeResults == true` |
 
 ```csharp
@@ -380,6 +402,7 @@ public sealed class DifficultyProfile
     public IReadOnlyCollection<SkillTag> UnlockedSkills { get; }
     public int MinOperandValue { get; }      // alap 0
     public int MaxOperandValue { get; }      // szintfüggő, 10..999
+    public int MaxResultValue { get; }       // > 0; önálló végeredmény-felsőkorlát, nem MaxOperandValue-ból származtatott (ADR-012)
     public int MinOperandCount { get; }      // >= 2
     public int MaxOperandCount { get; }      // <= 5 (MVP)
     public bool AllowParentheses { get; }

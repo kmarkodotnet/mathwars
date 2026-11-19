@@ -12,6 +12,11 @@
 > (`GATE_GAP_TOO_SMALL`, `PARENTHESIS_DEPTH_EXCEEDED`, `UNKNOWN_COUNT_MISMATCH`,
 > `RESULT_RANGE_VIOLATION`); a készség-jogosultság `SkillMasteryLevel`-re cserélve (ADR-010);
 > az `EquationSolving` készség-leképezés tisztázva.
+>
+> **Revízió r3 (2026-11-19, architect, ADR-013):** a kapacitás a kész
+> `MathProblem` része; a validátor aláírása változatlan. A kapacitás/célérték
+> hiányának, a vágással létrejövő döntetlennek és az optimumváltásnak explicit szabálya van.
+> A végeredmény-korlát az ADR-012 szerinti önálló `profile.MaxResultValue`.
 
 ## 0. Tervezési alapelvek
 
@@ -287,17 +292,49 @@ public enum ValidationSeverity { Warning = 0, Error = 1 }
 | `SKILL_NOT_UNLOCKED` | minden `SkillTag` benne van a `DifficultyProfile.UnlockedSkills`-ben (spec 7.2) | Error |
 | `OPERATOR_NOT_ALLOWED` | a fában csak `AllowedOperators` szerepel | Error |
 | `DIVISION_BY_ZERO` / `NON_INTEGER_RESULT` / `OVERFLOW` | kiértékelési hibák | Error |
-| `RESULT_RANGE_VIOLATION` | a végeredmény `<= profile.MaxOperandValue`-ból származtatott `MaxResultValue` | Error |
+| `RESULT_RANGE_VIOLATION` | a végeredmény `<= profile.MaxResultValue`; önálló konfigurált felső korlát, nem `MaxOperandValue`-ból származtatott (ADR-012) | Error |
 | `UNKNOWN_NOT_UNIQUE` | `MissingOperand`/`EquationSolving` esetén egyértelmű megoldás | Error |
 | `UNKNOWN_COUNT_MISMATCH` | `CountUnknowns(expr) == profile.UnknownOperandCount` | Error |
 | `PARENTHESIS_DEPTH_EXCEEDED` | `MeasureParenthesisDepth(expr) <= profile.MaxParenthesisDepth` | Error |
-| `GATE_TIE` | `ResourceOperationComparison`: a két kapu eredménye egyenlő | Error |
-| `GATE_GAP_TOO_SMALL` | `|A − B| < profile.MinGateGap` (CL1–3: 8, CL4+: 4 — GAME_DESIGN 3.5/1.) | Error |
-| `GATE_ORDER_INVERTED_BY_CAP` | a `ResourcePool.Max` vágás megfordítaná a `Goal` szerinti előnyt (spec 5.1 záró bekezdés) | Error |
+| `GATE_CAPACITY_INVALID` | `ResourceOperationComparison`: `ResourceCapacity` hiányzik vagy `<= 0`; más feladattípusnál nem `null` | Error |
+| `GATE_TARGET_MISSING` | `ResourceOperationComparison` + `ReachTarget`: `TargetValue` hiányzik | Error |
+| `GATE_TIE` | `ResourceOperationComparison`: bármely két nyers vagy effektív kapueredmény egyenlő, vagy a nyers/effektív `ReachTarget` optimum nem egyértelmű (azonos legkisebb céltávolság) | Error |
+| `GATE_GAP_TOO_SMALL` | bármely kapupár effektív eredményére `|A − B| < profile.MinGateGap` (CL1–3: 8, CL4+: 4 — GAME_DESIGN 3.5/1.) | Error |
+| `GATE_ORDER_INVERTED_BY_CAP` | a nyers és a kapacitással vágott eredmények egyértelmű `Goal` szerinti optimuma eltérő opció (spec 5.1 záró bekezdés) | Error |
 | `OPERAND_RANGE_VIOLATION` | operandusok a `[Min, Max]` tartományban | Error |
 | `THINK_TIME_NON_POSITIVE` | `ThinkTimeSeconds > 0` | Error |
 | `DISTRACTOR_TOO_FAR` | disztraktor nagyságrendje a 4.2 szabályon kívül | Warning |
 | `GUESSABLE_PATTERN` | a helyes válasz pl. mindig a legnagyobb/legkisebb opció | Warning |
+
+**Kapacitásellenőrzés — mindkét validátorbelépésre kötelező (ADR-013):**
+
+- A kapacitás egyetlen forrása `problem.ResourceCapacity`; a validátor nem kap
+  új paramétert, nem olvas session-/globális állapotot, és nem feltételez alapértéket.
+  `IsValid(problem, profile) == Validate(problem, profile).IsValid`.
+- A nyers érték az `AnswerOption.Value.Value`; az effektív érték
+  `min(nyers érték, ResourceCapacity)`. A kapu itt skalár eredményű; a nyers
+  `EvaluationResult`, a megjelenítés és az I1/I3 kiértékelési/egyenlőségi szabályai
+  ettől nem változnak. Ez a szerződés kizárólag a felső kapacitáskorlátot kezeli;
+  a jutalom tényleges alkalmazása továbbra is a `ResourceService` feladata.
+- `Maximize`: legnagyobb érték; `Minimize`: legkisebb érték; `ReachTarget`:
+  legkisebb `|érték − TargetValue|`. Mind a nyers, mind az effektív optimumot
+  ki kell számítani. A célértéket nem vágjuk a kapacitásra. A távolság és a
+  különbség számításakor az `int` túlcsordulását szélesített köztes ellenőrzés kerüli el.
+- A vágással keletkező döntetlen `GATE_TIE`; eltérő, egyértelmű nyertes
+  `GATE_ORDER_INVERTED_BY_CAP`. A döntetlen önmagában nem optimumváltás, ezért
+  arra nem kell az utóbbi kódot is kiadni. A túl kicsi effektív rés külön
+  `GATE_GAP_TOO_SMALL` hiba; ugyanaz a jelölt több hibát is hordozhat.
+- Érvénytelen kapacitásnál a kapacitást igénylő ellenőrzéseket kihagyjuk;
+  a nyers értékek ellenőrzése és a többi független szabály továbbra is lefut.
+  Hiányzó `ReachTarget` célértéknél csak a céltávolságot igénylő ellenőrzés marad ki.
+
+Példák (`MinGateGap = 4`, ahol más érték nincs megadva; a többi validációs
+feltétel teljesülése mellett): nyers `(40, 45)`,
+`Maximize`, kapacitás 100 → változatlan jobb kapu; kapacitás 40 → `GATE_TIE` és
+`GATE_GAP_TOO_SMALL`. Nyers `(40, 50)`, kapacitás 45, `MinGateGap = 8` →
+`GATE_GAP_TOO_SMALL`, noha a nyertes nem változik. Nyers `(45, 80)`, cél 60:
+kapacitás 75 → `GATE_TIE` (effektív távolságok 15/15); kapacitás 65 →
+`GATE_ORDER_INVERTED_BY_CAP` (nyersen a 45, effektíven a 65 nyer).
 
 **Statisztikai invariáns (külön teszt, nem per-feladat):** 10 000 seedelt feladaton a helyes
 válasz sávpozíciójának eloszlása egyenletes, khí-négyzet próba `p > 0.01` (spec 6.4/5. és 17.2).
@@ -381,7 +418,7 @@ public sealed class ProblemGenerationRequest
     public int Seed { get; init; }                      // kötelező, reprodukálhatóság
     public ProblemType Type { get; init; }
     /// Kötelező. MINDEN matematikai korlát innen jön: AllowedOperators, UnlockedSkills,
-    /// Min/MaxOperandValue, Min/MaxOperandCount, AllowParentheses + MaxParenthesisDepth,
+    /// Min/MaxOperandValue, MaxResultValue, Min/MaxOperandCount, AllowParentheses + MaxParenthesisDepth,
     /// AllowUnknownOperand + UnknownOperandCount, AnswerOptionCount, MinGateGap,
     /// AllowNegativeResults. A request nem duplikálja ezeket.
     public DifficultyProfile Difficulty { get; init; }
@@ -392,10 +429,10 @@ public sealed class ProblemGenerationRequest
     public RewardSpec Reward { get; init; }
     public GateGoal Goal { get; init; }
 
-    // Csak ResourceOperationComparison esetén kötelező:
+    // ResourceOperationComparison esetén kötelező, máskor null:
     public int? ResourceSnapshotValue { get; init; }    // a feladat matematikai bázisa (pl. 20)
-    public int? ResourceCapacity { get; init; }         // Max — a GATE_ORDER_INVERTED_BY_CAP-hoz
-    // Csak TargetValueSelection esetén:
+    public int? ResourceCapacity { get; init; }         // > 0; változatlanul MathProblem.ResourceCapacity-ba másolandó
+    // TargetValueSelection vagy ResourceOperationComparison + ReachTarget esetén:
     public int? TargetValue { get; init; }
 }
 ```
@@ -410,7 +447,8 @@ public sealed class ProblemGenerationRequest
 5. kifejezés generálása a Difficulty + SkillProfile korlátaiból
 6. helyes válasz kiértékelése / egyenlet megoldása
 7. disztraktorok generálása (AnswerOptionCount - 1 darab)
-8. opciók összeállítása, sávokhoz rendelés rngLane-nel keverve
+8. opciók összeállítása, sávokhoz rendelés rngLane-nel keverve;
+   request.ResourceCapacity és request.TargetValue megőrzése a MathProblem-en
 9. SkillClassifier.Classify  →  SkillTags
 10. ProblemValidator.Validate  →  ha Error, vissza az 5. lépésre (max 16 kör),
     utána fokozatos egyszerűsítés, végül Result.Fail("GENERATION_EXHAUSTED")
@@ -422,18 +460,29 @@ public sealed class ProblemGenerationRequest
   `AnswerOption.GateOperation` egy `BinaryOperationNode(op, UnknownNode, ConstantNode)` alak,
   ahol az `UnknownNode` a snapshot helye. `DisplayLabel` pl. `"×2"`, `"+25"`.
 - `Value` = `Evaluate(op alkalmazva ResourceSnapshotValue-ra)`.
-- `IsCorrect` = a `Goal` szerinti optimum (`Maximize` ⇒ legnagyobb, `Minimize` ⇒ legkisebb,
-  `ReachTarget` ⇒ `TargetValue`-hoz legközelebbi; döntetlen tilos).
-- A kapueredmények közti eltérés `>= Difficulty.MinGateGap`, különben újragenerálás
-  (`GATE_GAP_TOO_SMALL`).
-- `ResourceCapacity` megadása esetén az **effektív** érték `min(Value, Capacity)` alapján kell
-  eldönteni az optimumot; ha a vágás megfordítaná a sorrendet, a feladat érvénytelen és
-  újragenerálódik.
+- `IsCorrect` = a `Goal` szerinti egyetlen nyers optimum (`Maximize` ⇒ legnagyobb,
+  `Minimize` ⇒ legkisebb, `ReachTarget` ⇒ a kötelező `TargetValue`-hoz legközelebbi).
+  A kapacitással vágott optimum ugyanez az opció kell legyen; a generátor nem
+  címkézhet át egy nyersen rosszabb választ pusztán a vágás miatt.
+- A `ResourceCapacity` kötelező, pozitív, és a jelöltbe változatlanul átmásolandó
+  minden próbálkozásnál, egyszerűsítésnél és batch-elemben. A `TargetValue` is
+  megőrzendő. Hiányzó/érvénytelen kontextus nem javítható új véletlen húzással:
+  a generátor az 5. lépés előtt `Result.Fail("GATE_CAPACITY_INVALID")`, illetve
+  `Result.Fail("GATE_TARGET_MISSING")` hibával tér vissza; nem pótolja a mezőket.
+- Minden kapupár **effektív** eredménye közti eltérés `>= Difficulty.MinGateGap`;
+  döntetlen vagy túl kicsi rés esetén újragenerálás (`GATE_TIE`, `GATE_GAP_TOO_SMALL`).
+  A vágás nem hozhat létre céltávolság-döntetlent és nem cserélheti ki a nyertest
+  (`GATE_ORDER_INVERTED_BY_CAP`); a részletes szabályokat az 5. szakasz rögzíti.
 - `Goal == Minimize` esetén a `RewardResource` kötelezően `EnemyArmor` (GAME_DESIGN 3.4),
   és a `RewardDelta` negatív — ez a kívánt viselkedés.
 - Referencia-eset (spec 17.3): snapshot = 20, bal `×2` ⇒ 40, jobb `+25` ⇒ 45,
   `Goal = Maximize` ⇒ a jobb kapu a helyes; `RewardSpec.UseSnapshotDelta = true`,
   így a jutalom `45 − 20 = +25`.
+- A `Value`, `CorrectAnswer`, `GateResolution.OperationResult` és a
+  `RewardDelta = OperationResult − SnapshotValue` továbbra is a **nyers**
+  matematikai eredményből származik. A kapacitás az optimum validációját szolgálja;
+  nem csökkenti előre a jutalomdeltát, nem írja felül a harc közben változó
+  `Current` értéket, és nem módosítja a `ResourceService` tényleges vágását.
 
 ### 7.2. `AnswerLaneSelection` specialitásai (spec 5.2)
 
