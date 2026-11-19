@@ -301,7 +301,7 @@ public enum ValidationSeverity { Warning = 0, Error = 1 }
 | `GATE_TIE` | `ResourceOperationComparison`: bármely két nyers vagy effektív kapueredmény egyenlő, vagy a nyers/effektív `ReachTarget` optimum nem egyértelmű (azonos legkisebb céltávolság) | Error |
 | `GATE_GAP_TOO_SMALL` | bármely kapupár effektív eredményére `|A − B| < profile.MinGateGap` (CL1–3: 8, CL4+: 4 — GAME_DESIGN 3.5/1.) | Error |
 | `GATE_ORDER_INVERTED_BY_CAP` | a nyers és a kapacitással vágott eredmények egyértelmű `Goal` szerinti optimuma eltérő opció (spec 5.1 záró bekezdés) | Error |
-| `OPERAND_RANGE_VIOLATION` | operandusok a `[Min, Max]` tartományban | Error |
+| `OPERAND_RANGE_VIOLATION` | a generált operandusok a `[Min, Max]` tartományban; a resource sablon azonosított snapshot-helye külső `0..ResourceCapacity` kontextus (ADR-016, 7.1.), más literál nem kap kivételt | Error |
 | `THINK_TIME_NON_POSITIVE` | `ThinkTimeSeconds > 0` | Error |
 | `DISTRACTOR_TOO_FAR` | disztraktor nagyságrendje a 4.2 szabályon kívül | Warning |
 | `GUESSABLE_PATTERN` | a helyes válasz pl. mindig a legnagyobb/legkisebb opció | Warning |
@@ -469,6 +469,15 @@ public sealed class ProblemGenerationRequest
   `AnswerOption.GateOperation` egy `BinaryOperationNode(op, UnknownNode, ConstantNode)` alak,
   ahol az `UnknownNode` a snapshot helye. `DisplayLabel` pl. `"×2"`, `"+25"`.
 - `Value` = `Evaluate(op alkalmazva ResourceSnapshotValue-ra)`.
+- A snapshot külső erőforrás-kontextus, nem sorsolt operandus (ADR-016, spec 1.3.,
+  5.1.). Érvényes tartománya `0..ResourceCapacity`; a generált ConstantNode-ok
+  továbbra is a profil teljes `[MinOperandValue, MaxOperandValue]` tartományában
+  maradnak. A teljes offline kifejezésben kizárólag a helyes művelettel
+  szerkezetileg azonosítható snapshot-behelyettesítés mentesül az operandusőr
+  alól, nem tetszőleges nulla/bal oldali literál. A behelyettesített számfüggő
+  készségek, MaxResultValue és minden további invariáns változatlanul kötelező.
+  Azonos operátor több opcióban megengedett; pl. snapshot=0, `+1`/`+9` CL1-ben
+  érvényes lehet. A különböző operátor nem lehet öncélú generálási előfeltétel.
 - `IsCorrect` = a `Goal` szerinti egyetlen nyers optimum (`Maximize` ⇒ legnagyobb,
   `Minimize` ⇒ legkisebb, `ReachTarget` ⇒ a kötelező `TargetValue`-hoz legközelebbi).
   A kapacitással vágott optimum ugyanez az opció kell legyen; a generátor nem

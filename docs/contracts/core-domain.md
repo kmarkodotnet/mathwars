@@ -409,6 +409,11 @@ ezekről előkészítéskor nem szabad végleges snapshotadatot állítani. Az o
 eredmény-, készség-, kapacitás- és réskorlátok nem lazulnak. A binding egyszer
 keletkezik és utána változatlan; a későbbi harc sem értékeit, sem Maxát nem írja át.
 
+Az [ADR-016](../decisions/ADR-016.md) szerint a sablon snapshot-UnknownNode-jába
+kerülő érték külső `0..ResourceCapacity` kontextus; a generátor operandustartománya
+a generált ConstantNode-okra vonatkozik. Ez nem eredmény- vagy készségkivétel:
+a behelyettesített konkrét kifejezés ezeket továbbra is teljesen teljesíti.
+
 ---
 
 ### 3.2. Allokációmentes válaszadat a feloldási sorban
