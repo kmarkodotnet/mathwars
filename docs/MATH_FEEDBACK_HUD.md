@@ -71,7 +71,7 @@ valódi director/generátor/feloldó/jutalomszolgáltatással ellenőrzi a helye
 hibás döntést, mindkét műveleti eredményt, a fagyasztott snapshotot, negatív és
 Max-vágott deltát, 2–4 eredménysávot, párhuzamos eseményeket, rövid törlést,
 hibaágakat, leiratkozást és a handler/csendes drain nulla allokációját.
-Unity-frame-eken a visszajelzés közben a lőszer fogy, az ellenség sérül és
+A korábbi tesztfutás Unity-frame-jein a visszajelzés közben még lőszer fogyott, az ellenség sérült és
 közeledik, a PlayerController fogadja a sávinputot. A 9:16 és notch-os
 9:19.5 elrendezést három párhuzamos visszajelzéssel geometriai és TMP
 túlcsordulás-ellenőrzés igazolja. Nagyobb terminális átfedés adatvesztés nélkül
@@ -80,3 +80,7 @@ ellenőrizni az F3-12 kompozícióban.
 
 A helyi batch-render korlát miatt ez nem manuális szín-, eszközös olvashatóság-
 vagy teljes K kapujóváhagyás, és nem Android build-igazolás.
+
+**ADR-017:** ez a futási bizonyíték történeti. F1-20 az ammo-adatokat és az ammo
+feladatmegjelenítést kivezeti; a folyamatos tüzelés/sebzés nem-ammo fixture-ökkel
+ugyanilyen szigorúan újraigazolandó. A scene-integráció továbbra is F3-12.

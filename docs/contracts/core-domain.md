@@ -17,6 +17,9 @@
 > egyértelmű; `ReachTarget` erőforrás-kapu is hordozhat célértéket. Az ADR-012-ben
 > már rögzített, önálló `DifficultyProfile.MaxResultValue` mező átvezetve.
 
+> **Revízió r4 — ADR-017 (2026-11-19):** F1-20 kivezeti az aktív ammo-adatokat;
+> F1-21 adja a választható fegyverkészletet. Ez célkontrakt, a két jegy még nyitott.
+
 ## 0. Általános szabályok
 
 | Szabály | Indoklás |
@@ -190,9 +193,9 @@ public enum ProblemType
 /// A kapu/sáv-feladat CÉLJA — kizárólag az optimalizálás IRÁNYA, erőforrás-független.
 /// A "melyik erőforrásról van szó" kérdést a MathProblem.Reward.Resource /
 /// MathEventScheduleEntry.RewardResource adja meg. A kettő ORTOGONÁLIS:
-/// "Több lőszert!" = (Maximize, Ammo); "Kevesebb páncél!" = (Minimize, EnemyArmor);
-/// "Több pajzsot!" = (Maximize, Shield); "Érd el a 60-at!" = (ReachTarget, bármi).
-/// A GAME_DESIGN.md 3.4 táblázatának `MoreAmmo` / `LessEnemyArmor` / `MoreShield`
+/// "Több életerőt!" = (Maximize, Health); "Kevesebb páncél!" = (Minimize, EnemyArmor);
+/// "Több pajzsot!" = (Maximize, Shield); "Érd el a 60-at!" = (ReachTarget, aktív nem-ammo resource).
+/// A GAME_DESIGN.md 3.4 táblázatának `MoreHealth` / `LessEnemyArmor` / `MoreShield`
 /// nevei PREZENTÁCIÓS címkék (ikon + string-tábla kulcs), NEM enum-értékek.
 public enum GateGoal { Maximize = 0, Minimize = 1, ReachTarget = 2 }
 
@@ -260,7 +263,7 @@ public enum SkillTag
 public sealed class RewardSpec
 {
     public ResourceType Resource { get; }
-    /// AnswerLaneSelection esetén fix érték (pl. +30 lőszer).
+    /// AnswerLaneSelection esetén fix érték (pl. +30 életerő).
     /// ResourceOperationComparison esetén 0 — ott a delta számított.
     public int FlatAmount { get; }
     public bool UseSnapshotDelta { get; }   // true ⇒ ResourceOperationComparison
@@ -286,6 +289,13 @@ public sealed class MathProblem
     public string Explanation { get; }             // opcionális, lehet null (6.5)
 }
 ```
+
+**Ammo-tilalom (ADR-017):** a RewardSpec/MathProblem, az előkészített resource terv és
+a binding kizárólag aktív, nem-ammo erőforráshoz érvényes. A tombstone nem lehet
+feladat bemenete, célja, opciója vagy jutalma; a generátor/validátor minden útján
+`AMMO_NOT_ALLOWED`. A DTO-k történeti/validálandó jelöltként hordozhatnak tombstone-t; ez nem aktív
+feladatengedély. A requestőrök és mindkét validátor kötelezően elutasítják,
+a konstruktor nem helyettesítheti vagy teheti elérhetetlenné ezeket az ellenőrzéseket.
 
 **A kapacitás bemeneti szerződése (ADR-013):** a `ResourceCapacity` a
 `Reward.Resource` pooljának a feladat létrehozásakor rögzített `Max` értéke,
@@ -546,7 +556,7 @@ namespace MathHorde.Core.Resources;
 /// a ResourceService-ben.
 public enum ResourceType
 {
-    Ammo = 0,
+    Ammo = 0, // INAKTÍV tombstone (ADR-017); nem pool és nem matematikai erőforrás
     Health = 1,
     Shield = 2,
     /// Session-szintű, NEM per-ellenség pool: a pálya összes `Armored` ellenségének
@@ -584,20 +594,18 @@ public readonly struct ResourceChange
     public int RequestedDelta { get; }
     public int AppliedDelta { get; }   // Max/Min vágás miatt eltérhet RequestedDelta-tól
     public bool WasClamped { get; }
-    public string ReasonCode { get; }  // "WEAPON_FIRE", "MATH_GATE", "ENEMY_CONTACT", ...
+    public string ReasonCode { get; }  // "MATH_GATE", "ENEMY_CONTACT", ...
 }
 ```
 
 **Invariáns:** `Min <= Current <= Max` **mindig** fennáll; a vágás soha nem dob kivételt,
 hanem `WasClamped = true`-t jelez (spec 17.3 „amennyiben nincs kapacitáskorlátba ütközés”).
 
-**Kapacitás-szemantika (a GAME_DESIGN.md „soft cap” fogalmának kötelező értelmezése):**
-a `ResourcePool.Max` **kemény** felső korlát; a `Current` soha nem lépheti túl. A design-dokumentum
-„200-as soft cap, a felesleg pontszámmá válik” megfogalmazása azt jelenti, hogy
-`MaxAmmo == 200`, a vágott (`WasClamped == true`) `AppliedDelta − RequestedDelta` különbséget
-pedig a Fázis 5-ös pontszámítás írja jóvá (`ScoringService`, `AmmoBudgetSO.OverflowScorePerAmmo`).
-A Fázis 1–4-ben a vágott felesleg egyszerűen elveszik. **Nincs olyan állapot, amelyben a
-`Current > Max`.**
+**Kapacitás-szemantika:** `ResourcePool.Max` kemény felső korlát. A vágott
+felesleg elveszik; lőszerpool és lőszerből képzett overflow-pontszám nincs (ADR-017).
+Az Ammo tombstone-val ResourcePool/ResourceState nem hozható létre vagy bővíthető;
+programozói hiba `ArgumentException`. A generikus ismeretlen-pool lekérdezés nem
+jelent végtelen lőszert, az Ammo lekérdezése is elutasított.
 
 ---
 
@@ -648,7 +656,7 @@ public sealed class PlayerProgress
 public enum SessionResult { InProgress = 0, Victory = 1, Defeat = 2, Abandoned = 3 }
 
 /// MIÉRT ért véget vereséggel — a játékszabály szintjén. ZÁRT lista:
-/// a lőszerhiány és az ellenség-áttörés NEM önálló vereség-ok (spec 1.3), hanem
+/// az ellenség-áttörés NEM önálló vereség-ok (spec 1.3), hanem
 /// HealthDepleted-hez vezető ÚT. A diagnosztikát a LossDiagnosis adja.
 public enum FailureReason
 {
@@ -657,13 +665,13 @@ public enum FailureReason
 
 /// Fázis 4 — az adaptációs motor bemenete. NEM játékszabály, hanem MÉRT diagnózis:
 /// miért fogyott el az életerő. A difficulty-model.md 6.2 dimenzió-választó mátrixa
-/// erre hivatkozik (korábbi, hibás nevei: `EnemyBreakthrough`, `AmmoStarvation`).
+/// erre hivatkozik. Az ammo-diagnózis kizárólag történeti tombstone (ADR-017).
 public enum LossDiagnosis
 {
     None = 0,
-    /// A vereség előtti 30 s-ban a lőszer > 20%-ban 0 volt (WeaponDryFire arány magas).
+    /// Inaktív történeti tombstone; új rekord és DDA nem használja.
     AmmoStarvation = 1,
-    /// Volt lőszer, de az ellenségek átjutottak (kontakt-sebzés dominált).
+    /// Az ellenségek átjutottak (kontakt-sebzés dominált).
     EnemyBreakthrough = 2,
     /// A matematikai pontosság nem érte el a RequiredMathAccuracy-t.
     MathAccuracyShortfall = 3,
@@ -778,10 +786,6 @@ public sealed class EnemyDefinition
     public float MovementSpeed { get; }    // világegység/mp, > 0
     public int ContactDamage { get; }      // >= 0 — a játékos vonalát elérve okozott sebzés
     public float AttackCooldownSeconds { get; } // >= 0
-    /// A kill jutalma: ennyi **lőszer** íródik vissza (`ApplyCombatReward(Ammo, …)`),
-    /// NEM pontszám. A balance-modell „killRefund” tétele (difficulty-model.md 5.);
-    /// alapérték 1. A pontszám ettől független, az F5 `ScoringService` számolja.
-    public int RewardValue { get; }        // >= 0
     public string PrefabKey { get; }       // Presentation oldja fel
 
     // --- Fázis 5 (F5) bővítés — F1–F4-ben nem szerepel a konstruktorban ---
@@ -798,10 +802,10 @@ public sealed class EnemyDefinition
 public sealed class WeaponDefinition      // spec 4.2
 {
     public string WeaponId { get; }
+    public string DisplayNameKey { get; }   // lokalizációs kulcs, nem üres (F1-21)
     public int Damage { get; }             // > 0
     public float FireRate { get; }         // lövés/mp, > 0
     public float Range { get; }            // > 0
-    public int AmmoPerShot { get; }        // >= 1
     public float ProjectileSpeed { get; }  // > 0; 0 ⇒ hitscan
     public TargetingMode TargetingMode { get; }
     public string VisualEffectKey { get; }
@@ -848,8 +852,6 @@ public sealed class LevelDefinition
     public IReadOnlyList<WaveDefinition> Waves { get; }
     public IReadOnlyList<MathEventScheduleEntry> MathEvents { get; } // >= 10 (spec 10.1)
     public string BossEnemyId { get; }           // null ⇒ nincs boss
-    public int StartingAmmo { get; }
-    public int MaxAmmo { get; }
     public int StartingHealth { get; }
     public int MaxHealth { get; }
     public int StartingShield { get; }
@@ -860,7 +862,8 @@ public sealed class LevelDefinition
     /// Alapérték a `LevelDefinitionSO`-ban: 50 (GAME_DESIGN.md 6.1).
     public int MaxShield { get; }
     public float RequiredMathAccuracy { get; }   // 0 ⇒ nincs matek-minimum
-    public string WeaponId { get; }
+    public string WeaponId { get; }        // kezdő típus
+    public IReadOnlyList<string> AvailableWeaponIds { get; } // 1..4, egyedi, tartalmazza WeaponId-t (F1-21)
 }
 ```
 
@@ -870,13 +873,14 @@ public sealed class LevelDefinition
 |---|---|---|
 | L1 | `2 <= LaneCount <= 4` | `ArgumentOutOfRangeException` |
 | L2 | `TargetDurationSeconds > 0` | `ArgumentOutOfRangeException` |
-| L3 | `MaxAmmo > 0`, `MaxHealth > 0` | `ArgumentOutOfRangeException` |
+| L3 | `MaxHealth > 0` | `ArgumentOutOfRangeException` |
 | L4 | **`MaxShield >= 0`** — 0 megengedett (pajzs-mechanika nélküli pálya) | `ArgumentOutOfRangeException` |
-| L5 | `0 <= StartingAmmo <= MaxAmmo`, `0 <= StartingHealth <= MaxHealth`, **`0 <= StartingShield <= MaxShield`** | `ArgumentOutOfRangeException` |
+| L5 | `0 <= StartingHealth <= MaxHealth`, **`0 <= StartingShield <= MaxShield`** | `ArgumentOutOfRangeException` |
 | L6 | `0 <= RequiredMathAccuracy <= 1` | `ArgumentOutOfRangeException` |
+| L7 | `AvailableWeaponIds` 1..4 egyedi, nem üres Id, `WeaponId` benne van; mind feloldható | `ArgumentException` / repository config hiba |
 
 **Konstruktor-paraméter sorrend (kötelező):** `… startingHealth, maxHealth, startingShield,
-maxShield, requiredMathAccuracy, weaponId` — azaz a `maxShield` közvetlenül a
+maxShield, requiredMathAccuracy, weaponId, availableWeaponIds` (utóbbi F1-21-től) — azaz a `maxShield` közvetlenül a
 `startingShield` **után**, a többi `Starting*/Max*` pár mintájára.
 
 > **Megjegyzés a `ResourcePool.Max > 0` invariánshoz:** `MaxShield == 0` esetén a

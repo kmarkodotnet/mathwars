@@ -88,7 +88,7 @@ A W4–W7 pályái F5 előtt a már létező öt archetípusból építkeznek.
 | Pályák | 10 (200–240 s) |
 | Boss | **Falmester** (140 HP): a pajzsa csak akkor nyílik, ha a gyerek egy `TargetValueSelection` feladatot (`Goal = ReachTarget`) pontosan eltalál (pl. „Érd el a 100-at: 68 + ?"). Hibás válasz → a pajzs 12 s-ig zárva (`BossPhaseEntry.PenaltyOnWrongSeconds = 12`). |
 | `Unlock` | `RequiredWorld = w1`, `RequiredStarRatio = 0.60` |
-| Jutalom | „Pajzstörő" fegyver (szórt lövés, azonos DPS); a `Maximize × Shield` kapu állandósul a későbbi világokban |
+| Jutalom | „Pajzstörő" fegyver (szórt lövés, konfigurált erősség; nincs DPS-egyenlőségi korlát); a `Maximize × Shield` kapu állandósul a későbbi világokban |
 
 > **Megjegyzés a `ReachTarget` időzítéséhez:** a `GAME_DESIGN.md` 3.4 a `ReachTarget`-et
 > „W5-től" általános kapucélként vezeti be; a W2 boss **egyetlen, scriptelt** feladatként
@@ -217,9 +217,14 @@ verzióban rövidebb pályák is elfogadhatók") — a kontrakt validációja ez
 | `LevelDefinitionSO` | `Id`, `World`, `TemplateType`, `TargetDurationSeconds`, `LaneCount`, `Waves[]`, `MathEvents[]`, `BossEnemy`, `EnvironmentPrefab` | SO-séma 3. |
 | `WaveDefinitionEntry` + `WaveSpawnEntry` | `WaveIndex`, `StartGameTime`, `DurationSeconds`, `Spawns[]` (`Enemy`, `Count`, `SpawnIntervalSeconds`, `AllowedLanes[]`) | SO-séma 3.1–3.2 |
 | `EnemyDefinitionSO` (`Type = Boss`) + `BossPhaseEntry[]` | `MaxHealth`, fázisonként `HpThreshold`, `ProblemType`, `DamageOnCorrect`, `PenaltyOnWrongSeconds` — **nincs külön `BossDefinition` asset** | SO-séma 1., 1.1 |
-| `EnemyDefinitionSO` | `Type`, `MaxHealth`, `MovementSpeed`, `ContactDamage`, `RewardValue` (= lőszer-refund), `ArmorPoints`/`FrontalDamageReduction` [F5], `SplitOnDeathEnemy`/`SplitOnDeathCount` [F5], `SpawnGroupSize`, `Prefab` | SO-séma 1. |
+| `EnemyDefinitionSO` | `Type`, `MaxHealth`, `MovementSpeed`, `ContactDamage`, `ArmorPoints`/`FrontalDamageReduction` [F5], `SplitOnDeathEnemy`/`SplitOnDeathCount` [F5], `SpawnGroupSize`, `Prefab` | SO-séma 1. |
 | `StarRatingSO` | `WorldUnlockStarRatio`, `ShardsPerStar`, `SkinStarMilestones[]` | SO-séma 14. |
 
 A `WorldDefinition.IntroducedSkills` × `DifficultyProfile.UnlockedSkills` metszetképzése
 a `ProblemGenerationRequest` összeállításának felelőssége (`gameplay-dev` állítja elő,
 `math-engine-dev` fogyasztja) — lásd 1. pont és `math-engine.md` 7.
+
+**ADR-017 (2026-11-19):** minden világ minden fegyvere mindig végtelen lőszerrel
+működik. A típusok eltérő és növekvő erősségűek lehetnek. Az MVP közvetlen
+fegyverválasztását F1-21 adja; a világjutalmak további mélyítése F5-13, új
+vásárlási vagy matek→fegyver jutalompolitika nincs befagyasztva itt.

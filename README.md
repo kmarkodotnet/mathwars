@@ -3,12 +3,13 @@
 3D-s, matematikai túlélő-lövöldözős mobiljáték 7–12 éves gyermekeknek.
 A játékos karaktere automatikusan tüzel a felülről érkező ellenségekre,
 miközben matematikai kapukon és eredményválasztó sávokon keresztül szerez
-lőszert és egyéb erőforrást — **a harc a matematikai feladatok alatt sem
+életerőt, pajzsot és egyéb nem-ammo erőforrást — **a harc a matematikai feladatok alatt sem
 áll le**. A nehézség 1–10 skálán, automatikusan alkalmazkodik a gyermek
 teljesítményéhez.
 
 > **Állapot: fejlesztés alatt (ARCH fázis kész).**
-> Jelenleg kizárólag tervdokumentáció létezik, játszható build még nem.
+> F3 fejlesztés folyamatban. Az ADR-017 végtelen tüzelését és valódi fegyverváltását
+> az új F1-20/F1-21 jegyek valósítják meg; a dokumentáció nem kész funkció.
 > A pontos, naprakész állapot: [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 ## Technológia

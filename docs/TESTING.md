@@ -326,19 +326,23 @@ Három további eset opciószámonként 10 000 CL4 feladaton, a generálást kü
 ellenőrzi a MathEngine 9. szakasz `<2 ms` átlagidejét; a mért érték az XML-ben van.
 A jelenetszintű megjelenítő- és sessionbekötés további F3-12 feladat.
 
+**Történeti bizonyíték:** a fenti F3-06 futás a korábbi ammo-modellt ellenőrizte;
+ADR-017 után ugyanazon életciklus/invariánsok nem-ammo regresszióját F1-20 futtatja újra.
+
 ### 3.3 Erőforrás-kapu teszt (17.3. szakasz)
 
 | ID | Leírás | Elvárt eredmény | Mód |
 |---|---|---|---|
-| T-GATE-001 | Alapeset: kiinduló lőszer 20, bal kapu `×2`, jobb kapu `+25` | bal eredmény 40, jobb eredmény 45, optimális a jobb kapu, helyes választás jutalma +25 | dotnet |
-| T-GATE-002 | A T-GATE-001 feladat létrehozásakor a snapshot 20, de a kapu aktiválásakor a tényleges lőszer időközbeni lövésektől 8-ra csökkent | `RewardDelta = OperationResult(45) − SnapshotValue(20) = 25`; végső lőszer `8 + 25 = 33` | dotnet |
-| T-GATE-003 | A játékos a hibás (bal, `×2`) kaput választja | nincs matematikai jutalom jóváírva, a tényleges lőszer csak a lövésekből eredően változik | dotnet |
+| T-GATE-001 | Alapeset: kiinduló pajzs 20 (Max50, explicit érvényes profil), bal kapu `×2`, jobb kapu `+25` | bal eredmény 40, jobb eredmény 45, optimális a jobb kapu, helyes választás jutalma +25 | dotnet |
+| T-GATE-002 | A T-GATE-001 feladat létrehozásakor a snapshot 20, de a kapu aktiválásakor a tényleges pajzs kontaktsebzéstől 8-ra csökkent | `RewardDelta = OperationResult(45) − SnapshotValue(20) = 25`; végső pajzs `8 + 25 = 33` | dotnet |
+| T-GATE-003 | A játékos a hibás (bal, `×2`) kaput választja | nincs matematikai jutalom jóváírva, a tényleges pajzs csak a harci sebzésekből eredően változik | dotnet |
 
 A T-GATE-002 explicit igazolja a specifikáció `RewardDelta =
 OperationResult − SnapshotValue` képletét snapshot-alapú számítással,
 nem a nyers kapu-eredmény felülírásával (5.1. szakasz, "Erőforrás-
 snapshot").
 
+**Történeti F3-05/F3-07 bizonyíték, az akkori modellel:**
 Az F3-05 a meglévő offline `Generate` és az ADR-015 szerinti
 `PrepareResourceGate`/`BindResourceGate` útvonalat együtt igazolja. A változó
 snapshotú fuzz-minta `0..100` kiindulóértéket, változó kapacitást, mindhárom
@@ -370,13 +374,13 @@ integrációs hibát láthatóan őrzi. Részletes hatókör:
 
 | ID | Leírás | Elvárt eredmény | Mód |
 |---|---|---|---|
-| T-COMBAT-001 | Lövés végrehajtása, van lőszer | a lőszerkészlet eggyel (vagy a fegyver-kontraktban rögzített mértékkel) csökken | PlayMode |
-| T-COMBAT-002 | Lövési kísérlet nulla lőszerrel | nem történik lövés, nincs lőszer-alulfutás (negatív érték) | PlayMode |
+| T-COMBAT-001 | Tartós automatikus tüzelés minden típusból | nincs lőszerpool/fogyasztás/kill-refund, a lövés és sebzés folyamatos | PlayMode |
+| T-COMBAT-002 | Valódi HUD-fegyverváltás és gyors oda-vissza input | aktív típus és sebzés változik; nincs extra lövés, pause/hibás Id hatástalan | PlayMode |
 | T-COMBAT-003 | Találat egy ellenségen | az ellenség életereje a fegyver sebzésével csökken | PlayMode |
 | T-COMBAT-004 | Ellenség életereje nullára csökken | az ellenség megsemmisül (eltávolításra/inaktívra kerül) | PlayMode |
 | T-COMBAT-005 | Ellenség eléri a játékos pozícióját/vonalát | a játékos életereje csökken a kontraktban rögzített sebzéssel | PlayMode |
 | T-COMBAT-006 | A játékos életereje nullára csökken | `GameOver` állapotátmenet következik be | PlayMode |
-| T-COMBAT-007 | **Matematikai esemény folyamatban (`AwaitingDecision` állapot), miközben ellenségek közelednek és a fegyver tüzel** | a harci szimuláció (ellenségmozgás, találatfeldolgozás, lőszerfogyás) a matek-esemény állapotától függetlenül, változatlan ütemben fut tovább — ez a 14. szakasz kritikus szinkronizációs követelményének közvetlen igazolása | PlayMode |
+| T-COMBAT-007 | **Matematikai esemény folyamatban (`AwaitingDecision` állapot), miközben ellenségek közelednek és a fegyver tüzel** | a harci szimuláció (ellenségmozgás, találatfeldolgozás, készletfüggetlen tüzelés) a matek-esemény állapotától függetlenül, változatlan ütemben fut tovább — ez a 14. szakasz kritikus szinkronizációs követelményének közvetlen igazolása | PlayMode |
 | T-COMBAT-008 | Egy adott kapu/sáv-esemény (rögzített esemény-azonosítóval) kétszer kerül feldolgozásra (pl. a játékos kétszer "lép be" ugyanabba a felbontott eseménybe) | a jutalom csak egyszer íródik jóvá (idempotens feldolgozás az esemény-azonosító alapján) | PlayMode |
 | T-COMBAT-009 | A matek-esemény határideje lejár (`Expired` állapot) mielőtt a játékos választana | nincs jutalom jóváírva, a harc zavartalanul folytatódik | PlayMode |
 
@@ -421,7 +425,7 @@ mechanizmus szolgálja ki az 5.2. szakasz eredményválasztó sávjait is.
 | D | Többféle operátor | T-MATH-001–010, T-MATH-FUZZ-001 | lefedi +, −, ×, ÷, mod, maradékos osztás, többoperandusos kifejezés |
 | E | Ismeretlen operandus | T-MATH-009, T-MATH-010, T-MATH-015 | egyértelmű, egy-ismeretlenes egyenletek |
 | F | Valós idejű működés | T-COMBAT-007 | **ez a legszorosabban vett, egyetlen architektúrális invariánst igazoló teszt** — ha ez piros, a 14. szakasz alapelve sérül |
-| G | Erőforráshiány | T-COMBAT-002, T-COMBAT-006, T-GATE-003 | hibás matematikai döntések → lőszerhiány → áttörés → GameOver lánc |
+| G | Erőforráshiány | T-COMBAT-006, T-GATE-003 | elmaradó Health/Shield jutalom → kevesebb védelem → GameOver; a lövés folyamatos |
 | H | Adaptív nehézség | T-ADAPT-001, 002, 003, 007 | szintnövekedés/csökkenés és korlátok |
 | I | Készségprofil | T-SKILL-001–004, T-ADAPT-006 | külön készség-nyilvántartás és annak hatása a feladatkiválasztásra |
 | J | Szülői kimutatás | **nincs automatizált teszt ebben a katalógusban** | a specifikáció 11. szakasza saját maga "következő mérföldkő"-ként jelöli a Parent Dashboard-ot; az `Analytics` réteg (`ProgressReportService`, `LocalStatisticsRepository`) kontraktjának elkészültekor a TESTING.md-t bővíteni kell `T-PARENT-*` tesztekkel. Amíg ez nincs meg, J kritérium kizárólag manuális ellenőrzéssel igazolható |
@@ -528,3 +532,27 @@ igazolható kritérium — a technikai kockázat szempontjából — az **F
 időzítésérzékeny PlayMode tesztre (T-COMBAT-007) támaszkodik egy
 architekturálisan kritikus, könnyen regresszálható invariáns
 (matek-állapotgép és harci ciklus tényleges függetlensége) igazolására.
+
+## ADR-017 utáni kötelező regresszió — F1-20/F1-21
+
+A fenti aktív tesztterv a célállapot, nem az új működés már lefutott bizonyítéka.
+A történeti F3-05/06/07 futásszámok és done naplók változatlan történeti adatok.
+
+- F1-20: mindkét requestmező és generátorbelépés, GenerateBatch, Prepare/Bind,
+  Validate/IsValid, schedule/adapter, reward és mindhárom math presenter Ammo
+  elutasítása. Nincs elfedő resource-csere. Kill nem ad erőforrást, HUD nem kér
+  Ammo poolt; szerializált enum-ordinalok és régi offline mentés olvasható.
+- A korábbi pozitív ammo fixture-ök explicit nem-ammo adatra migrálnak ugyanazon
+  aritmetikai/lifecycle/skill/gap/cap oracle megtartásával; nem törölhetők vagy
+  ignorálhatók a tesztek. Negatív Ammo regresszió külön marad.
+- Valódi LevelW1L01/config/builder betöltés, aktív reward-pool ellenőrzés. Az
+  új Shield50/CL1 full-coverage továbbra is őszinte GENERATION_EXHAUSTED; ez
+  nem teljesült F3-12. A F1 combat bootstrap indulása és folyamatos lövése igazolt.
+- F1-21: tényleges scene gomb, mindkét asset, lokalizált név/aktív jelölés,
+  sebzéskülönbség, cooldown megőrzés, már repülő lövedék stabilitása, UI touch
+  és sávinput elválasztása, szünet/halál/sessionvég/azonos és hibás Id, ismételt
+  session inicializáció, G4 nulla allokáció. Nincs csak mockból hívott váltás.
+- Mindkét jegy: scripts/test.ps1 -Full (.NET + Unity EditMode + PlayMode), 10 000
+  seedelt math invariáns és a teljes kötelező minőségi kapu; valós parancs és
+  total/passed/failed napló. Az új Android/eszközös bizonyíték korlátját őszintén
+  kell jelezni. F3-12 külön bizonyítja a szállított scene 10+ eseményét/mindkét típust.

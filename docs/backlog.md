@@ -1,6 +1,6 @@
 # Math Horde — Feladatlista (backlog index)
 
-> **Állapot (2026-11-19): 48 kész / 92 feladat (44 nyitott).**
+> **Állapot (2026-11-19): 48 kész / 94 feladat (46 nyitott).**
 >
 > Ez a fájl **generált index**. Minden feladat önálló fájlban él, és a fájl
 > HELYE jelzi az állapotát:
@@ -26,7 +26,7 @@
 | [F0-04](backlog/done/F0-04.md) | .gitignore, scripts/build.ps1, scripts/test.ps1, gyökér README.md a… | `mobile-build-engineer` | F0-01 | PAR | S | — | ✅ **KÉSZ** |
 | [F0-05](backlog/done/F0-05.md) | Resources/Strings/hu.json váz + ILocalizationService kulcsfeloldó | `ui-dev` | F0-02 | PAR | S | — | ✅ **KÉSZ** |
 
-## Fázis 1 — Játszható harci alap  ·  19/19 kész
+## Fázis 1 — Játszható harci alap  ·  19/21 kész
 
 | ID | Feladat | Agent | Függ | Mód | Becs. | Krit. | Állapot |
 |---|---|---|---|---|---|---|---|
@@ -49,6 +49,8 @@
 | [F1-17](backlog/done/F1-17.md) | Gameplay scene összeállítása Editor-eszközzel (reprodukálható, nem kézi) | `gameplay-dev` | F1-08, F1-13, F1-14, F1-15 | SZEKV | M | A, K | ✅ **KÉSZ** |
 | [F1-18](backlog/done/F1-18.md) | Harci EditMode + PlayMode tesztek (spec 17.4) | `qa-unity` | F1-17 | SZEKV | M | A, F, G | ✅ **KÉSZ** |
 | [F1-19](backlog/done/F1-19.md) | TextMeshPro betűtípus és magyar glyph-lefedettség | `ui-dev` | F1-16 | PAR | S | K | ✅ **KÉSZ** |
+| [F1-20](backlog/F1-20.md) | Mindig végtelen tüzelés és az ammo teljes kivezetése a matekból | `gameplay-dev` | F1-19, F3-11 | SZEKV | XL | A, B, C, F, G, K | ⬜ nyitott |
+| [F1-21](backlog/F1-21.md) | Valódi HUD-fegyverváltás és erősebb konfigurált típus | `gameplay-dev` | F1-20 | SZEKV | L | A, F, K | ⬜ nyitott |
 
 ## Fázis 2 — Matematikai alapmotor  ·  13/13 kész
 
@@ -83,7 +85,7 @@
 | [F3-09](backlog/done/F3-09.md) | MathQuestionPresenter | `ui-dev` | F1-15, F3-02 | PAR | M | C, K | ✅ **KÉSZ** |
 | [F3-10](backlog/done/F3-10.md) | LanePresenter | `ui-dev` | F1-12 | PAR | S | K | ✅ **KÉSZ** |
 | [F3-11](backlog/done/F3-11.md) | Visszajelzés helyes/hibás döntésnél (mindkét eredmény rövid… | `ui-dev` | F3-03, F3-09 | PAR | M | B, C | ✅ **KÉSZ** |
-| [F3-12](backlog/F3-12.md) | Integráció | `gameplay-dev` | F3-04, F3-08, F3-09 | SZEKV | M | B, C, F | ⬜ nyitott |
+| [F3-12](backlog/F3-12.md) | Integráció | `gameplay-dev` | F1-21, F3-04, F3-08, F3-09 | SZEKV | M | B, C, F | ⬜ nyitott |
 | [F3-13](backlog/F3-13.md) | Erőforrás-kapu teszt (17.3) | `qa-unity` | F3-12 | SZEKV | M | B, F | ⬜ nyitott |
 | [F3-14](backlog/F3-14.md) | PlayMode teszt | `qa-unity` | F3-12 | SZEKV | S | F | ⬜ nyitott |
 
@@ -160,6 +162,8 @@ graph TD
     F1Core[F1-01..F1-08<br/>Core + GameLogic SZEKV]
     F1Pres[F1-09..F1-16<br/>SO + Presentation PAR]
     F1Int[F1-17..F1-18<br/>Integráció + teszt]
+    F1Ammo[F1-20<br/>Végtelen tüzelés + ammo kivezetés]
+    F1Weapon[F1-21<br/>HUD fegyverváltás]
   end
 
   subgraph P2[Fázis 2 - Matekmotor]
@@ -190,6 +194,9 @@ graph TD
   F3A --> F3C
   F2B --> F3B
   F3B --> F3C
+  F1Int --> F1Ammo
+  F3B --> F1Ammo
+  F1Ammo --> F1Weapon --> F3C
   F3C --> F4
   F4 --> F5
   F4 --> F6
@@ -197,10 +204,10 @@ graph TD
   F6 --> F7
 
   classDef crit fill:#ffd6d6,stroke:#c33,stroke-width:2px;
-  class F1Core,F2A,F2B,F3A,F3C,F4 crit;
+  class F1Core,F2A,F2B,F3A,F1Ammo,F1Weapon,F3C,F4 crit;
 ```
 
-**Kritikus út (pirossal):** `F0 → F1-01..F1-08 → F1-17 → F3-01..F3-04 → F3-12 → F4-00 → …`
+**Kritikus út (pirossal):** `F0 → F1-01..F1-08 → F1-17 → F3-01..F3-11 → F1-20 → F1-21 → F3-12 → F4-00 → …`
 Ezen a láncon **nincs párhuzamosítás**, mert minden lépés a következő kontrakt-felületét
 definiálja.
 
@@ -228,13 +235,13 @@ kontraktot. Önhatalmú interfész-módosítás tilos (CLAUDE.md „Párhuzamos 
 
 | Kritérium | Fedő feladatok |
 |---|---|
-| A. Folyamatos harc | F1-04, F1-06, F1-07, F1-08, F1-14, F1-17, F1-18 |
+| A. Folyamatos harc | F1-04, F1-06, F1-07, F1-08, F1-14, F1-17, F1-18, F1-20, F1-21 |
 | B. Erőforrás-kapu (20 / ×2 / +25) | F3-03, F3-04, F3-05, F3-11, F3-13 |
 | C. Eredményválasztó sávok (7×8) | F2-09, F3-06, F3-08, F3-09, F3-12 |
 | D. Többféle operátor | F2-01, F2-03, F2-05, F2-07, F2-12 |
 | E. Ismeretlen operandus | F2-04, F2-05, F2-11 |
 | F. Valós idejű működés | F1-08, F3-01, F3-02, F3-12, F3-14 |
-| G. Erőforráshiány | F1-04, F1-06, F3-13, F4-08 |
+| G. Erőforráshiány | F1-04, F1-06, F1-20, F3-13, F4-08 |
 | H. Adaptív nehézség | F4-03, F4-04, F4-05, F4-07, F4-09 |
 | I. Készségprofil | F2-06, F4-01, F4-02, F6-02, F6-05 |
 | J. Szülői kimutatás | F6-01, F6-03, F6-04 … F6-09, F6-10 |

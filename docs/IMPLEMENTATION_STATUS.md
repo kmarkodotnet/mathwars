@@ -2,6 +2,26 @@
 
 Utolsó frissítés: **2026-11-19** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
 
+**Aktív termékváltozás: ADR-017 — implementáció még NYITOTT.**
+Minden fegyver mindig végtelen lőszerrel működik; ammo semmilyen matekfeladatban
+nem szerepelhet. Két közvetlenül választható, eltérő erősségű fegyver kerül a
+valódi HUD-ra. **F1-20 → F1-21 → F3-12** a soros sorrend. Ez a dokumentációs
+rendezés nem implementált funkció és nem új teszt-/buildbizonyíték.
+
+F1-20 érinti a runtime/config/asset/HUD/mentési kompatibilitást és mindkét math
+request/generator/validator/reward/presenter utat; F1-21 a valódi váltást.
+A korábbi F1 combat bootstrap a két jegy után indítható marad. A schedule
+resource jutalma Shield, lane jutalma Health lesz; az engedélyezett pool feltétel.
+A **CL1/Shield50 teljes coverage** továbbra is valódi integrációs akadály,
+valamint a geometria/schedule és a teljes scene-matekbekötés **F3-12** feladata.
+Az Ammo→más erőforrás névcsere nem tekinthető ennek megoldásának.
+A korábbi gyári F3-12 resource-context DRAFT superseded, nem implementálandó.
+A teljes minőségi kapu és mindkét kötelező matekmechanika követelménye változatlan.
+
+> A következő F3-02…F3-07 leírások az ADR-017 előtti ténylegesen ellenőrzött
+> munkák történeti bizonyítékai. Az ottani ammo-adatok nem jelenlegi termékszabályok;
+> a migrált működést F1-20/F1-21 saját új futása igazolja majd. A done naplók nem változtak.
+
 Az aktuális feladatonkénti állapotot a [generált backlog](backlog.md) tartalmazza.
 **F3-07 konfigurációja elkészült**: valódi `MathEventConfigDefault.asset`, a
 `LevelDefinitionSO` nyolcmezős matematikai ütemezése/accuracyje és Core-fordítása,

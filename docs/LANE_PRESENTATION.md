@@ -65,7 +65,7 @@ PlayerController mellett igazolja a 2–4 sávot, swipe/tap után a megfelelő
 kiemelést, mindkét kaputípust, egyidejű ablakokat, esemény nélküli
 állapotegyeztetést, hiba-/lejárati-/sessionvég-ágat, leiratkozást és nulla
 handler/drain allokációt. Korábbi jutalomfeloldást nem helyettesít.
-Valódi Unity-frame-eken a lőszer fogy és az ellenség sérül, miközben a
+A korábbi tesztfutás valódi Unity-frame-jein még lőszer fogyott és az ellenség sérült, miközben a
 döntési keretek láthatók. A 9:16 és 9:19.5 kamera geometriai ellenőrzése
 a döntési jelölőket a harci terület talaján tartja.
 
@@ -73,3 +73,7 @@ A teljes Gameplay scene kompozíciója F3-12. A batch-render helyi korlátai
 miatt a színek és a végső mobilos olvashatóság manuális Editor Game View /
 valós eszköz ellenőrzése a K kapu része marad; ez a jegy nem állít ilyen
 jóváhagyást, Android buildet vagy teljes session-integrációt.
+
+**ADR-017:** ez a futási bizonyíték történeti. F1-20 az ammo-adatokat és az ammo
+feladatmegjelenítést kivezeti; a folyamatos tüzelés/sebzés nem-ammo fixture-ökkel
+ugyanilyen szigorúan újraigazolandó. A scene-integráció továbbra is F3-12.

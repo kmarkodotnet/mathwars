@@ -18,6 +18,24 @@
 > hiányának, a vágással létrejövő döntetlennek és az optimumváltásnak explicit szabálya van.
 > A végeredmény-korlát az ADR-012 szerinti önálló `profile.MaxResultValue`.
 
+## 0. Ammo kizárása — ADR-017 / F1-20
+
+A lőszer soha nem feladattartalom. Az offline `ProblemGenerationRequest` és a
+runtime `ResourceGatePreparationRequest` `RewardResource` ÉS `Reward.Resource`
+mezője aktív nem-ammo erőforrás kell legyen; Ammo bármelyikben `AMMO_NOT_ALLOWED`,
+eltérő nem-ammo pár `INVALID_REQUEST`. Ez Generate/GenerateBatch és Prepare előtt
+ellenőrzött, keresés vagy profilváltoztatás nélkül. Bind sem fogadhat Ammo-t
+hordozó előkészített tervet. A snapshot mennyiségi jelentését nem használjuk lőszerre.
+
+A `Validate` Error kódja `AMMO_NOT_ALLOWED`, `IsValid` ugyanarra false; mindkét
+belépés közös szabályt használ. A feladattípus/Goal/opciócímke nem rejthet el ammo
+jutalmat. A generikus AST számai önmagukban erőforrásfüggetlenek; erőforrásként
+megjelölt Ammo érvénytelen, nincs szöveges alias vagy csendes Ammo→más resource csere.
+A nullás snapshot, a teljes 0..Max coverage, a készség-/operandus-/eredményhatár és
+G4 más erőforrásokra változatlan. A szállított CL1/Shield50 továbbra sem bizonyított
+resource tartalom; az ADR-017 és F3-12 rögzíti a megmaradó akadályt.
+
+
 ## 0. Tervezési alapelvek
 
 | # | Elv |

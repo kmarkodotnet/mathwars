@@ -10,9 +10,9 @@
 
 ## 1. A szimuláció célja
 
-Validálni a `difficulty-model.md` 5. pontjában felírt lőszer-költségvetési egyenletet **valós
-időbeli lefutáson**, nem csak zárt képlettel. A zárt képlet átlagot ad; a szimuláció a
-**szórást** és az időzítést méri — azaz azt, hogy a lőszerhiány *mikor* lép fel, és kimenthető-e.
+Validálni a Health/Shield túlélési modellt és az elérhető fegyverprofilokat valós
+időbeli lefutáson. Az ADR-017 kivezette a lőszerbudgetet; a korábbi ammo-alapú
+levezetés és metrikák nem érvényesek. Nem állítunk új mérési eredményt.
 
 Három kérdésre kell választ adnia:
 1. A 75–85%-os pontosságú játékos ténylegesen teljesíti-e a pályák ~70%-át? (spec 718. sor)
@@ -71,11 +71,10 @@ korrigálódik: `p_eff = clamp(mathAccuracy − 0.04 × (problemCL − playerCL)
 | Metrika | Definíció |
 |---|---|
 | `completed` | bool — a boss legyőzve, HP > 0 |
-| `failReason` | `HealthDepleted` / `AmmoStarvation` / `TimeExpired` / `None` |
-| `ammoSpentTotal`, `ammoSpentPerWave[]` | **várható lőszerfogyás hullámonként** (spec 812. sor) |
+| `failReason`, `lossDiagnosis` | szerződött FailureReason és külön aktív LossDiagnosis; nincs ammo-diagnózis |
+| `weaponId`, `shots`, `damageDealtPerWave[]` | a tényleges konfigurált fegyver és harci hatása |
 | `mathRewardTotal`, `mathRewardMissed` | **várható matematikai jutalom** (spec 813. sor) |
-| `dryTimeSec`, `dryEpisodes` | mennyi ideig / hányszor volt a lőszer 0 — **lőszerhiány** (spec 814. sor) |
-| `minAmmo`, `ammoAtWaveStart[]` | tartaléksáv alakulása |
+| `minHealth`, `minShield`, `rewardClamped` | védelmi tartalék és kapacitás miatt elvesző jutalom |
 | `damageTaken`, `breakthroughCount` | **várható sebzés** (spec 815. sor) |
 | `accuracyActual`, `timeoutCount` | tényleges teljesítmény |
 | `assistActivations[tier]` | **mentőfeladatok rendelkezésre állása/használata** (spec 818. sor) |
@@ -84,7 +83,7 @@ korrigálódik: `p_eff = clamp(mathAccuracy − 0.04 × (problemCL − playerCL)
 
 ### 4.2. Profilonként aggregálva
 
-`completionRate`, `medianDryTime`, `P(dryTime > 10 s)`, `medianMinAmmo`,
+`completionRate`, `medianMinHealth`, `medianMinShield`,
 `requiredAccuracyEmpirical` (a `completionRate = 0,5`-hez tartozó pontosság, binárisan keresve),
 `assistRate`, `medianDamageTaken`.
 
@@ -100,7 +99,7 @@ korrigálódik: `p_eff = clamp(mathAccuracy − 0.04 × (problemCL − playerCL)
 | Segítség | `assistEnabled = true` / `false` | 2 |
 | Seed | 500 ismétlés | 500 |
 
-**Összesen 9 × 5 × 2 × 2 × 500 = 90 000 futás.** A `assistEnabled = false` ág méri a „nyers"
+**Alapmátrix 9 × 5 × 2 × 2 × 500 = 90 000 futás, elérhető fegyvertípusonként.** A `assistEnabled = false` ág méri a „nyers"
 egyensúlyt, a `true` ág a segítség hatását — a kettő különbsége a segítség **ereje**, amit a
 7. pont korlátoz.
 
@@ -116,19 +115,16 @@ A Fázis 4 szimuláció akkor zöld, ha **minden** alábbi feltétel teljesül a
 | B1 | `P-Target-Low` (75%) `completionRate` | **0,60 – 0,80** | spec 718. sor |
 | B2 | `P-Target-High` (85%) `completionRate` | **0,80 – 0,95** | spec 718. sor |
 | B3 | `P-Guess` `completionRate` | **≤ 0,15** | spec 806. sor („ne legyen teljesíthető találgatással") |
-| B4 | `P-Strong` (95%) `completionRate` | **≥ 0,95**, de `medianMinAmmo` **> 0** csak 0,90 arányban — azaz még neki is legyen szűk pillanata | spec 808. sor |
+| B4 | `P-Strong` (95%) `completionRate` | **≥ 0,95**; a védelmi tartalékot külön jelenteni kell, új ammo-eredetű küszöb nélkül | spec 808. sor |
 | B5 | `P-Struggling` (50%) `completionRate` | **0,15 – 0,35** | spec 700. sor: a segítség ne tegye mindenki számára teljesíthetővé |
-| B6 | `requiredAccuracyEmpirical` | **0,66 – 0,76** | `difficulty-model.md` 5.2 (elméleti 0,714) |
+| B6 | Korábbi ammo-egyenletből származó küszöb | KIVEZETVE; az empirikus pontosságot mérjük, új elfogadási küszöb F4-00-ban mélyítendő | ADR-017 |
 | B7 | A segítség hatása: `completionRate(assist=true) − completionRate(assist=false)` a `P-Struggling`-nál | **+0,08 – +0,20** | érezhető, de nem dönti el a pályát |
-| B8 | `P-SlowButAccurate` fő `failReason`-je | `AmmoStarvation` **timeout miatt**, és a `timePressureScale × 1,3` mellett a `completionRate` **≥ +0,25**-tel javul | spec 651. sor: a lassúságra idő a válasz |
+| B8 | `P-SlowButAccurate` fő `failReason`-je | `HealthDepleted` vagy `MathMinimumNotMet` timeouttal összefüggésben, és a `timePressureScale × 1,3` mellett a `completionRate` **≥ +0,25**-tel javul | spec 651. sor: a lassúságra idő a válasz |
 | B9 | `P-CombatWeak` fő `failReason`-je | `HealthDepleted`, és `CombatDifficulty −1` mellett `completionRate` **≥ +0,20** | spec 655. sor |
-| B10 | Hullámonkénti lőszerfogyás monotonitása | egyetlen hullám se fogyasszon többet, mint a pálya teljes fogyásának **22%-a** | nehogy egy hullám önmagában eldöntse a pályát |
-| B11 | `P(dryTime > 10 s)` a `P-Target-High`-nál | **≤ 0,10** | a jól számoló gyerek ne álljon tehetetlenül |
-| B12 | `assistActivations[T3]` a `P-Target-High`-nál | átlag **≤ 0,5 / pálya** | a célsávban a mentőhullám kivétel legyen, ne rutin |
 
 **Ha egy kritérium bukik, a javítás sorrendje** (hogy ne egymást rontó paraméterek mozogjanak):
-1. `RewardTableConfig` jutalomértékei (a `RequiredAccuracy`-t közvetlenül hangolják)
-2. `LevelAmmoBudgetConfig.overkillFactor` / `killRefund`
+1. `RewardTableConfig` jutalomértékei (a túlélési tartalékot hangolják)
+2. Health/Shield kapacitás, tényleges jutalom és boss-gyengepont; nincs ammo-budget
 3. `CombatDifficultyTableConfig` ellenségszám és HP
 4. `InLevelAssistConfig` küszöbök
 5. `TimePressureTableConfig` — **utolsóként**, mert ez befolyásolja a mért pontosságot is,
@@ -158,13 +154,12 @@ kötelező szakaszokkal:
 
 1. **Bemenet** — a használt config-assetek és verziójuk, a seed-tartomány, futásszám, dátum.
 2. **Profil-összefoglaló táblázat** — profilonként: `completionRate`, `failReason` megoszlás,
-   `medianMinAmmo`, `dryTime`, `damageTaken`, `assistActivations`.
-3. **Hullámonkénti lőszermérleg** — táblázat: hullám, várható fogyás, várható matek-jutalom,
-   záró lőszer mediánja és 10/90 percentilise. (spec 812–814. sor)
-4. **Lőszerhiány-elemzés** — `P(dryTime > 0)` és `P(dryTime > 10 s)` profilonként, és a
-   leggyakoribb kiváltó hullám.
-5. **`requiredAccuracyEmpirical`** — mért érték vs. az elméleti 0,714, és az eltérés magyarázata.
-6. **Elfogadási kritériumok kiértékelése** — B1–B12 és D1–D5 pipa/bukás táblázatban.
+   `weaponId`, `medianMinHealth/Shield`, `damageTaken`, `assistActivations`.
+3. **Hullámonkénti harci/védelmi mérleg** — sebzés, áttörés, Health/Shield,
+   nem-ammo jutalom és vágás percentilisei, fegyverenként.
+4. **Kudarcdiagnózis** — aktív okok és timeoutok; nincs dry-time vagy ammo-starvation.
+5. **requiredAccuracyEmpirical** — mért érték és bizonytalanság, korábbi ammo-egyenlet nélkül.
+6. **Elfogadási kritériumok kiértékelése** — aktív B1–B9 és D1–D5 pipa/bukás táblázatban.
 7. **Javasolt paraméter-módosítások** — konkrét asset + mező + régi → új érték, a 6. pont
    javítási sorrendjét követve.
 8. **Nyers adat** — a CSV relatív elérési útja.
@@ -191,6 +186,11 @@ kötelező szakaszokkal:
 - [ ] CSV-író + `SIM-<pálya>.md` generátor
 - [ ] A 90 000 futásos mátrix lefuttatása CL1/3/5/7/10-re
 - [ ] A 10 pályás progressziós futás profilonként
-- [ ] B1–B12 és D1–D5 kiértékelése, paraméterjavítás, újrafuttatás a konvergenciáig
+- [ ] aktív B1–B9 és D1–D5 kiértékelése, paraméterjavítás, újrafuttatás a konvergenciáig
 - [ ] A végleges értékek visszaírása a `*Config` assetekbe és a `difficulty-model.md` 3–5.
       táblázataiba (a dokumentum és az asset nem térhet el egymástól)
+
+**Érvényvesztett kapuk:** B10/B11/B12 a régi lőszerfogyást, dry-time-ot és T3-at
+mérte; nem aktív, nem teljesültnek jelölt tesztek. B6 új küszöbét és a nem-ammo
+szimuláció mélyítését F4-00/F4-08 rögzíti. A megmaradó termék-kapuk és a 75–85%-os
+célsáv változatlan; teljes balance-siker az újramérés előtt nem állítható.

@@ -196,89 +196,51 @@ ezért alapértelmezésben **0** — két párhuzamos CL-skálázás duplán neh
 
 ---
 
-## 5. A lőszer-költségvetési egyenlet (spec 9.1)
+## 5. Véges védelmi erőforrások és fegyverprofilok — ADR-017
 
-Ez a balancing **központi invariánsa**. A `gameplay-dev` ebből származtassa a jutalmakat,
-ne egymástól függetlenül állítsa be őket (spec 9.1 utolsó mondata: „Az ellenségek számát és a
-jutalmakat ne véletlenszerűen, egymástól függetlenül állítsd be").
+A régi lőszer-költségvetési egyenlet, kill-refund arány, abból számolt
+RequiredAccuracy és overflow-pontszám érvényét vesztette. A korábbi levezetés nem
+bizonyítja a végtelen tüzelés új egyensúlyát. Új mért balance még nincs; a
+SIM-plan szerinti újramérés F4-08 feladata, a kontrakt mélyítése F4-00.
 
-```
-AmmoDemand      = Σ(enemyHP) × OverkillFactor            // OverkillFactor = 1.15
-AmmoSupply(p)   = StartingAmmo + KillAmmoRefund×enemyCount + p × MathRewardPerfect
-RequiredAccuracy = (AmmoDemand − StartingAmmo − KillAmmoRefund×enemyCount) / MathRewardPerfect
-```
+A hullámnyomást a tényleges fegyver Damage/FireRate, találat, kontaktsebzés,
+Health/Shield kapacitás, nem-ammo matekjutalom és meglévő boss-gyengepont együtt
+határozza meg. Minden elérhető fegyvertípussal külön mérni kell: a nagyobb DPS
+nem oldhatja fel a két matekmechanika és a valódi matematikai teljesítmény elvét.
+Nincs rejtett fegyvergyengítés, ammo-alapú nehezítés vagy automatikus fegyverjutalom.
+A LevelDefinition.RequiredMathAccuracy meglévő győzelmi feltétel, nem azonos a
+szimulációból mért requiredAccuracyEmpirical értékkel.
 
-### 5.1. CL5 referencia-pálya levezetése
+### 5.1. Nem-ammo jutalomforrások
 
-| Tétel | Számítás | Érték |
-|---|---|---|
-| Ellenségek összes HP-ja | 110 ellenség, átlag 4,0 HP | 440 |
-| Boss | | 120 |
-| Overkill (szórás, túlsebzés, elhibázott lövés) | (440+120) × 1,15 | **644 lövés = 644 lőszer** |
-| Kezdő lőszer (`LevelDefinitionSO.StartingAmmo`) | | −60 |
-| Kill-refund (`EnemyDefinitionSO.RewardValue` = +1 lőszer / kill) | 110 | −110 |
-| **Mateknak fedeznie kell** | | **474** |
-| Tökéletes matek-hozam (6 kapu × 60 + 8 sáv × 38) | 360 + 304 | **664** |
-| **RequiredAccuracy** | 474 / 664 | **0,714** |
+Health lane jutalom a RewardTableSO.HealthRewardBase (15), Shield lane jutalom
+ShieldRewardBase (10). Resource kapunál továbbra is a nyers OperationResult−Snapshot
+adja a deltát, a Max-vágás és az egyértelmű nyers/effektív optimum kötelező.
+A Health/Shield adatok újramérést igényelnek; a másik resource nevére cserélt ammo
+költségvetés nem validáció.
 
-> A kill-refund a kontraktban `EnemyDefinitionSO.RewardValue` (**lőszer**, nem pontszám) ×
-> `AmmoBudgetSO.KillAmmoRefund`. A harci (nem matek) hozam felső korlátja a tökéletes
-> matek-hozam 15%-a (`AmmoBudgetSO.CombatRewardShareMax`) — itt 110/664 = 16,6%, ami
-> **a határon van**: a `SIM-plan.md` futásánál vagy a `RewardValue` csökken 0,9-re
-> (effektíve 99 lőszer), vagy a `MathRewardPerfect` emelkedik. A szabály iránya kötött:
-> **a matek-hozam nem csökkenhet** a harci hozam javára (spec 23/2.).
+### 5.3. Megőrzött generikus jutalom- és eseményszám-referenciák
 
-### 5.2. Ebből következő profil-kimenetek (a `SIM-plan.md` validálja)
+Ezek a meglévő RewardTableSO adatok; nem lőszerértékek és nem bizonyítanak
+célsávbeli pályasikert. A resource delta helyett nem használhatók fix jutalomként.
+A konkrét resource-specifikus oszlop elsőbbségét az SO-séma 6.1. rögzíti.
 
-| Pontosság | Matek-hozam | Egyenleg (±) | Várt kimenet |
+| CL | GateRewardBase | LaneRewardBase | MathDecisionCount / pálya |
 |---|---|---|---|
-| 50% | 332 | **−142** | Kifogy a lőszer a 6. hullámnál → pályavesztés tipikus (`LossDiagnosis = AmmoStarvation` → `FailureReason = HealthDepleted`). Megfelel a „ne legyen tippeléssel teljesíthető" elvnek. |
-| 70% | 465 | −9 | Borotvaélen; a segítő mentőhullám (6.5/T3) dönt. Pályasiker ≈ 45%. |
-| 75% | 498 | +24 | Jellemzően sikeres, szűk tartalékkal. |
-| 85% | 564 | +90 | Kényelmesen sikeres, de a boss még kihívás. |
-| 95% | 631 | +157 | Sikeres + a felesleg pontszámmá válik (F5), ★3 elérhető. |
+| 1 | 30 | 20 | 10 |
+| 2 | 34 | 22 | 11 |
+| 3 | 40 | 26 | 12 |
+| 4 | 50 | 32 | 13 |
+| 5 | 60 | 38 | 14 |
+| 6 | 70 | 44 | 14 |
+| 7 | 82 | 52 | 15 |
+| 8 | 96 | 60 | 15 |
+| 9 | 112 | 70 | 16 |
+| 10 | 130 | 82 | 16 |
 
-**Ez teljesíti a spec 718. sorát:** a 75–85%-os sávban a játékos általában sikeres, de a kihívás
-(boss-fázisok, páncélosok) megmarad. A `RequiredAccuracy = 0,714` szándékosan a célsáv alsó
-pereme alatt van ~4 százalékponttal, hogy a hullám-RNG-ből adódó szórás ne buktasson el egy
-75%-os gyereket.
-
-> **Figyelem a `LevelDefinition.RequiredMathAccuracy`-val való összekeverésre:** az itteni
-> `RequiredAccuracy` egy **számított balance-metrika** (mennyi pontosság kell a lőszer
-> kijöveteléhez), a `LevelDefinition.RequiredMathAccuracy` ezzel szemben egy **győzelmi
-> feltétel** (spec 1.2), alapértéke 0.0 = nincs matek-minimum. A kettő nem azonos és nem
-> egymásból származik.
-
-**ScriptableObject:** `AmmoBudgetSO` (`OverkillFactor`, `KillAmmoRefund`,
-`CombatRewardShareMax`, `TargetRequiredAccuracyMin/Max`, `OverflowScorePerAmmo`) +
-`RewardTableSO` (CL-enkénti jutalmak) — scriptable-object-schema.md 6.1, 6.2.
-A `StartingAmmo` és a `MaxAmmo` (= `ammoSoftCap`) **pályánkénti** adat:
-`LevelDefinitionSO`.
-
-### 5.3. Jutalomértékek CL-enként
-
-A jutalmak a CL-lel együtt skálázódnak, mert a `AmmoDemand` is nő. Az arány tartása a fontos,
-nem az abszolút szám.
-
-| CL | `GateRewardBase` | `LaneRewardBase` | `MathDecisionCount` / pálya | `MathRewardPerfect` | `RequiredAccuracy` (cél: 0,68–0,74) |
-|---|---|---|---|---|---|
-| 1 | 30 | 20 | 10 (4 kapu + 6 sáv) | 240 | 0,69 |
-| 2 | 34 | 22 | 11 | 282 | 0,70 |
-| 3 | 40 | 26 | 12 | 350 | 0,71 |
-| 4 | 50 | 32 | 13 | 474 | 0,71 |
-| 5 | 60 | 38 | 14 | 664 | 0,714 |
-| 6 | 70 | 44 | 14 | 772 | 0,72 |
-| 7 | 82 | 52 | 15 | 904 | 0,72 |
-| 8 | 96 | 60 | 15 | 1056 | 0,73 |
-| 9 | 112 | 70 | 16 | 1232 | 0,735 |
-| 10 | 130 | 82 | 16 | 1420 | 0,74 |
-
-A `RequiredAccuracy` CL10-ig csak 0,69→0,74-re nő: a magasabb szinten **nem a lőszerhiánnyal**
-nehezítünk (az frusztráló tehetetlenséget okoz), hanem a matematikai és időbeli komplexitással.
-
-**ScriptableObject:** `RewardTableSO` (scriptable-object-schema.md 6.1).
-A `MathDecisionCount` oszlop a `LevelDefinitionSO.MathEvents` elemszámának **célértéke**;
-a kemény alsó korlát a spec 10.1 szerinti 10 (`Tutorial` sablonnál 8).
+A szállított CL1/Shield50 teljes coverage továbbra is érvénytelen; ezt F3-12
+rendezi, profil-, skill-, rés- vagy kapacitáshamisítás nélkül. A gyári korábbi
+kontextus-fallback DRAFT superseded (ADR-017).
 
 ---
 
@@ -308,16 +270,15 @@ okából választja ki a **dimenziót**, amelyen a fő elmozdulás történik.
 A kudarc oka két, egymástól független adat (core-domain.md 6.):
 `FailureReason` = a **játékszabály** szerinti ok (zárt lista: `HealthDepleted`, `TimeLimit`,
 `PlayerQuit`, `MathMinimumNotMet`), `LossDiagnosis` = a **mért** diagnózis
-(`AmmoStarvation`, `EnemyBreakthrough`, `MathAccuracyShortfall`, `BossPhaseStall`).
-A lőszerhiány és az ellenség-áttörés **nem** `FailureReason`, mert a lőszer kifogyása
-önmagában nem vereség (spec 1.3) — a vereség oka ilyenkor is `HealthDepleted`.
+(`EnemyBreakthrough`, `MathAccuracyShortfall`, `BossPhaseStall`).
+Az ellenség-áttörés diagnózis, a vereség oka ilyenkor `HealthDepleted`. Az
+AmmoStarvation ordinal1 csak történeti tombstone; új mérés és DDA nem használja.
 
 | Diagnózis (a hosszú távú ablak alapján) | Elsődleges beavatkozás | Másodlagos |
 |---|---|---|
 | Pontosság < 65%, átlagos válaszidő a keret 60%-a alatt (gyorsan hibázik) | `MathComplexity −1` | – |
 | Pontosság ≥ 80%, de timeout-arány > 20% (jól számol, lassan) | `timePressureScale × 1.15` | MathComplexity változatlan |
 | Pontosság ≥ 80%, `LossDiagnosis == EnemyBreakthrough` | `CombatDifficulty −1` | MathComplexity változatlan |
-| Pontosság ≥ 80%, `LossDiagnosis == AmmoStarvation` | `GateRewardBase`/`LaneRewardBase` × 1.10 | jelzés a balance-logba (modellhiba gyanú) |
 | Pontosság ≥ 80%, `LossDiagnosis == BossPhaseStall` | `CombatDifficulty −1` és a boss-fázis gondolkodási ideje × 1.25 | – |
 | Pontosság ≥ 88% **és** siker első próbálkozásra **és** timeout < 5% | `MathComplexity +1` | `CombatDifficulty +1` ha a HP > 60% volt a végén |
 
@@ -347,7 +308,7 @@ A kontrakt invariánsa:
 
 | Ablak | Méret | Mit vezérel | Irány |
 |---|---|---|---|
-| Rövid (`ShortWindowSize`) | utolsó **5** válasz (min. 3 kell a kiértékeléshez) | **pályán belüli segítség** (6.5), és csak az új feladatokat/hullámokat érinti | **csak könnyítés**; legfeljebb a pálya alap-CL-jéhez képest **−1 szintnyi** eltérés (T3-nál −2) |
+| Rövid (`ShortWindowSize`) | utolsó **5** válasz (min. 3 kell a kiértékeléshez) | **pályán belüli segítség** (6.5), és csak az új feladatokat/hullámokat érinti | **csak könnyítés**; legfeljebb a pálya alap-CL-jéhez képest **−1 szintnyi** eltérés  |
 | Hosszú (`LongWindowSize`) | utolsó **40** válasz (tartomány 30–50) | a `ChallengeLevel` pályák közötti módosítása és a következő pálya kezdő szintje | mindkét irány, ±1 |
 
 A rövid ablak **sosem nehezít** menet közben — a pályán belüli nehezítés azt az érzetet keltené,
@@ -368,22 +329,21 @@ szerződése: „a MÁR AKTÍV események paraméterei nem változnak").
 |---|---|---|---|
 | **T1 — Finom** | `ConsecutiveErrors` = 2 (vagy 2 timeout az utolsó 5-ben) | `ThinkTimeMultiplier` 1.25; `GateSpeedMultiplier` 0.85 | 2 feladat |
 | **T2 — Érezhető** | `ConsecutiveErrors` = **3** (a spec explicit küszöbe, 677. sor) | T1 + `MathComplexityDelta = −1`; `LaneCountOverride = 3` | 3 feladat, vagy amíg 2 egymást követő helyes nem jön |
-| **T3 — Mentőhullám** | `AmmoBelowRatio` = 0.20 (a hátralévő `AmmoDemand` 20%-a — **kritikus erőforráshiány**) | Rövid, könnyebb **mentő-matek-hullám**: 2 sáv-feladat `MathComplexityDelta = −2` szinten, `LaneCountOverride = 2`, dupla jutalommal (`RewardTableSO.RescueWaveRewardMultiplier = 2.0`); egyidejűleg `SpawnDensityMultiplier = 0.70` | 1 mentőhullám, pályánként max. **2** (`MaxActivationsPerLevel = 2`) |
 | **T4 — Harci enyhítés** | `HealthDropRate` = 0.30 (HP a max 30%-a alá esik 20 s-on belül) | `EnemySpeedMultiplier` 0.85, `SpawnDensityMultiplier` 0.75, `EnemyDamageMultiplier` 0.80 | 25 s (`DurationSeconds`) |
 
 **Visszaállás (fontos, nehogy a segítség beragadjon):** minden tier kikapcsol, ha a játékos
 **2 egymást követő helyes választ** ad (`RecoveryCorrectAnswers = 2`); a visszaállás fokozatos
-(T3 → T1 → ki), tier-enként legalább 1 feladatnyi késleltetéssel, hogy ne legyen hirtelen
+(T2 → T1 → ki), tier-enként legalább 1 feladatnyi késleltetéssel, hogy ne legyen hirtelen
 nehezedés.
 
 **Mit NEM csinál a segítség (spec 692–700. sor):**
-- Nem ad ingyen lőszert és nem old meg feladatot a játékos helyett.
-- Nem garantál pályateljesítést: a T3 mentőhullám jutalma csak **helyes** válasz esetén jár, és
-  maximum 2×, ami a hiányzó lőszer ~35%-át fedezi — a maradékot a gyereknek kell megoldania.
+- Nem ad ingyen jutalmat és nem old meg feladatot a játékos helyett.
+- Nem garantál pályateljesítést. A korábbi ammo-mentő T3 inaktív; nincs új
+  helyettesítő trigger vagy kiosztott védelmi erőforrás (ADR-017).
 - Nem állítja le a harcot és a matekot (spec 696. sor).
 - Nem módosít visszamenőleg már megjelent feladványt.
 
-**ScriptableObject:** `InLevelAssistSO` → `AssistTierEntry` × 4
+**ScriptableObject:** `InLevelAssistSO` → `AssistTierEntry` × 3 (Tier1,2,4)
 (scriptable-object-schema.md 8.1).
 
 ---
@@ -411,7 +371,6 @@ nem megy (spec 12.). Kapcsoló: `DeveloperSettingsSO.LogAdaptationDecisions`.
 | `MathDifficultyTableSO` | 10 × `MathDifficultyLevelEntry` (matematikai tartalom) | 2 | F2 |
 | `TimePressureTableSO` | 10 × `TimePressureLevelEntry` | 3 | F2 |
 | `CombatDifficultyTableSO` | 10 × `CombatDifficultyLevelEntry` | 4 | F1 |
-| `AmmoBudgetSO` | költségvetési egyenlet együtthatói | 5 | F3 |
 | `RewardTableSO` | 10 × (`GateRewardBase`, `LaneRewardBase`, `MathDecisionCount`) | 5.3 | F3 |
 | `AdaptiveDifficultyConfigSO` | pályák közötti szabályok, dimenzió-választó mátrix, hiszterézis | 6.1–6.4 | F4 |
 | `InLevelAssistSO` | 4 × `AssistTierEntry` | 6.5 | F4 |
@@ -420,3 +379,7 @@ nem megy (spec 12.). Kapcsoló: `DeveloperSettingsSO.LogAdaptationDecisions`.
 Ezek pontos C# mezőnevei és típusai a `docs/contracts/scriptable-object-schema.md`-ben
 rögzítettek — ott az architect agent a felelős, ez a dokumentum az **értékeket** adja hozzá.
 Ütközés esetén a kontrakt az irányadó (ADR-009).
+
+Az első fegyverkészlet névleges DPS-e 15/30 (ADR-017); a korábbi egyetlen
+4 lövés/s × 1 sebzés referencia nem igazolt szállított fegyverprofil. A
+GameBalanceSO.ReferenceDps referenciaadat, nem fegyveregyenlőségi korlát.

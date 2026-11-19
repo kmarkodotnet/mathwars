@@ -8,7 +8,7 @@
 >
 > **Revízió r2 (2026-11-16, architect):** a `ResourceService.Initialize` pajzs-viselkedése
 > rögzítve (`MaxShield`); `EnemySnapshot` definíció/snapshot szétválasztása explicit;
-> `ApplyCombatReward` kill-refund szemantika; `CalculateStars` küszöbök SO-ból;
+> történeti r2-jutalomszemantika (az ammo részt ADR-017 felülírta); `CalculateStars` küszöbök SO-ból;
 > `LossDiagnosis` bevezetve az adaptációs bemenethez (ld. core-domain.md 6.).
 
 ## 0. Alapszabályok
@@ -49,10 +49,10 @@ public interface IGameEvent { double GameTime { get; } }
 | `WaveCleared` | WaveDirector | `int WaveIndex, double GameTime` |
 | `EnemySpawned` | WaveDirector | `int EnemyInstanceId, string EnemyId, LaneIndex Lane, Vec2 Position, double GameTime` |
 | `EnemyDamaged` | CombatService | `int EnemyInstanceId, int Damage, int RemainingHealth, double GameTime` |
-| `EnemyKilled` | CombatService | `int EnemyInstanceId, string EnemyId, int RewardValue, double GameTime` |
+| `EnemyKilled` | CombatService | `int EnemyInstanceId, string EnemyId, double GameTime` |
 | `EnemyReachedPlayer` | CombatService | `int EnemyInstanceId, int ContactDamage, double GameTime` |
-| `WeaponFired` | CombatService | `int TargetEnemyInstanceId, int AmmoUsed, double GameTime` |
-| `WeaponDryFire` | CombatService | `double GameTime` (nincs lőszer) |
+| `WeaponFired` | CombatService | `int TargetEnemyInstanceId, string WeaponId, int Damage, double GameTime` |
+| `WeaponChanged` | CombatService | `string PreviousWeaponId, string WeaponId, double GameTime` (F1-21) |
 | `PlayerDamaged` | CombatService | `int Damage, int RemainingHealth, double GameTime` |
 | `PlayerLaneChanged` | CombatService | `LaneIndex From, LaneIndex To, double GameTime` |
 | `MathEventPreviewStarted` | MathEventDirector | `MathEventId EventId, ProblemType Type, MathProblemId? ProblemId, string DisplayExpression, ResourceType Resource, GateGoal Goal, int? TargetValue, double GameTime` |
@@ -84,13 +84,13 @@ public interface IResourceService
     int GetMax(ResourceType type);
 
     /// EGYETLEN módosítási út. Pozitív és negatív delta egyaránt.
-    /// A [Min, Max] tartományra vág, soha nem dob kivételt.
-    /// reasonCode: "WEAPON_FIRE" | "MATH_GATE" | "ENEMY_CONTACT" | "PICKUP" | "LEVEL_INIT"
-    ///           | "KILL_REFUND" | "BOSS_PHASE"
+    /// Aktív erőforrásnál a [Min, Max] tartományra vág; a vágás nem dob kivételt.
+    /// reasonCode: "MATH_GATE" | "ENEMY_CONTACT" | "PICKUP" | "LEVEL_INIT"
+    ///           | "BOSS_PHASE"
     ResourceChange ApplyDelta(ResourceType type, int delta, string reasonCode);
 
     /// Lefoglalás: csak akkor von le, ha a teljes mennyiség rendelkezésre áll.
-    /// Visszatérés: true, ha sikerült. A fegyver ezt használja (nincs részleges lövés).
+    /// Visszatérés: true, ha sikerült. Csak véges, nem-ammo erőforráshoz használható.
     bool TryConsume(ResourceType type, int amount, string reasonCode, out ResourceChange change);
 
     /// Maximum módosítása (upgrade). A Current soha nem haladhatja meg az új Max-ot.
@@ -112,16 +112,15 @@ public interface IResourceService
 | **Nincs publikus `SetCurrent(type, absoluteValue)`** | A kapu soha nem írhatja felül a harc által módosított tényleges értéket (spec 5.1, 17.3). |
 | `ApplyDelta` hívása a Presentation rétegből | A HUD csak olvas és `ResourceChanged` eseményre animál. |
 | `ResourcePool` közvetlen mutálása | `ResourceState` immutable. |
-| A `Max` levezetése a `Starting*` értékből | Minden erőforrásnak **saját** `Max` mezője van a `LevelDefinition`-ben (`MaxAmmo`, `MaxHealth`, `MaxShield`) — spec 4.3. |
+| A `Max` levezetése a `Starting*` értékből | Minden erőforrásnak **saját** `Max` mezője van a `LevelDefinition`-ben (`MaxHealth`, `MaxShield`) — spec 4.3. |
 
 ### 2.2. `Initialize` kötelező viselkedése
 
 A `LevelDefinition` három `Starting*`/`Max*` párjából **pontosan** három pool jön létre,
-azonos minta szerint; semmilyen erőforrásra nincs speciális eset:
+azonos véges-erőforrás minta szerint. Az Ammo tombstone nem aktív erőforrás:
 
 | Pool | `Current` | `Max` | Mikor jön létre |
 |---|---|---|---|
-| `Ammo` | `level.StartingAmmo` | `level.MaxAmmo` | mindig (`MaxAmmo > 0` invariáns) |
 | `Health` | `level.StartingHealth` | `level.MaxHealth` | mindig (`MaxHealth > 0` invariáns) |
 | `Shield` | `level.StartingShield` | `level.MaxShield` | **csak ha `level.MaxShield > 0`** |
 
@@ -134,17 +133,20 @@ F1–F4 fázisban (F5-től a `LevelDefinition` bővítése után).
 
 ### 2.3. Kötelező referencia-viselkedés (spec 17.3 teszt)
 
-> Ez egy **unit-teszt-forgatókönyv**, nem pályaalapértelmezés. A `LevelDefinitionSO`
-> `StartingAmmo` alapértéke 60 (GAME_DESIGN.md 6.1, difficulty-model.md 5.1); az alábbi
-> 20-as kezdőérték azért szerepel, mert a spec 17.3 példája ezzel számol.
+Ez explicit, érvényes matekprofilú Shield unit-teszt, nem a szállított CL1
+lefedettségi bizonyítéka (ADR-017).
 
 ```
-Initialize: Ammo = 20 (Max 200)
-CaptureSnapshot(Ammo) -> 20
-... harc: TryConsume(Ammo, 1, "WEAPON_FIRE") × 12  ->  Current = 8
-GateResolution: operationResult = 45, snapshot = 20  =>  delta = +25
-ApplyDelta(Ammo, +25, "MATH_GATE")  ->  PreviousValue = 8, NewValue = 33, WasClamped = false
+Initialize: Shield = 20 (Max 50)
+CaptureSnapshot(Shield) -> 20
+... harc: ENEMY_CONTACT 12 pajzssebzés -> Current = 8
+GateResolution: operationResult = 45, snapshot = 20 => delta = +25
+ApplyDelta(Shield, +25, "MATH_GATE") -> PreviousValue = 8, NewValue = 33
 ```
+
+Ammo pool nem inicializálódik. Az Ammo-t fogadó Get/GetCurrent/GetMax,
+CaptureSnapshot/ApplyDelta/TryConsume/SetMax út `ArgumentException` programozói
+hibával elutasít; sem 0/Max, sem int.MaxValue nem reprezentál végtelent.
 
 ---
 
@@ -153,7 +155,7 @@ ApplyDelta(Ammo, +25, "MATH_GATE")  ->  PreviousValue = 8, NewValue = 33, WasCla
 ```csharp
 public interface ICombatService
 {
-    void Initialize(LevelDefinition level, WeaponDefinition weapon,
+    void Initialize(LevelDefinition level, IReadOnlyList<WeaponDefinition> weapons,
                     IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog);
 
     /// Egy szimulációs lépés: ellenségmozgás, célzás, tüzelés, találat, ütközés, halál.
@@ -202,15 +204,14 @@ public readonly struct CombatModifiers
     public float EnemyHealthMultiplier { get; }    // 0.5 .. 2.0
     public float EnemyDamageMultiplier { get; }    // 0.5 .. 2.0
     public float SpawnRateMultiplier { get; }      // 0.5 .. 2.0
-    public float AmmoConsumptionMultiplier { get; }// 0.5 .. 2.0
     public static CombatModifiers Neutral { get; }
 }
 ```
 
 **Kötelező harci szabályok (spec 4.2, 17.4):**
 
-1. Tüzelés: `1 / (FireRate * ...)` másodpercenként egy lövés, ha van célpont **és**
-   `TryConsume(Ammo, AmmoPerShot)` sikerül. Sikertelenség ⇒ `WeaponDryFire`, a harc folytatódik.
+1. Tüzelés: a kiválasztott fegyver `1 / FireRate` ütemében, ha van célpont.
+   Lőszerkészlet, fogyasztás, dry-fire és újratöltés nincs; minden típus mindig végtelen (ADR-017).
 2. Célpontválasztás a `TargetingMode` szerint: alap `OwnLaneThenAdjacent` — először a
    játékos sávjában a legközelebbi élő ellenség, csak ha nincs, akkor a szomszédos sáv.
 3. `ProjectileSpeed == 0` ⇒ hitscan (azonnali találat); különben a lövedék a `Tick`-ben halad
@@ -225,11 +226,23 @@ public readonly struct CombatModifiers
 6. `Health <= 0` ⇒ `IsPlayerAlive = false` + `PlayerDamaged` majd a `GameSessionService`
    `SessionEnded(Defeat, HealthDepleted)`.
 7. Ellenség `CurrentHealth <= 0` ⇒ `EnemyKilled`, az instance a poolba kerül (az instance-id
-   nem használható újra ugyanabban a session-ben). A `GameSessionService` ezután
-   `IRewardService.ApplyCombatReward(Ammo, definition.RewardValue, "KILL_REFUND")`-ot hív
-   (ld. 7. szakasz).
+   nem használható újra ugyanabban a session-ben). Kill után nincs erőforrás-visszatérítés; az `EnemyKilled` önmagában nem jutalom (ADR-017).
 
 ---
+
+### 3.1. Fegyvertípus-választás — F1-21 (ADR-017)
+
+`ICombatService` további felülete: `string CurrentWeaponId { get; }` és
+`Result<bool> SelectWeapon(string weaponId, double gameTime)`. Az Initialize a
+pálya rendezett `AvailableWeaponIds` halmazához tartozó immutable definíciókat
+kapja; hiány/duplikáció/idegen Id startup konfigurációs hiba. Kezdetben WeaponId aktív.
+A session listája ebből a másolt katalógusból olvas, nem keres SO-t Tickben.
+A session SelectWeapon kizárólag futó/élő/nem szünetelő állapotban továbbít.
+Hibák: `SESSION_NOT_RUNNING`, `SESSION_PAUSED`, `WEAPON_NOT_AVAILABLE`; azonos típus
+`Ok(false)`, váltás `Ok(true)` és pontosan egy WeaponChanged struct esemény.
+Váltáskor nincs lövés; `nextShotAt = max(oldNextShotAt, t + 1/newFireRate)`.
+Már repülő lövedék eredeti sebzése/sebessége megmarad. Nincs resource/math hívás,
+RNG vagy managed allokáció. Az ADR-017 rögzíti a két szállított típust és a HUD-utat.
 
 ## 4. IWaveDirector (spec 4.1)
 
@@ -586,10 +599,7 @@ public interface IRewardService
     RewardApplication ApplyReward(in GateResolution resolution);
 
     /// Nem matematikai jutalom — nem idempotencia-köteles, mert nincs esemény-azonosítója.
-    /// Két kötelező használata:
-    ///  - KILL_REFUND: minden `EnemyKilled` után `EnemyDefinition.RewardValue` LŐSZER
-    ///    (difficulty-model.md 5.: `killRefund`, alap +1/kill — a matek-hozam ~10%-a).
-    ///  - BOSS_PHASE: boss-fázisok közti életerő-jóváírás (GAME_DESIGN.md 6.1: +15 HP).
+    /// Meglévő használata: BOSS_PHASE: boss-fázisok közti életerő-jóváírás (GAME_DESIGN.md 6.1: +15 HP).
     ResourceChange ApplyCombatReward(ResourceType type, int amount, string reasonCode);
 
     IReadOnlyCollection<Guid> AppliedRewardEventIds { get; }
@@ -611,11 +621,11 @@ public enum RewardApplicationStatus
 }
 ```
 
-**Matek-hozam vs. harci hozam aránya (balance-invariáns, spec 1.: „a lőszer a matek jutalma”):**
-a `ApplyCombatReward(Ammo, …)` összege egy pályán **nem haladhatja meg** a tökéletes
-matek-hozam (`MathRewardPerfect`, difficulty-model.md 5.3) 15%-át. Ezt a
-balancing-szimuláció (`SIM-plan.md`) ellenőrzi; sérülés esetén a `RewardValue` csökken,
-nem a matek-jutalom nő.
+**Jutalomhatár (ADR-017):** ammo és kill-refund nem támogatott. `ApplyReward`
+és `ApplyCombatReward` Ammo-t programozói hibaként (`ArgumentException`) utasít el,
+a pool vagy idempotencia-napló módosítása előtt. `RewardApplicationStatus` nem kap
+hamis Applied/SkippedIncorrect értéket. Más aktív erőforrások meglévő idempotenciája,
+nyers delta- és kapacitásszabálya változatlan.
 
 ---
 
@@ -628,7 +638,12 @@ public interface IGameSessionService
     SessionResult Result { get; }
     bool IsRunning { get; }
 
-    void StartSession(LevelDefinition level, PlayerProgress progress, int seed);
+    // A meglévő F1 explicit kompozíció végrehajtható bemenete, F1-21-ben listára bővül:
+    void StartSession(LevelDefinition level, IReadOnlyList<WeaponDefinition> weapons,
+                      IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog, int seed);
+    IReadOnlyList<WeaponDefinition> AvailableWeapons { get; }
+    string CurrentWeaponId { get; }
+    Result<bool> SelectWeapon(string weaponId);
 
     /// AZ EGYETLEN helyen definiált Tick-sorrend (ARCHITECTURE 6.1).
     /// A Presentation (MonoBehaviour.Update) ezt hívja, mást nem.
@@ -675,9 +690,8 @@ EvaluateVictoryOrDefeat(t);
 - Győzelem: `WaveDirector.AllWavesCompleted && !IsBossActive && Health > 0 &&
   MathAccuracy >= LevelDefinition.RequiredMathAccuracy`.
 - Vereség: `Health <= 0` ⇒ `Defeat / HealthDepleted`.
-- **A lőszer kifogyása önmagában nem vereség** (spec 1.3) — ezért nincs `FailureReason`
-  értéke. A lőszerhiány mint ok a `GameSessionRecord.LossDiagnosis = AmmoStarvation`
-  mért diagnózisban jelenik meg (core-domain.md 6.), amit a `Finalize` számol ki.
+- Ammo-kifogyás és új AmmoStarvation diagnózis nincs (ADR-017); történeti ordinal
+  olvasható, de nem vezérel DDA-t. A tüzelés a készlettől független.
 
 ---
 
@@ -755,7 +769,6 @@ public readonly struct InLevelAssistance
 | mindig | `1 <= ChallengeLevel <= 10` |
 | 3 egymást követő hibás matek-válasz | `InLevelAssistance` aktiválódik |
 | `LossDiagnosis == EnemyBreakthrough` és pontosság >= 80% | csak `CombatDifficulty` csökken |
-| `LossDiagnosis == AmmoStarvation` és pontosság >= 80% | jutalomérték +10% és balance-log jelzés (modellhiba gyanú), `MathComplexity` változatlan |
 | jól számol, de lassan (timeout-arány > 20%) | csak `TimePressure` csökken (több idő) |
 | globális szint emelkedik | **nem** old fel nem tanult készséget (`SkillProfile.GetMasteryLevel(tag) >= Introduced` kötelező) |
 | minden változtatás | `DifficultyAdjustment` naplóba kerül (visszakövethetőség, spec 7.6) |
@@ -803,5 +816,5 @@ Implementáció: `LocalSaveRepository`, `GameConfigurationRepository` (Infrastru
 | B. Erőforrás-kapu | `IGateResolutionService` + `IResourceService.CaptureSnapshot/ApplyDelta` |
 | C. Eredményválasztó sávok | `IMathEventDirector` + `AnswerLaneSelection` |
 | F. Valós idejű működés | `IGameSessionService.Tick` sorrend (8. szakasz), G5 szabály, 5. szakasz függetlenségi táblázata |
-| G. Erőforráshiány | `WeaponDryFire`, `TryConsume == false` ág |
+| G. Erőforráshiány | elmaradó Health/Shield jutalom, kontaktsebzés és HealthDepleted |
 | H. Adaptív nehézség | `IAdaptiveDifficultyService` (Fázis 4) |

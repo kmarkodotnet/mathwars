@@ -75,29 +75,33 @@ operandus/szorzótartomány) szerkeszthető adatok; e jegy **nem állít** hozz�
 teljes scene/generátor/presenter bekötést. A host a lefagyasztott API-kat
 használja; az adapter nem módosít `DifficultyProfile`-t ezek kedvéért.
 
-## Meglévő W1L01 prototípus és ismert integrációs hiba
+## W1L01 migráció és megmaradó integrációs korlát — ADR-017
 
-Az eddigi `LevelW1L01.asset` 150 másodperces F1-pálya, változatlan erőforrásokkal,
-fegyverrel és hullámokkal. Most 10 váltakozó resource/lane esemény van benne:
-trigger 4, 18, 32, 46, 60, 74, 88, 102, 116, 130 s; Preview 2 s; valamennyi
-override 0; cél `Maximize`, erőforrás `Ammo`, accuracy-követelmény 0.
-A 14 s-os triggerköz a CL1 táblabeli szünetét teljesíti. Ez szerializált,
-strukturálisan valid **előkészítési adat**, nem már lejátszható F3 referencia:
-a teljes lifecycle ideje/concurrency és a 15 s-os matekmentes lezárás pályaszintű
-kalibrálása a valódi hosttal az F3-12 integrációban szükséges.
+Az ADR-017 előtti, valóban szállított asset tíz váltakozó resource/lane bejegyzése
+Ammo jutalmat tartalmazott. Ez történeti állapot, nem megengedett új tartalom.
+Az F1-20 mind az öt resource bejegyzést `Maximize × Shield`, mind az öt lane
+bejegyzést Health jutalomra migrálja; nincs runtime automatikus átnevezés.
+Lane jutalom a meglévő HealthRewardBase=15, resource mindig nyers snapshot-delta.
+A konkrét CL1 profil, az eredeti schedule-index és a 4,18,…,130 triggerlista
+megmarad; új feladatfajta, skill-feloldás és táblázat nincs. MaxShield>0 kell;
+ha a korábbi pálya letiltotta, az elfogadott SO-default50 látható adatváltozás.
+Hiányzó/letiltott poolt a SO/repository/adapter elutasít.
 
-Az alap CL1 profil `MaxResultValue=10`, miközben `MaxAmmo=200`. Ez a teljes
-`0..Max` snapshot-tartományra nem adható érvényes resource gate; a tényleges
-director `PrepareUpcomingEvents` eredménye **GENERATION_EXHAUSTED**. A shipped
-asseteket betöltő teszt ezt a valódi generátorral igazolja. Nem csökkentjük
-emiatt a kapacitást, nem tágítjuk a profilt, nem cseréljük a snapshotot és nem
-engedjük el a gap/skill/validátor invariánsait. Startup failure után a végleges
-host nem indíthat gameplay-frame-et; futó sessionben az ADR-015 diagnosztikus
-hibafolyamata érvényes. Ez ismert technikai hiba, amelyet a teljes F3 rollout
-előtt rendezni kell. Az F1 bootstrap jelenleg továbbra a korábbi null directorral
-fut; a valódi scene/presenter/session összekötése **F3-12**.
+**A resource coverage nincs megoldva:** CL1 MaxResultValue10, operandus1..10,
+MinGateGap8 mellett Shield Max50 teljes 0..Max tartományán sincs érvényes binding.
+A globális operation-limit átadása, a nullás snapshot, a full-cap döntetlen,
+valamint a 150 s/10 esemény/geometria/concurrency és a 15 s matekmentes lezárás
+összehangolása továbbra F3-12 munka. Az assetteszt a migrált, valós generátorral
+őrizze az őszinte GENERATION_EXHAUSTED kimenetet. Nincs profilbővítés, cserélt
+snapshot, cap-csökkentés vagy kizárt teszt a zöldítéshez.
 
-Igazolás: `MathEventConfigurationTests` PlayMode tesztek — szerializált asset,
-adapter-indexstabilitás és immutabilitás, override/sentinel, határértékek,
-CL/global szigorúság, helyi és integrációs hibák. A teljes kapu konkrét
-eredménye a [jegy naplójában](../backlog/done/F3-07.md) található.
+Az F1 combat bootstrap a két új alapjegy alatt továbbra indítható; a korábbi
+NullMathEventDirector helyére az érvényes, valódi matek host/presenterek bekötése
+F3-12. Startup-előkészítési hiba után a valódi host nem indíthat gameplay-frame-et;
+futó session diagnosztikája az ADR-015 szerint történik. A régi gyári
+resource-context fallback DRAFT superseded; nem elfogadott megoldás.
+
+F3-12 készhez a szállított scene 10+ ténylegesen megoldott eseménye és mindkét
+valós mechanika folyamatos harc mellett szükséges. Explicit magasabb profilú
+fixture önmagában ezt nem bizonyítja. A korábbi F3-07 futás történeti bizonyítéka
+az [eredeti napló](../backlog/done/F3-07.md); a migráció új igazolásra vár.

@@ -333,7 +333,7 @@ sequenceDiagram
     participant A as PerformanceTracker
     S->>C: Advance(dt)
     S->>W: Tick(t)  %% spawnol ellenséget, FÜGGETLENÜL a mateseménytől
-    S->>K: Tick(t)  %% lő, lőszer fogy, ellenség sebződik/sebez
+    S->>K: Tick(t)  %% korlátlanul tüzel, ellenség sebződik/sebez
     S->>M: Tick(t)  %% Preview→Approaching→AwaitingDecision→Expired
     M-->>S: Enqueue(ResolveCommand{eventId, laneIndex})
     S->>G: Resolve(cmd)
@@ -378,7 +378,7 @@ RewardService.ApplyReward(MathEventId id, RewardSpec spec):
 | Előkészítési/binding-hiba | `Expired(PREPARATION_FAILED)` + diagnosztika; nincs gyermek-attempt/jutalom, a harc folytatódik (ADR-015) |
 | Jutalom jóváírása | `Resolving` → `RewardService.ApplyReward(eventId, …)` → attempt naplózása → `OnRewardProcessed` → `Completed`; hibás válasznál 0 jutalommal is befejeződik (ADR-015) |
 | Játékos közben meghal | `GameSessionService` `SessionEnded` jelzést küld, minden nem terminális esemény `Expired`; a már `Completed` nem vonódik vissza |
-| Nincs elég lőszer | A harc nem áll le, a karakter nem lő; a matematikai esemény normálisan fut tovább és fel tudja tölteni a lőszert (spec 1.3) |
+| Fegyverváltás | A harc és a matek állapotgépe tovább fut; a session parancsa csak az aktív fegyvert módosítja, készlet és ammo-feladat nincs (ADR-017) |
 | Feladat kész, de a harc megy | `Completed` terminális; a vizuális kapuk lebomlanak, a `WaveDirector` érintetlen |
 | Kétszeri jóváírás megelőzése | `MathEventId` + `_appliedRewards` halmaz (6.2) |
 | Szünet | `IGameClock.IsPaused = true` → `GameTime` nem nő → sem harc, sem `Deadline` nem halad |
@@ -386,13 +386,13 @@ RewardService.ApplyReward(MathEventId id, RewardSpec spec):
 ### 6.4. Erőforrás-snapshot (spec 5.1) — a legkényesebb szabály
 
 ```
-Approaching belépéskor:  snapshot = ResourceService.Get(ResourceType.Ammo).Current   // pl. 20
-                        capacity = ResourceService.GetMax(ResourceType.Ammo)
+Approaching belépéskor:  snapshot = ResourceService.Get(ResourceType.Shield).Current   // pl. 20
+                        capacity = ResourceService.GetMax(ResourceType.Shield)
                         binding = BindResourceGate(prepared, snapshot, capacity)  // nulla allokáció
 Kapuk:                   Left = snapshot * 2 = 40 ;  Right = snapshot + 25 = 45
-Resolving (játékos a jobb kapuban, aktuális lőszer közben 8-ra csökkent):
+Resolving (játékos a jobb kapuban, aktuális pajzs közben kontaktsebzéstől 8-ra csökkent):
     rewardDelta = OperationResult - SnapshotValue = 45 - 20 = +25
-    ResourceService.ApplyDelta(Ammo, +25)  →  8 + 25 = 33
+    ResourceService.ApplyDelta(Shield, +25)  →  8 + 25 = 33
 ```
 
 **TILOS**: `ResourceService.SetCurrent(45)`. A kapu soha nem állít be abszolút értéket, csak
@@ -453,3 +453,32 @@ nincs publikus abszolút setter (ld. [`contracts/game-logic.md`](contracts/game-
 | Szabad válaszadásos (numpad) kihívás | 5 | nincs kontraktálva |
 | Parent Dashboard grafikon-adatmodell | 6 | `IProgressReportService` vázlat |
 | Számrendszerek / sorozatok / geometria (6.0.1–6.0.4) | poszt-MVP | az AST bővítési pontja rögzítve |
+
+## 11. Fegyverkészlet és lőszermentes matematika — ADR-017
+
+A felhasználói termékdöntés célállapota, F1-20/F1-21 még nyitott:
+
+```mermaid
+flowchart LR
+  SO[WeaponConfigSO + Level.AvailableWeapons] --> Repo[Infrastructure repository]
+  Repo --> Def[Core immutable weapon list]
+  Def --> Session[GameSessionService]
+  HUD[GameplayHUD type buttons] -->|SelectWeapon Id| Session
+  Session -->|Id + gameTime| Combat[CombatService]
+  Combat -->|WeaponChanged struct| HUD
+  Combat -->|WeaponFired + damage| Hit[Hit / projectile]
+```
+
+A UI kizárólag sessionparancsot ad, a kiválasztás és cooldown a GameLogic dolga;
+a Core/MathEngine/GameLogic továbbra is Unity-független. A katalógus és lookup
+startupkor másolt, a kiválasztás/Tick nem allokál. A HUD a szinkron eseményben
+csak dirty flaget ír, RenderPending a session.Tick után formáz és rajzol.
+Kezdő fegyver: Level.WeaponId; elérhető készlet: 1–4 rendezett Id. A valódi első
+scene két konfigurált típusa 15 és 30 DPS; a további progresszió F5-13 feladat.
+
+Ammo pool, fogyasztás, kill-refund, WeaponDryFire, lőszerbudget/overflow és
+ammo-DDA nincs. Az összes math request/validator/adapter/reward/presenter út
+kizárja Ammo-t. A más erőforrásokra vonatkozó friss snapshot, nyers delta,
+Prepare/Bind és teljes coverage megmarad. F1-20 után a szállított Shield50/CL1
+konfiguráció továbbra is őszinte előkészítési hibát adhat; a jelenlegi F1 combat
+bootstrap indítható marad, és a valódi math-host bekötést csak F3-12 zárhatja le.

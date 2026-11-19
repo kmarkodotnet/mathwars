@@ -64,3 +64,35 @@ A lokalizált cél és eredmény formázása RenderPending alatt történik; a r
 gate Preview üres DisplayExpression-je nem jelenít meg üres feladványablakot.
 Reward/Max/snapshot nem Presentationből változik. A sávinput a már szerződött
 OnPlayerLaneSelected bemenetre jut; a host nem hív Resolve/ApplyReward-ot UI-ból.
+
+## 3. Végtelen tüzelés és fegyverválasztó — ADR-017
+
+F1-20 eltávolítja a GameplayHudModel/GameplayHUD lőszer Current/Max számát,
+csíkját, lekérdezését és ammo ResourceChanged ágát. Nincs készletből képzett ∞
+vagy véges mód. A normál HUD Health/Shield/hullám/szünet funkciója megmarad.
+A MathQuestion/Gate/Feedback presenter nem fogad Ammo resource-t; Initialize/
+RenderPending tartalomhibát jelez, nem lokalizálja vagy rajzolja ki ammo feladatként.
+A lokalizációs táblából az aktív ammo-matek cél/jutalom kulcsok és opciók kikerülnek.
+
+F1-21 a meglévő HUD-ra épülő felülete:
+
+```csharp
+// A meglévő GameplayHUD.Initialize mellé vagy annak kiegészítéseként, startupkor:
+void InitializeWeaponSelection(IGameSessionService session, IGameEventSource events);
+// A meglévő host külső renderfázisában, session.Tick után:
+void RenderPending();
+```
+
+A modell AvailableWeapons/CurrentWeaponId-t olvas; lokalizált típusonkénti gombok
+közvetlenül a session.SelectWeapon(Id)-t hívják. A view nem módosít konfigurációt,
+Damage-t vagy ResourceService-t. A WeaponChanged handler csak előre foglalt értéket/
+dirty flaget ír; stringfeloldás és UI-frissítés a külső RenderPending-ben történik.
+A kezdő kijelölés StartSession után szinkronizált. A bootstrap és scene-builder
+ugyanazt a két gombot, referenciákat és lifecycle-leiratkozást szállítja.
+
+A két első típus és a váltási eredmény/hibakód az ADR-017 szerint. Legalább 48 dp
+érintési felület, magyar név, aktív jelölés, portrait elrendezés kell; a választó nem
+takarhat matekfeladatot. 1 elérhető típusnál elrejthető. Pause/sessionvég alatt tiltott.
+A UI-n indult érintés nem jut az InputAdapter sávválasztó/swipe csatornájára; ezt
+valódi PlayMode pointeres bemenet ellenőrzi. A váltás nem állítja meg a harcot,
+nem számít matekválasznak és nem jelent jutalmat vagy feloldást.
