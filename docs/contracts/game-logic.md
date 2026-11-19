@@ -302,6 +302,10 @@ public interface IMathEventDirector
     /// A már Completed eseményeket NEM vonja vissza.
     void OnSessionEnded(double gameTime);
 
+    /// A session visszajelzése a jutalom feldolgozása és az attempt naplózása után.
+    /// Nem alkalmaz jutalmat; ismételt/késői jelzés nem módosít terminális eseményt.
+    void OnRewardProcessed(in RewardApplication application, double gameTime);
+
     IReadOnlyList<ActiveMathEvent> ActiveEvents { get; }
     IReadOnlyList<ResolveCommand> PendingResolutions { get; }
     void ClearPendingResolutions();
@@ -350,7 +354,7 @@ t0 + PreviewDuration    : Preview -> Approaching         (kapuk spawn, SNAPSHOT 
 kapuk a döntési zónában : Approaching -> AwaitingDecision
 DecisionOpenedAt + ThinkTime : -> Expired, ha nincs választás
 LaneSelected            : AwaitingDecision -> Resolving  (ResolveCommand sorba állítva)
-RewardApplied           : Resolving -> Completed
+RewardProcessed         : Resolving -> Completed (Applied vagy SkippedIncorrect)
 ```
 
 **Függetlenségi szerződés (spec 14., 23./4. — kikényszerített, nem csak leírt):**
@@ -366,6 +370,44 @@ RewardApplied           : Resolving -> Completed
 > `IsCorrect` a `GateCarrier`-ben **csak a feloldás után** használható fel vizuálisan.
 > Döntés előtt a Presentation nem jeleníthet meg semmit belőle (spec 5.1: „A két kapu
 > eredményét a döntés előtt ne jelenítsd meg”). Ezt a code-reviewer ellenőrzi.
+
+### 5.1. Implementációs határok és nyitott életciklus-rések (ADR-015)
+
+A konkrét `MathEventDirector` konstruktorának teljes szignatúráját ez a kontrakt nem
+rögzíti. A már előírt, Unity-mentes konfigurációs értékek és a meglévő
+`IResourceService`/`IGameEventSink` injektálása implementációs döntés; a konstruktor
+továbbra sem kaphat `ICombatService` vagy `IWaveDirector` referenciát. A konfigurációs
+assetek későbbi implementációja nem jogosít beégetett balance-értékekre: a director
+tesztben explicit bemeneti értékekkel is létrehozható. Az F1-es, csak `Tick`-et
+tartalmazó kódbeli placeholder nem alternatív kontrakt; az F3-ban a fenti teljes
+felületet kell implementálni.
+
+Az `ApplyTimePressure` az ezután `Preview`-ba belépő események időnyomását állítja.
+A director belépéskor rögzíti az esemény effektív idejét és sebességét. A gondolkodási
+alapidő a schedule pozitív override-ja, különben a profil alapideje; az effektív idő
+ennek és a rögzített `thinkTimeMultiplier`-nek a szorzata. A határidő
+`DecisionOpenedAt + effektív idő` (ARCHITECTURE 6.3.). Az előkészített, immutable
+`MathProblem.ThinkTimeSeconds` alapidőt hordozhat; a szorzó és az effektív idő a
+director futásidejű állapota. Ehhez nem kell `MathProblem`-et mutálni vagy
+`Tick`-ben másolatot létrehozni. Az előzőleg már aktív esemény effektív ideje,
+sebessége és határideje későbbi `ApplyTimePressure` hívásra sem változik.
+
+`OnRewardProcessed` a már előírt jutalom utáni lezárás bejövő útja. A session a
+`RewardApplication` eredményét közvetíti; a director nem hívja a feloldó- vagy
+jutalomszolgáltatást. Azonos EventId-jú, `Resolving` eseménynél `Applied` és
+`SkippedIncorrect` → `Completed` + pontosan egy `MathEventCompleted` az application
+`AppliedDelta`/`Resource` adataival; hibás válasznál a delta 0. Az `AlreadyApplied`
+és `SkippedExpired` nem indít új `Completed` átmenetet. Ismeretlen EventId és
+már terminális esemény jelzése hatástalan. Az ismételt visszajelzés nem ismétel
+jutalmat, átmenetet vagy completion-eseményt. A már `Expired` esemény nem válhat
+`Completed`-dé. A jelzés önmagában nem mutál erőforrást, és nem engedélyez
+Tick-allokációt. Indoklás: [ADR-015 4.](../decisions/ADR-015.md#4-resolving--completed-bejövő-visszajelzés).
+
+**Nyitott, az F3-02 teljes megvalósítását blokkoló kontraktpont:** a G4-et betartó,
+snapshotfüggő generálás/prefetch és a már látható Preview közötti adat-életciklus.
+A bizonyítékok és a konkrét, még nem elfogadott folyamat/API-javaslat az
+[ADR-015](../decisions/ADR-015.md)-ben szerepelnek. A javaslat nem hatályos kontrakt,
+és ez a pontosítás nem lazítja a fennálló követelményeket.
 
 ---
 
@@ -505,8 +547,9 @@ _mathEventDirector.Tick(t);           // matek állapotgép — harcot NEM módo
 foreach (var res in _mathEventDirector.PendingResolutions)
 {
     var resolution = _gateResolutionService.Resolve(res, _mathEventDirector.Find(res.EventId));
-    _rewardService.ApplyReward(resolution);          // idempotens
+    var application = _rewardService.ApplyReward(resolution); // idempotens
     _performanceTracker.Record(resolution.Answer);   // Analytics, passzív
+    _mathEventDirector.OnRewardProcessed(application, t);
 }
 _mathEventDirector.ClearPendingResolutions();
 

@@ -254,7 +254,7 @@ stateDiagram-v2
     Approaching --> Expired: DeadlineReached (a játékos nem ért a zónába)
     AwaitingDecision --> Resolving: LaneSelected(laneIndex)
     AwaitingDecision --> Expired: DeadlineReached
-    Resolving --> Completed: RewardApplied (idempotens)
+    Resolving --> Completed: RewardProcessed (idempotens)
     Completed --> [*]
     Expired --> [*]
     Inactive --> Expired: SessionEnded
@@ -271,7 +271,7 @@ stateDiagram-v2
 | `Approaching` | kapuk/sávhordozók spawnolnak, `ResourceSnapshot` **itt** rögzül | `MathEventGatesSpawned` |
 | `AwaitingDecision` | a játékos sávválasztása számít, `Deadline` fut | `MathEventDecisionWindowOpened` |
 | `Resolving` | `IGateResolutionService.Resolve(...)` → `GateResolution` | `MathEventResolved` |
-| `Completed` | `RewardService` jóváírt, `QuestionAttempt` naplózva | `MathEventCompleted` |
+| `Completed` | jutalom feldolgozva (helyes vagy hibás válasz), `QuestionAttempt` naplózva | `MathEventCompleted` |
 | `Expired` | nincs jutalom, `Timeout = true` attempt naplózva | `MathEventExpired` |
 
 **Invariánsok (teszttel kikényszerítve):**
@@ -321,15 +321,22 @@ sequenceDiagram
     participant K as CombatService
     participant M as MathEventDirector
     participant G as GateResolutionService
+    participant Q as RewardService
     participant R as ResourceService
+    participant A as PerformanceTracker
     S->>C: Advance(dt)
     S->>W: Tick(t)  %% spawnol ellenséget, FÜGGETLENÜL a mateseménytől
     S->>K: Tick(t)  %% lő, lőszer fogy, ellenség sebződik/sebez
     S->>M: Tick(t)  %% Preview→Approaching→AwaitingDecision→Expired
     M-->>S: Enqueue(ResolveCommand{eventId, laneIndex})
     S->>G: Resolve(cmd)
-    G->>R: ApplyDelta(eventId, ResourceType, delta)
-    R-->>G: ResourceChange (vagy NoOp, ha eventId már alkalmazva)
+    G-->>S: GateResolution
+    S->>Q: ApplyReward(resolution)
+    Q->>R: ApplyDelta(ResourceType, delta) — csak első, helyes jutalomnál
+    R-->>Q: ResourceChange
+    Q-->>S: RewardApplication (alkalmazott vagy kihagyott)
+    S->>A: Record(resolution.Answer)
+    S->>M: OnRewardProcessed(application, t)
 ```
 
 ### 6.2. Idempotens jutalomkönyvelés
@@ -361,7 +368,7 @@ RewardService.ApplyReward(MathEventId id, RewardSpec spec):
 | Mikor jelennek meg a kapuk | `Preview` → `Approaching` átmenetkor, `PreviewDurationSeconds` után |
 | Meddig választhat | `AwaitingDecision` belépésétől `DeadlineGameTime`-ig (= `ThinkTimeSeconds`, adaptívan skálázva) |
 | Határidő lejár | `Expired`, nincs jutalom, `QuestionAttempt{Timeout=true}` naplózva, kapuvizuálok lebomlanak |
-| Jutalom jóváírása | `Resolving` → `RewardService.ApplyReward(eventId, …)` → `Completed` |
+| Jutalom jóváírása | `Resolving` → `RewardService.ApplyReward(eventId, …)` → attempt naplózása → `OnRewardProcessed` → `Completed`; hibás válasznál 0 jutalommal is befejeződik (ADR-015) |
 | Játékos közben meghal | `GameSessionService` `SessionEnded` jelzést küld, minden nem terminális esemény `Expired`; a már `Completed` nem vonódik vissza |
 | Nincs elég lőszer | A harc nem áll le, a karakter nem lő; a matematikai esemény normálisan fut tovább és fel tudja tölteni a lőszert (spec 1.3) |
 | Feladat kész, de a harc megy | `Completed` terminális; a vizuális kapuk lebomlanak, a `WaveDirector` érintetlen |
