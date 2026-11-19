@@ -3,6 +3,15 @@
 Utolsó frissítés: **2026-11-19** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
 
 Az aktuális feladatonkénti állapotot a [generált backlog](backlog.md) tartalmazza.
+**F3-05 generátorellenőrzése elkészült**: a már implementált offline
+`Generate` és az ADR-015 Prepare/Bind út invariánsait változó snapshotú,
+10 000 seedelt regresszió és explicit kapacitáshatár-esetek is fedik.
+A nyers eredmény/delta megmarad; a döntetlen, a túl kicsi effektív rés és
+a kapacitás miatti nyertesváltás elutasított. A Bind aritmetikai hibaágai
+is 0 bájtot allokálnak. A profil/Max inkompatibilitás továbbra is valódi hiba;
+a teljes scene- és assetintegráció F3-07/F3-12.
+Részletes bizonyíték: [F3-05 napló](backlog/done/F3-05.md).
+
 **F3-03 elkészült**: `IGateResolutionService`, nyers snapshot-delta és fix
 sávjutalom, struct válaszadat, timeout, idempotens feloldás és napló-visszaállítás.
 Az előre lefoglalt napló mellett mindkét feladattípus 10 000 első feloldása és

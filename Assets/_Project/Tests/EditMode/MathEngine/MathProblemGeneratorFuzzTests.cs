@@ -125,6 +125,47 @@ namespace MathHorde.Tests.EditMode.MathEngine
         }
 
         [Test]
+        public void Generate_TenThousandResourceSnapshots_KeepRawArithmeticAndCapacityOptimumForEveryGoal()
+        {
+            var generator = new MathProblemGenerator();
+            var evaluator = new ExpressionEvaluator();
+            var evaluation = new EvaluationOptions { AllowNegativeIntermediate = true, AllowNegativeResult = true };
+            var validator = new ProblemValidator();
+            var operators = new[] { BinaryOperator.Addition, BinaryOperator.Subtraction,
+                BinaryOperator.Multiplication, BinaryOperator.Division, BinaryOperator.Modulo };
+            var profile = ProblemValidatorTests.Profile(count: 2, maxOperand: 100, allowNegative: true, operators: operators);
+            var observedOperators = new HashSet<BinaryOperator>();
+            int clampedWinners = 0, zeroSnapshots = 0;
+            for (int i = 0; i < Samples; i++)
+            {
+                int snapshot = i % 101, capacity = Math.Max(12, snapshot + 1 + i % 41);
+                var request = MathProblemGeneratorTests.Request(seed: 305000 + i, type: ProblemType.ResourceOperationComparison,
+                    count: 2, goal: (GateGoal)(i % 3), capacity: capacity, profile: profile, snapshot: snapshot);
+                var result = generator.Generate(request);
+                string context = "seed=" + request.Seed + " snapshot=" + snapshot + " capacity=" + capacity + " goal=" + request.Goal;
+                Assert.That(result.IsSuccess, Is.True, context + " " + result.ErrorCode);
+                var problem = result.Value;
+                Assert.That(validator.IsValid(problem, profile), Is.True, context);
+                Assert.That(problem.ResourceCapacity, Is.EqualTo(capacity), context);
+                Assert.That(problem.Goal, Is.EqualTo(request.Goal), context);
+                Assert.That(problem.TargetValue, Is.EqualTo(request.TargetValue), context);
+                Assert.That(problem.Reward, Is.SameAs(request.Reward), context);
+                AssertGateOracle(problem, snapshot, profile.MinGateGap, evaluator, context, evaluation);
+                foreach (var option in problem.Options)
+                    observedOperators.Add(((BinaryOperationNode)option.GateOperation).Operator);
+                if (snapshot == 0) zeroSnapshots++;
+                if (problem.CorrectAnswer.Value > capacity) clampedWinners++;
+                if (request.Goal == GateGoal.Minimize)
+                    Assert.That(problem.CorrectAnswer.Value - snapshot, Is.LessThan(0), context);
+            }
+            Assert.That(observedOperators, Is.EquivalentTo(operators));
+            Assert.That(zeroSnapshots, Is.GreaterThan(0));
+            Assert.That(clampedWinners, Is.GreaterThan(0));
+            TestContext.WriteLine("Resource Generate: 10000 seeds=305000..314999, snapshots=0..100, all scalar operators/goals, "
+                + "zeroSnapshots=" + zeroSnapshots + ", rawWinnersAboveCapacity=" + clampedWinners);
+        }
+
+        [Test]
         public void Generate_TenThousandMixedOperationGatePairs_LargerOperandIsNotAWinningStrategy()
         {
             var generator = new MathProblemGenerator();
@@ -152,13 +193,14 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That((double)nonObvious / measured, Is.GreaterThanOrEqualTo(.30));
         }
 
-        private static void AssertGateOracle(MathProblem p, int snapshot, int gap, IExpressionEvaluator evaluator, string context)
+        private static void AssertGateOracle(MathProblem p, int snapshot, int gap, IExpressionEvaluator evaluator, string context,
+            EvaluationOptions evaluation = null)
         {
             var values = p.Options.Select(o => o.Value.Value).ToArray();
             var effective = values.Select(v => Math.Min(v, p.ResourceCapacity.Value)).ToArray();
             for (int i = 0; i < p.Options.Count; i++)
             {
-                Assert.That(evaluator.EvaluateWith(p.Options[i].GateOperation, snapshot, EvaluationOptions.Default).Value, Is.EqualTo(p.Options[i].Value), context);
+                Assert.That(evaluator.EvaluateWith(p.Options[i].GateOperation, snapshot, evaluation ?? EvaluationOptions.Default).Value, Is.EqualTo(p.Options[i].Value), context);
                 EvaluationResult independent;
                 Assert.That(TryEvaluate(p.Options[i].GateOperation, snapshot, out independent), Is.True, context + " gate arithmetic");
                 Assert.That(independent, Is.EqualTo(p.Options[i].Value), context + " gate arithmetic value");

@@ -328,7 +328,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
 
         internal static ProblemGenerationRequest Request(int seed = 209013, ProblemType type = ProblemType.AnswerLaneSelection,
             int count = 3, int lanes = 4, GateGoal goal = GateGoal.Maximize, int? capacity = 1000,
-            bool omitTarget = false, float time = 7f, DifficultyProfile profile = null, SkillProfile skills = null)
+            bool omitTarget = false, float time = 7f, DifficultyProfile profile = null, SkillProfile skills = null, int snapshot = 20)
         {
             bool gate = type == ProblemType.ResourceOperationComparison;
             bool unknown = type == ProblemType.MissingOperand || type == ProblemType.EquationSolving;
@@ -341,7 +341,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
                     (SkillTag[])Enum.GetValues(typeof(SkillTag)), 0, 30, 1000, 2, 4, true, 2, unknown, unknown ? 1 : 0, false, count, 6f, 4, true),
                 LaneCount = lanes, ThinkTimeSeconds = time, RewardResource = resource,
                 Reward = new RewardSpec(resource, gate ? 0 : 5, gate), Goal = goal,
-                ResourceSnapshotValue = gate ? 20 : (int?)null,
+                ResourceSnapshotValue = gate ? snapshot : (int?)null,
                 ResourceCapacity = gate ? capacity : capacity == 1000 ? null : capacity,
                 TargetValue = !omitTarget && (type == ProblemType.TargetValueSelection || gate && goal == GateGoal.ReachTarget) ? 25 : (int?)null,
                 SkillProfile = skills,

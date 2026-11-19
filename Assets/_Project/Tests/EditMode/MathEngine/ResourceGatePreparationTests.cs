@@ -145,6 +145,41 @@ namespace MathHorde.Tests.EditMode.MathEngine
             }
         }
 
+        [TestCase(20, 100, GateGoal.Maximize, null, 4, null)]
+        [TestCase(20, 44, GateGoal.Maximize, null, 4, null)]
+        [TestCase(20, 43, GateGoal.Maximize, null, 1, null)]
+        [TestCase(20, 43, GateGoal.Maximize, null, 4, "GATE_GAP_TOO_SMALL")]
+        [TestCase(20, 40, GateGoal.Maximize, null, 4, "GATE_TIE")]
+        [TestCase(25, 100, GateGoal.Maximize, null, 4, "GATE_TIE")]
+        [TestCase(20, 44, GateGoal.ReachTarget, 42, 4, "GATE_TIE")]
+        [TestCase(40, 72, GateGoal.ReachTarget, 70, 4, "GATE_ORDER_INVERTED_BY_CAP")]
+        public void Bind_CapacityBoundaryCasesAgreeWithOfflineErrors_AndRetainRawValues(
+            int snapshot, int capacity, GateGoal goal, int? target, int gap, string error)
+        {
+            var prepared = ReferencePrepared(capacity, goal, target, gap);
+            int a = snapshot * 2, b = snapshot + 25;
+            long scoreA = goal == GateGoal.Maximize ? -(long)a : Math.Abs((long)a - target.Value);
+            long scoreB = goal == GateGoal.Maximize ? -(long)b : Math.Abs((long)b - target.Value);
+            int winner = scoreA <= scoreB ? 0 : 1;
+            var candidate = new ResourceGateBinding(prepared, 0, snapshot, capacity, winner,
+                new EvaluationResult(a), new EvaluationResult(b));
+            var report = new ProblemValidator().Validate(Materialize(candidate), prepared.Difficulty);
+            var bound = new MathProblemGenerator().BindResourceGate(prepared, snapshot, capacity);
+            Assert.That(report.IsValid, Is.EqualTo(error == null));
+            Assert.That(bound.IsSuccess, Is.EqualTo(report.IsValid));
+            if (error != null)
+            {
+                Assert.That(ProblemValidatorTests.Codes(report), Does.Contain(error));
+                Assert.That(bound.ErrorCode, Is.EqualTo("GENERATION_EXHAUSTED"));
+                return;
+            }
+            Assert.That(bound.Value.CorrectOptionIndex, Is.EqualTo(winner));
+            Assert.That(bound.Value.GetValue(0).Value, Is.EqualTo(a));
+            Assert.That(bound.Value.GetValue(1).Value, Is.EqualTo(b));
+            Assert.That(bound.Value.GetValue(winner).Value - bound.Value.SnapshotValue, Is.EqualTo(winner == 0 ? snapshot : 25));
+            Assert.That(bound.Value.ResourceCapacity, Is.EqualTo(capacity));
+        }
+
         [Test]
         public void Bind_BothSuccessAndEveryBusinessFailure_AllocateZeroBytes()
         {
@@ -182,12 +217,15 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That(generator.BindResourceGate(prepared.Value, capacity, int.MaxValue).ErrorCode, Is.EqualTo("GATE_CONTEXT_CHANGED"));
         }
 
-        [Test]
-        public void Bind_CheckedArithmeticOverflowIsRejectedWithoutAllocatingAnException()
+        [TestCase(BinaryOperator.Multiplication, int.MaxValue)]
+        [TestCase(BinaryOperator.Division, 0)]
+        [TestCase(BinaryOperator.Division, 3)]
+        [TestCase(BinaryOperator.Modulo, 0)]
+        public void Bind_InvalidArithmeticIsRejectedWithoutAllocatingAnException(BinaryOperator op, int operand)
         {
             var options = new[]
             {
-                new ResourceGateOptionTemplate(0, new LaneIndex(0), new BinaryOperationNode(BinaryOperator.Multiplication, new UnknownNode(), new ConstantNode(int.MaxValue)), "large"),
+                new ResourceGateOptionTemplate(0, new LaneIndex(0), new BinaryOperationNode(op, new UnknownNode(), new ConstantNode(operand)), "invalid"),
                 new ResourceGateOptionTemplate(1, new LaneIndex(1), new BinaryOperationNode(BinaryOperator.Subtraction, new UnknownNode(), new ConstantNode(1)), "small"),
             };
             var tags = new[] { SkillTag.ResourceComparison, SkillTag.Multiplication, SkillTag.Subtraction };
@@ -273,7 +311,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
                 p.ThinkTimeSeconds, p.Reward, p.Seed, p.Goal, p.TargetValue, null, binding.ResourceCapacity);
         }
 
-        internal static PreparedResourceGate ReferencePrepared(int capacity, GateGoal goal, int? target)
+        internal static PreparedResourceGate ReferencePrepared(int capacity, GateGoal goal, int? target, int gap = 1)
         {
             var options = new[]
             {
@@ -294,7 +332,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
                 tags.UnionWith(classifier.Classify(new BinaryOperationNode(op.Operator, new ConstantNode(s), op.Right), ProblemType.ResourceOperationComparison));
                 metadata[s] = tags.ToList();
             }
-            return new PreparedResourceGate(new MathProblemId(Guid.Empty), 1, Profile(capacity: Math.Max(100, capacity),
+            return new PreparedResourceGate(new MathProblemId(Guid.Empty), 1, Profile(capacity: Math.Max(100, capacity), gap: gap,
                     operators: new[] { BinaryOperator.Multiplication, BinaryOperator.Addition }), 6f,
                 new RewardSpec(ResourceType.Ammo, 0, true), goal, target, capacity, new[] { template }, new[] { metadata });
         }

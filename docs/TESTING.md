@@ -221,15 +221,17 @@ választ, a különböző opciókat, a 2–4-es opciószámot, a seed/típus/neh
 metaadatokat és a mintán belüli egyedi, nem üres azonosítót. Minden teljes,
 10 000-es csoporton külön vizsgálja a helyes sáv khí-négyzet statisztikáját.
 A további 10 000 modulo-/maradékos feladat (`2120000 + i`) és a 10 000
-vegyes műveletű kapupár (`2091000 + i`) mellett ez összesen 170 000
-generált feladat a fixture 17 tesztesetében.
+vegyes műveletű kapupár (`2091000 + i`), valamint a 10 000 változó
+snapshotú erőforrás-kapu (`305000 + i`) mellett ez összesen 180 000
+generált feladat a fixture 18 tesztesetében.
 A D és E kritérium matematikai rétegét ez igazolja; a játékbeli megjelenés
 és választás teljes integrációja a Fázis 3 feladata.
 
 #### 3.1.1 A 10 000 seedelt fuzz-teszt
 
 - **Mesterszeed:** `209000`, a modulo-/maradékos kiegészítő mintánál
-  `2120000`, a vegyes kapupár-mintánál `2091000`. A `k`-adik feladat
+  `2120000`, a vegyes kapupár-mintánál `2091000`, a változó snapshotú
+  kapuknál `305000`. A `k`-adik feladat
   seedje `masterSeed + k` (`k = 0..9999`), így a teszt teljes egészében
   reprodukálható. Egy bukó esethez a seed mellett a típus/opciószám és
   kapunál a cél, illetve a kiegészítő mintánál az operátor is szerepel
@@ -320,6 +322,23 @@ A T-GATE-002 explicit igazolja a specifikáció `RewardDelta =
 OperationResult − SnapshotValue` képletét snapshot-alapú számítással,
 nem a nyers kapu-eredmény felülírásával (5.1. szakasz, "Erőforrás-
 snapshot").
+
+Az F3-05 a meglévő offline `Generate` és az ADR-015 szerinti
+`PrepareResourceGate`/`BindResourceGate` útvonalat együtt igazolja. A változó
+snapshotú fuzz-minta `0..100` kiindulóértéket, változó kapacitást, mindhárom
+célt és az öt skalár műveletet ellenőrzi független egész aritmetikával.
+Az engedélyezett negatív páncél-delta és a kapacitást meghaladó nyers nyertes
+is része a mintának; a profil változatlan marad.
+
+A `ResourceGatePreparationTests` 10 000 előkészítést és azok 110 000
+bindingját az offline validátorral ellenőrzi. Külön esetek igazolják a nyers
+és kapacitás okozta döntetlent, az effektív `MinGateGap` pontos határát és
+a `ReachTarget` nyertesének kapacitás miatti megváltozását. A sikeres binding
+nyers értéket és nyers snapshot-deltát őriz. A Bind siker-, kontextushiba-,
+túlcsordulás-, nullával osztás-, nem egész osztás- és hibás modulo-ágának
+allokációmérése 0 bájtot követel. Az inkompatibilis CL1/MaxAmmo páros
+`GENERATION_EXHAUSTED` marad; a tényleges SO/pályakonfiguráció integrációs
+ellenőrzése az F3-07/F3-12 feladata.
 
 ### 3.4 Harci tesztek (17.4. szakasz)
 
