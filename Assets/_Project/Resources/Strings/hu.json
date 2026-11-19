@@ -25,5 +25,13 @@
   "question.resourcePreview": "{0}\n{1}",
   "question.preview": "Készülj!",
   "question.approaching": "Közeledik",
-  "question.time": "{0} mp"
+  "question.time": "{0} mp",
+  "feedback.correct": "Helyes döntés! {0}",
+  "feedback.incorrect": "Próbáld újra! {0}",
+  "feedback.applied": "{0}: {1}",
+  "feedback.noReward": "Nincs jutalom.",
+  "feedback.operation": "{0} = {1}",
+  "feedback.best": "Jobb választás",
+  "feedback.answer": "Helyes válasz",
+  "feedback.selected": "Választottad\n{0}"
 }

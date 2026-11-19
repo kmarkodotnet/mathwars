@@ -1,6 +1,6 @@
 # Math Horde — Feladatlista (backlog index)
 
-> **Állapot (2026-11-19): 47 kész / 92 feladat (45 nyitott).**
+> **Állapot (2026-11-19): 48 kész / 92 feladat (44 nyitott).**
 >
 > Ez a fájl **generált index**. Minden feladat önálló fájlban él, és a fájl
 > HELYE jelzi az állapotát:
@@ -68,7 +68,7 @@
 | [F2-12](backlog/done/F2-12.md) | 10 000 seedelt fuzz-teszt + válaszopció-invariánsok (17.2) +… | `qa-unity` | F2-09 | SZEKV | M | D | ✅ **KÉSZ** |
 | [F2-13](backlog/done/F2-13.md) | ProblemExplanationService null-implementációja + kontrakt-váz | `math-engine-dev` | F2-02 | PAR | S | — | ✅ **KÉSZ** |
 
-## Fázis 3 — Mindkét matematikai kaputípus  ·  10/14 kész
+## Fázis 3 — Mindkét matematikai kaputípus  ·  11/14 kész
 
 | ID | Feladat | Agent | Függ | Mód | Becs. | Krit. | Állapot |
 |---|---|---|---|---|---|---|---|
@@ -82,7 +82,7 @@
 | [F3-08](backlog/done/F3-08.md) | GatePresenter | `ui-dev` | F1-14, F3-02 | PAR | M | C, K | ✅ **KÉSZ** |
 | [F3-09](backlog/done/F3-09.md) | MathQuestionPresenter | `ui-dev` | F1-15, F3-02 | PAR | M | C, K | ✅ **KÉSZ** |
 | [F3-10](backlog/done/F3-10.md) | LanePresenter | `ui-dev` | F1-12 | PAR | S | K | ✅ **KÉSZ** |
-| [F3-11](backlog/F3-11.md) | Visszajelzés helyes/hibás döntésnél (mindkét eredmény rövid… | `ui-dev` | F3-03, F3-09 | PAR | M | B, C | ⬜ nyitott |
+| [F3-11](backlog/done/F3-11.md) | Visszajelzés helyes/hibás döntésnél (mindkét eredmény rövid… | `ui-dev` | F3-03, F3-09 | PAR | M | B, C | ✅ **KÉSZ** |
 | [F3-12](backlog/F3-12.md) | Integráció | `gameplay-dev` | F3-04, F3-08, F3-09 | SZEKV | M | B, C, F | ⬜ nyitott |
 | [F3-13](backlog/F3-13.md) | Erőforrás-kapu teszt (17.3) | `qa-unity` | F3-12 | SZEKV | M | B, F | ⬜ nyitott |
 | [F3-14](backlog/F3-14.md) | PlayMode teszt | `qa-unity` | F3-12 | SZEKV | S | F | ⬜ nyitott |
