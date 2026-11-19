@@ -24,7 +24,7 @@ namespace MathHorde.Core.Problems
     /// non-null and (b) the handful of single-field range/consistency
     /// comments that appear on MathProblem's own properties but are NOT part
     /// of the I1-I11 table (DifficultyLevel 1..10, ThinkTimeSeconds &gt; 0,
-    /// TargetValue only for TargetValueSelection) — those are ordinary
+    /// TargetValue only for a target-selection/ReachTarget problem) — those are ordinary
     /// programmer-error guards, not business-rule validation.
     /// </summary>
     public sealed class MathProblem
@@ -61,8 +61,11 @@ namespace MathHorde.Core.Problems
         /// <summary>The gate's goal, for its icon.</summary>
         public GateGoal Goal { get; }
 
-        /// <summary>Non-null only for ProblemType.TargetValueSelection.</summary>
+        /// <summary>TargetValueSelection or a ReachTarget resource gate.</summary>
         public int? TargetValue { get; }
+
+        /// <summary>Captured resource pool maximum. Candidate validity is checked by ProblemValidator.</summary>
+        public int? ResourceCapacity { get; }
 
         /// <summary>Optional; may be null (spec 6.5).</summary>
         public string Explanation { get; }
@@ -81,7 +84,8 @@ namespace MathHorde.Core.Problems
             int seed,
             GateGoal goal,
             int? targetValue,
-            string explanation)
+            string explanation,
+            int? resourceCapacity = null)
         {
             if (expression == null)
             {
@@ -118,9 +122,10 @@ namespace MathHorde.Core.Problems
                 throw new ArgumentOutOfRangeException(nameof(thinkTimeSeconds), thinkTimeSeconds, "ThinkTimeSeconds pozitív kötelező.");
             }
 
-            if (targetValue.HasValue && type != ProblemType.TargetValueSelection)
+            if (targetValue.HasValue && type != ProblemType.TargetValueSelection
+                && !(type == ProblemType.ResourceOperationComparison && goal == GateGoal.ReachTarget))
             {
-                throw new ArgumentException("TargetValue csak ProblemType.TargetValueSelection esetén adható meg.", nameof(targetValue));
+                throw new ArgumentException("TargetValue requires target selection or a ReachTarget resource gate.", nameof(targetValue));
             }
 
             Id = id;
@@ -136,6 +141,7 @@ namespace MathHorde.Core.Problems
             Seed = seed;
             Goal = goal;
             TargetValue = targetValue;
+            ResourceCapacity = resourceCapacity;
             Explanation = explanation;
         }
     }

@@ -19,16 +19,8 @@ namespace MathHorde.Core.Skills
     /// type may be hard-coded by a consumer (spec 7.2: "A táblázat
     /// konfigurálható legyen, ne kerüljön beégetésre a kódba").
     ///
-    /// CONTRACT NOTE 1 — MaxResultValue: core-domain.md 4.'s field list has no
-    /// MaxResultValue, yet math-engine.md 5. requires the RESULT_RANGE_VIOLATION
-    /// check against "a végeredmény &lt;= profile.MaxOperandValue-ból
-    /// származtatott MaxResultValue", IExpressionGenerator's request carries a
-    /// MaxResultValue, and scriptable-object-schema.md 5. configures it as an
-    /// explicit per-level column that is NOT derivable from MaxOperandValue
-    /// (L3: MaxOperandValue 20 but MaxResultValue 100). Dropping it in
-    /// translation would silently lose configured balance data, so it is
-    /// carried here as a named field. Flagged for the architect in F2-10's
-    /// closing report rather than resolved by reinterpreting the contract.
+    /// MaxResultValue is an independent configured limit, never derived from
+    /// MaxOperandValue (ADR-012, core-domain.md 4., math-engine.md 5.).
     ///
     /// CONTRACT NOTE 2 — UnknownPlacement: the per-level UnknownPlacement
     /// column (scriptable-object-schema.md 5., L8-L9 RightOperand, L10
@@ -36,13 +28,8 @@ namespace MathHorde.Core.Skills
     /// MathEngine layer (math-engine.md 3.) and Core must not reference
     /// MathEngine. It stays readable on MathDifficultyTableSO.
     ///
-    /// CONTRACT NOTE 3 — ResourceCapacity: the GATE_ORDER_INVERTED_BY_CAP
-    /// validator code (math-engine.md 5.) needs the ResourcePool.Max cut-off,
-    /// which is deliberately NOT a field here. A pool capacity is per-level,
-    /// per-resource session state (LevelDefinition.MaxAmmo/MaxHealth/MaxShield,
-    /// core-domain.md 7.), not a property of the difficulty level, and it does
-    /// not appear in the 10-row table. See F2-10's closing report for where it
-    /// should live instead.
+    /// ResourceCapacity belongs to MathProblem (ADR-013), not this profile:
+    /// it captures a resource pool maximum rather than a difficulty value.
     /// </summary>
     public sealed class DifficultyProfile
     {

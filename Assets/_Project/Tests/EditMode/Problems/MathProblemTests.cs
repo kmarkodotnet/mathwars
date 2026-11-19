@@ -38,7 +38,9 @@ namespace MathHorde.Tests.EditMode.Problems
             int difficultyLevel = 3,
             float thinkTimeSeconds = 6f,
             int? targetValue = null,
-            IReadOnlyList<SkillTag> skillTags = null)
+            IReadOnlyList<SkillTag> skillTags = null,
+            GateGoal goal = GateGoal.Maximize,
+            int? resourceCapacity = null)
         {
             return new MathProblem(
                 id: new MathProblemId(Guid.NewGuid()),
@@ -52,9 +54,10 @@ namespace MathHorde.Tests.EditMode.Problems
                 thinkTimeSeconds: thinkTimeSeconds,
                 reward: new RewardSpec(ResourceType.Ammo, 30, useSnapshotDelta: false),
                 seed: 12345,
-                goal: GateGoal.Maximize,
+                goal: goal,
                 targetValue: targetValue,
-                explanation: null);
+                explanation: null,
+                resourceCapacity: resourceCapacity);
         }
 
         [Test]
@@ -72,6 +75,7 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(problem.Seed, Is.EqualTo(12345));
             Assert.That(problem.Goal, Is.EqualTo(GateGoal.Maximize));
             Assert.That(problem.TargetValue, Is.Null);
+            Assert.That(problem.ResourceCapacity, Is.Null);
             Assert.That(problem.Explanation, Is.Null);
         }
 
@@ -89,6 +93,40 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(
                 () => BuildValidProblem(type: ProblemType.AnswerLaneSelection, targetValue: 60),
                 Throws.TypeOf<ArgumentException>());
+        }
+
+        [Test]
+        public void Constructor_ReachTargetResourceGate_PreservesTargetAndCapacity()
+        {
+            var problem = BuildValidProblem(type: ProblemType.ResourceOperationComparison,
+                targetValue: 60, goal: GateGoal.ReachTarget, resourceCapacity: 75);
+            Assert.That(problem.TargetValue, Is.EqualTo(60));
+            Assert.That(problem.ResourceCapacity, Is.EqualTo(75));
+        }
+
+        [TestCase(GateGoal.Maximize)]
+        [TestCase(GateGoal.Minimize)]
+        public void Constructor_ResourceGateWithTargetForOtherGoal_Throws(GateGoal goal)
+        {
+            Assert.That(() => BuildValidProblem(type: ProblemType.ResourceOperationComparison,
+                targetValue: 60, goal: goal), Throws.TypeOf<ArgumentException>());
+        }
+
+        [TestCase(null)]
+        [TestCase(0)]
+        [TestCase(-1)]
+        public void Constructor_InvalidGateContext_RemainsAValidatableCandidate(int? capacity)
+        {
+            var problem = BuildValidProblem(type: ProblemType.ResourceOperationComparison,
+                goal: GateGoal.ReachTarget, resourceCapacity: capacity);
+            Assert.That(problem.ResourceCapacity, Is.EqualTo(capacity));
+            Assert.That(problem.TargetValue, Is.Null);
+        }
+
+        [Test]
+        public void Constructor_CapacityOnOtherType_IsDeferredToValidator()
+        {
+            Assert.That(BuildValidProblem(resourceCapacity: 100).ResourceCapacity, Is.EqualTo(100));
         }
 
         [TestCase(0)]
