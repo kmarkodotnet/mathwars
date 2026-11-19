@@ -3,6 +3,16 @@
 Utolsó frissítés: **2026-11-19** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
 
 Az aktuális feladatonkénti állapotot a [generált backlog](backlog.md) tartalmazza.
+**F3-06 válaszsáv-generálása és sávhoz rendelése igazolt**: a meglévő generátor
+és director teljes, korai immutable feladat-Preview-jét 2–4 opcióval és minden
+megengedett pályasávszámmal ellenőrizzük a valódi feloldásig és jutalomkönyvelésig.
+A harc közben fogyó lőszer mellett a helyes választás fix +30, a hibás +0;
+az opció nélküli sáv nem old fel feladatot. Az előkészített helyes és hibás
+életciklus 0 bájtot allokál, a CL4 generálás átlagideje opciószámonként
+10 000 mintán 2 ms alatt marad. A meglévő független aritmetikai és sáveloszlási
+fuzz is a teljes kapu része. A scene/presenter bekötése továbbra is F3-12.
+Részletes bizonyíték: [F3-06 napló](backlog/done/F3-06.md).
+
 **F3-05 generátorellenőrzése elkészült**: a már implementált offline
 `Generate` és az ADR-015 Prepare/Bind út invariánsait változó snapshotú,
 10 000 seedelt regresszió és explicit kapacitáshatár-esetek is fedik.

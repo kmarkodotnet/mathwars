@@ -310,6 +310,22 @@ aritmetikája adja; hibás sorrend vagy kerekítés eredménye disztraktor
 lehet, nem második helyes válasz. A D/E kritérium itt a matematikai
 rétegre igazolt; a játékbeli sávválasztás és jutalmazás Fázis 3 hatóköre.
 
+**F3-06 válaszsáv-integráció és teljesítmény:** az
+[`AnswerLaneSelectionIntegrationTests`](../Assets/_Project/Tests/EditMode/GameLogic/AnswerLaneSelectionIntegrationTests.cs)
+15 esete a valódi generátort, directort, feloldót és jutalomszolgáltatást használja.
+A hat `(opciószám, pályasávszám)` kombináció: `(2,2)`, `(2,3)`, `(2,4)`,
+`(3,3)`, `(3,4)`, `(4,4)`; mindegyiknél ugyanazon feladat minden választását
+végigpróbáljuk. A Preview már a teljes kifejezést közli, a hordozók később jelennek
+meg ugyanazzal az opcióindexszel, sávval, értékcímkével és helyességgel.
+Az extra, opció nélküli sáv nem választ válaszopciót. A feladat ugyanaz az immutable
+objektum marad a Preview-tól a lezárásig. A lőszer `20→13→7` változása mellett a
+helyes választás `+30`, a hibás `+0` jutalmat ad, generálás/binding nélkül a Tickben.
+Külön hat eset méri a helyes/hibás 2–4 opciós életciklus 0 managed allokációját,
+a hordozók spawnjától a feloldáson és jutalomkönyvelésen át a lezárásig.
+Három további eset opciószámonként 10 000 CL4 feladaton, a generálást külön időzítve
+ellenőrzi a MathEngine 9. szakasz `<2 ms` átlagidejét; a mért érték az XML-ben van.
+A jelenetszintű megjelenítő- és sessionbekötés további F3-12 feladat.
+
 ### 3.3 Erőforrás-kapu teszt (17.3. szakasz)
 
 | ID | Leírás | Elvárt eredmény | Mód |
