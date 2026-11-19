@@ -1,8 +1,6 @@
 // LevelDefinitionSOTests.cs
 // F1-09 — contract scriptable-object-schema.md 3., 3.1, 3.2. World (F5),
-// BossEnemy/BossTriggerGameTime (F5), MathEvents and RequiredMathAccuracy (F3)
-// are intentionally not part of the SO in this phase (see LevelDefinitionSO.cs's
-// header comment), so they are not exercised here either.
+// BossEnemy/BossTriggerGameTime remain F5; F3 extends the valid fixture's schedule.
 using System.Collections.Generic;
 using MathHorde.Infrastructure.Configuration;
 using MathHorde.Tests.PlayMode.TestSupport;
@@ -70,6 +68,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
             ConfigTestReflection.SetField(level, "_weapon", weapon);
             ConfigTestReflection.SetField(level, "_environmentPrefab", environmentPrefab);
             ConfigTestReflection.SetField(level, "_waves", new List<LevelDefinitionSO.WaveDefinitionEntry> { CreateValidWave(enemy) });
+            ConfigTestReflection.SetField(level, "_mathEvents", ConfigTestReflection.MathSchedule());
 
             return level;
         }

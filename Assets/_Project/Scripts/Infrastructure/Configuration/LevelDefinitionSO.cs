@@ -1,18 +1,9 @@
 // LevelDefinitionSO.cs
-// F1-09 — contract scriptable-object-schema.md 3. LevelDefinitionSO (F1 scope),
-// plus the nested 3.1 WaveDefinitionEntry and 3.2 WaveSpawnEntry types.
-//
-// Scope note: the contract's field table also lists World (WorldDefinitionSO,
-// F5), MathEvents (List<MathEventScheduleEntry>, F3), BossEnemy/
-// BossTriggerGameTime (F5) and RequiredMathAccuracy (F3) — all four are tagged
-// with a LATER phase in the Fázis column. World in particular cannot be added
-// without creating WorldDefinitionSO itself (contract section 4, F5), which is
-// not part of this task's header (EnemyDefinitionSO, WeaponConfigSO,
-// CombatBalanceSO, LevelDefinitionSO, DeveloperSettingsSO + IValidatableConfig).
-// Those four fields are left for the F3/F5 tasks that own them, matching how
-// EnemyDefinitionSO (same contract revision) also omits its own F5-tagged
-// fields (ArmorPoints, FrontalDamageReduction, SplitOnDeathEnemy/Count).
+// SO schema 3., 3.1–3.3. F3 adds the math schedule and accuracy threshold.
+// World/BossEnemy/BossTriggerGameTime remain F5 fields.
 using System.Collections.Generic;
+using MathHorde.Core.Problems;
+using MathHorde.Core.Resources;
 using UnityEngine;
 
 namespace MathHorde.Infrastructure.Configuration
@@ -20,6 +11,52 @@ namespace MathHorde.Infrastructure.Configuration
     [CreateAssetMenu(fileName = "LevelDefinition", menuName = "MathHorde/Level Definition")]
     public sealed class LevelDefinitionSO : ScriptableObject, IValidatableConfig
     {
+        [System.Serializable]
+        public sealed class MathEventScheduleEntry
+        {
+            [SerializeField, Range(0f, 600f)] private float _triggerGameTime = 10f;
+            [SerializeField] private ProblemType _problemType = ProblemType.AnswerLaneSelection;
+            [SerializeField, Range(0.5f, 10f)] private float _previewDurationSeconds = 2f;
+            [SerializeField, Range(0f, 60f)] private float _thinkTimeSecondsOverride;
+            [SerializeField] private ResourceType _rewardResource = ResourceType.Ammo;
+            [SerializeField] private GateGoal _goal = GateGoal.Maximize;
+            [SerializeField, Range(0, 500)] private int _rewardAmountOverride;
+            [SerializeField, Range(0, 999)] private int _targetValueOverride;
+
+            public float TriggerGameTime => _triggerGameTime;
+            public ProblemType ProblemType => _problemType;
+            public float PreviewDurationSeconds => _previewDurationSeconds;
+            public float ThinkTimeSecondsOverride => _thinkTimeSecondsOverride;
+            public ResourceType RewardResource => _rewardResource;
+            public GateGoal Goal => _goal;
+            public int RewardAmountOverride => _rewardAmountOverride;
+            public int TargetValueOverride => _targetValueOverride;
+
+            internal void CollectErrors(List<string> errors, string path)
+            {
+                ConfigValidation.RequireRange(errors, $"{path}.TriggerGameTime", _triggerGameTime, 0f, 600f);
+                ConfigValidation.RequireRange(errors, $"{path}.PreviewDurationSeconds", _previewDurationSeconds, 0.5f, 10f);
+                ConfigValidation.RequireRange(errors, $"{path}.ThinkTimeSecondsOverride", _thinkTimeSecondsOverride, 0f, 60f);
+                ConfigValidation.RequireRange(errors, $"{path}.RewardAmountOverride", _rewardAmountOverride, 0, 500);
+                ConfigValidation.RequireRange(errors, $"{path}.TargetValueOverride", _targetValueOverride, 0, 999);
+                if (!System.Enum.IsDefined(typeof(ProblemType), _problemType)) errors.Add($"{path}.ProblemType érvénytelen.");
+                if (!System.Enum.IsDefined(typeof(ResourceType), _rewardResource)) errors.Add($"{path}.RewardResource érvénytelen.");
+                if (!System.Enum.IsDefined(typeof(GateGoal), _goal)) errors.Add($"{path}.Goal érvénytelen.");
+                if (_goal == GateGoal.ReachTarget && _problemType != ProblemType.TargetValueSelection)
+                    errors.Add($"{path}.Goal ReachTarget csak TargetValueSelection esetén engedett.");
+                if (_goal == GateGoal.Minimize && _rewardResource != ResourceType.EnemyArmor)
+                    errors.Add($"{path}.Goal Minimize csak EnemyArmor esetén engedett.");
+                if (_problemType == ProblemType.ResourceOperationComparison && _rewardAmountOverride != 0)
+                    errors.Add($"{path}.RewardAmountOverride resource gate esetén 0: a jutalom snapshot-delta.");
+                if (_problemType != ProblemType.TargetValueSelection && _targetValueOverride != 0)
+                    errors.Add($"{path}.TargetValueOverride csak TargetValueSelection esetén alkalmazható.");
+            }
+
+            internal MathHorde.Core.Levels.MathEventScheduleEntry ToDomain() =>
+                new MathHorde.Core.Levels.MathEventScheduleEntry(_triggerGameTime, _problemType,
+                    _previewDurationSeconds, _thinkTimeSecondsOverride, _rewardResource, _goal);
+        }
+
         [System.Serializable]
         public sealed class WaveSpawnEntry
         {
@@ -97,6 +134,9 @@ namespace MathHorde.Infrastructure.Configuration
 
         [SerializeField] private List<WaveDefinitionEntry> _waves = new List<WaveDefinitionEntry>();
 
+        [SerializeField] private List<MathEventScheduleEntry> _mathEvents = new List<MathEventScheduleEntry>();
+        [SerializeField, Range(0f, 1f)] private float _requiredMathAccuracy;
+
         [Range(0, 999)]
         [SerializeField] private int _startingAmmo = 60;
 
@@ -125,6 +165,8 @@ namespace MathHorde.Infrastructure.Configuration
         public int LaneCount => _laneCount;
         public float TargetDurationSeconds => _targetDurationSeconds;
         public IReadOnlyList<WaveDefinitionEntry> Waves => _waves;
+        public IReadOnlyList<MathEventScheduleEntry> MathEvents => _mathEvents;
+        public float RequiredMathAccuracy => _requiredMathAccuracy;
         public int StartingAmmo => _startingAmmo;
         public int MaxAmmo => _maxAmmo;
         public int StartingHealth => _startingHealth;
@@ -152,6 +194,9 @@ namespace MathHorde.Infrastructure.Configuration
             ConfigValidation.RequireRange(errors, nameof(StartingShield), _startingShield, 0, 999);
             ConfigValidation.RequireRange(errors, nameof(MaxShield), _maxShield, 0, 999);
             ConfigValidation.RequireCount(errors, nameof(Waves), _waves.Count, 1, 50);
+            ConfigValidation.RequireRange(errors, nameof(RequiredMathAccuracy), _requiredMathAccuracy, 0f, 1f);
+            if (!System.Enum.IsDefined(typeof(LevelTemplate), _templateType)) errors.Add("TemplateType érvénytelen.");
+            CollectMathEventErrors(errors, 0f, 2);
 
             if (_startingAmmo > _maxAmmo)
             {
@@ -174,6 +219,39 @@ namespace MathHorde.Infrastructure.Configuration
             }
 
             return errors;
+        }
+
+        // Sorting only a copy preserves the original schedule indexes used by IDs/reward/target maps.
+        internal void CollectMathEventErrors(List<string> errors, float minGap, int maxSameType)
+        {
+            if (_mathEvents == null) { errors.Add("MathEvents nem lehet null."); return; }
+            ConfigValidation.RequireCount(errors, nameof(MathEvents), _mathEvents.Count,
+                _templateType == LevelTemplate.Tutorial ? 8 : 10, 40);
+            var order = new List<int>(_mathEvents.Count);
+            for (int i = 0; i < _mathEvents.Count; i++)
+            {
+                var entry = _mathEvents[i];
+                if (entry == null) { errors.Add($"MathEvents[{i}] nem lehet null."); continue; }
+                entry.CollectErrors(errors, $"MathEvents[{i}]");
+                if (entry.TriggerGameTime >= _targetDurationSeconds)
+                    errors.Add($"MathEvents[{i}].TriggerGameTime a pálya vége előtt kötelező.");
+                order.Add(i);
+            }
+            order.Sort((a, b) =>
+            {
+                int time = _mathEvents[a].TriggerGameTime.CompareTo(_mathEvents[b].TriggerGameTime);
+                return time != 0 ? time : a.CompareTo(b);
+            });
+            int consecutive = 1;
+            for (int i = 1; i < order.Count; i++)
+            {
+                var previous = _mathEvents[order[i - 1]];
+                var current = _mathEvents[order[i]];
+                if (current.TriggerGameTime - previous.TriggerGameTime < minGap || current.TriggerGameTime == previous.TriggerGameTime)
+                    errors.Add($"MathEvents[{order[i]}].TriggerGameTime: legalább {minGap} s szünet kötelező.");
+                consecutive = current.ProblemType == previous.ProblemType ? consecutive + 1 : 1;
+                if (consecutive > maxSameType) errors.Add($"MathEvents[{order[i]}].ProblemType: legfeljebb {maxSameType} egymást követő azonos típus engedett.");
+            }
         }
 
         private void OnValidate()

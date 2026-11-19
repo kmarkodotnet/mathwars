@@ -356,6 +356,16 @@ allokációmérése 0 bájtot követel. Az inkompatibilis CL1/MaxAmmo páros
 `GENERATION_EXHAUSTED` marad; a tényleges SO/pályakonfiguráció integrációs
 ellenőrzése az F3-07/F3-12 feladata.
 
+Az F3-07 `MathEventConfigurationTests` PlayMode tesztjei a valódi globális SO-t
+és W1L01 assetet is betöltik. A repository Core-schedule-fordítása, a nyolc
+szerkeszthető mező, a range/finite/enum/goal/count/időrendi validáció, a CL-szünet
+és globális floor szigorúbb értéke, a típusismétlés, a jutalom-/cél-override és
+a generált 0 cél külön tesztelt. A settings megőrzi az eredeti schedule-indexeket
+és leválik a módosítható bemenetekről. A shipped CL1/MaxAmmo=200 assetpár valódi
+directoros előkészítése `GENERATION_EXHAUSTED`; ez a regressziós teszt az ismert
+integrációs hibát láthatóan őrzi. Részletes hatókör:
+[math-events.md](balance/math-events.md). A teljes scene-be kötés továbbra F3-12.
+
 ### 3.4 Harci tesztek (17.4. szakasz)
 
 | ID | Leírás | Elvárt eredmény | Mód |

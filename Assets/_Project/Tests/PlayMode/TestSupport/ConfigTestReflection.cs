@@ -38,5 +38,20 @@ namespace MathHorde.Tests.PlayMode.TestSupport
 
             return false;
         }
+
+        public static List<MathHorde.Infrastructure.Configuration.LevelDefinitionSO.MathEventScheduleEntry> MathSchedule(int count = 10, float gap = 20f, float start = 10f)
+        {
+            var schedule = new List<MathHorde.Infrastructure.Configuration.LevelDefinitionSO.MathEventScheduleEntry>();
+            for (int i = 0; i < count; i++)
+            {
+                var entry = new MathHorde.Infrastructure.Configuration.LevelDefinitionSO.MathEventScheduleEntry();
+                SetField(entry, "_triggerGameTime", start + i * gap);
+                SetField(entry, "_problemType", i % 2 == 0
+                    ? MathHorde.Core.Problems.ProblemType.ResourceOperationComparison
+                    : MathHorde.Core.Problems.ProblemType.AnswerLaneSelection);
+                schedule.Add(entry);
+            }
+            return schedule;
+        }
     }
 }

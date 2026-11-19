@@ -3,6 +3,17 @@
 Utolsó frissítés: **2026-11-19** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
 
 Az aktuális feladatonkénti állapotot a [generált backlog](backlog.md) tartalmazza.
+**F3-07 konfigurációja elkészült**: valódi `MathEventConfigDefault.asset`, a
+`LevelDefinitionSO` nyolcmezős matematikai ütemezése/accuracyje és Core-fordítása,
+valamint az eredeti indexeket megőrző adapter a meglévő director-settingsre.
+A CL-időzítés/jutalom feloldott táblázati értékei explicit bemenetek; nincs
+alternatív balance-tábla. A W1L01 10 váltakozó eseményt tartalmaz, de a
+CL1/MaxAmmo=200 teljes coverage továbbra is igazolt `GENERATION_EXHAUSTED`:
+ez ismert, rollout előtt javítandó technikai hiba. A teljes scene- és
+pályaidőzítési integráció **F3-12**. Részletek:
+[konfiguráció és integrációs korlát](balance/math-events.md),
+[F3-07 napló](backlog/done/F3-07.md).
+
 **F3-06 válaszsáv-generálása és sávhoz rendelése igazolt**: a meglévő generátor
 és director teljes, korai immutable feladat-Preview-jét 2–4 opcióval és minden
 megengedett pályasávszámmal ellenőrizzük a valódi feloldásig és jutalomkönyvelésig.

@@ -38,6 +38,88 @@ MonoBehaviour:
       _count: 4
       _spawnIntervalSeconds: 2
       _allowedLanes: 
+  _mathEvents:
+  - _triggerGameTime: 4
+    _problemType: 0
+    _previewDurationSeconds: 2
+    _thinkTimeSecondsOverride: 0
+    _rewardResource: 0
+    _goal: 0
+    _rewardAmountOverride: 0
+    _targetValueOverride: 0
+  - _triggerGameTime: 18
+    _problemType: 1
+    _previewDurationSeconds: 2
+    _thinkTimeSecondsOverride: 0
+    _rewardResource: 0
+    _goal: 0
+    _rewardAmountOverride: 0
+    _targetValueOverride: 0
+  - _triggerGameTime: 32
+    _problemType: 0
+    _previewDurationSeconds: 2
+    _thinkTimeSecondsOverride: 0
+    _rewardResource: 0
+    _goal: 0
+    _rewardAmountOverride: 0
+    _targetValueOverride: 0
+  - _triggerGameTime: 46
+    _problemType: 1
+    _previewDurationSeconds: 2
+    _thinkTimeSecondsOverride: 0
+    _rewardResource: 0
+    _goal: 0
+    _rewardAmountOverride: 0
+    _targetValueOverride: 0
+  - _triggerGameTime: 60
+    _problemType: 0
+    _previewDurationSeconds: 2
+    _thinkTimeSecondsOverride: 0
+    _rewardResource: 0
+    _goal: 0
+    _rewardAmountOverride: 0
+    _targetValueOverride: 0
+  - _triggerGameTime: 74
+    _problemType: 1
+    _previewDurationSeconds: 2
+    _thinkTimeSecondsOverride: 0
+    _rewardResource: 0
+    _goal: 0
+    _rewardAmountOverride: 0
+    _targetValueOverride: 0
+  - _triggerGameTime: 88
+    _problemType: 0
+    _previewDurationSeconds: 2
+    _thinkTimeSecondsOverride: 0
+    _rewardResource: 0
+    _goal: 0
+    _rewardAmountOverride: 0
+    _targetValueOverride: 0
+  - _triggerGameTime: 102
+    _problemType: 1
+    _previewDurationSeconds: 2
+    _thinkTimeSecondsOverride: 0
+    _rewardResource: 0
+    _goal: 0
+    _rewardAmountOverride: 0
+    _targetValueOverride: 0
+  - _triggerGameTime: 116
+    _problemType: 0
+    _previewDurationSeconds: 2
+    _thinkTimeSecondsOverride: 0
+    _rewardResource: 0
+    _goal: 0
+    _rewardAmountOverride: 0
+    _targetValueOverride: 0
+  - _triggerGameTime: 130
+    _problemType: 1
+    _previewDurationSeconds: 2
+    _thinkTimeSecondsOverride: 0
+    _rewardResource: 0
+    _goal: 0
+    _rewardAmountOverride: 0
+    _targetValueOverride: 0
+  _requiredMathAccuracy: 0
   _startingAmmo: 60
   _maxAmmo: 200
   _startingHealth: 100

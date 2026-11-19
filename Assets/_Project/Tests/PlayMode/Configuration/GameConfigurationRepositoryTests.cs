@@ -80,6 +80,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
             ConfigTestReflection.SetField(level, "_weapon", weapon);
             ConfigTestReflection.SetField(level, "_environmentPrefab", environmentPrefab);
             ConfigTestReflection.SetField(level, "_waves", new List<LevelDefinitionSO.WaveDefinitionEntry> { wave });
+            ConfigTestReflection.SetField(level, "_mathEvents", ConfigTestReflection.MathSchedule());
 
             return level;
         }
@@ -210,10 +211,11 @@ namespace MathHorde.Tests.PlayMode.Configuration
             Assert.That(level.Waves[0].Spawns[0].AllowedLanes[0].Value, Is.EqualTo(0));
             Assert.That(level.Waves[0].Spawns[0].AllowedLanes[1].Value, Is.EqualTo(2));
 
-            // F3/F5-tagged fields LevelDefinitionSO does not carry yet (see F1-09's own
-            // header note) translate to the documented "not present" defaults.
+            // World/boss still await F5; F3 schedule is now translated.
             Assert.That(level.WorldId.Value, Is.EqualTo(string.Empty));
-            Assert.That(level.MathEvents.Count, Is.EqualTo(0));
+            Assert.That(level.MathEvents.Count, Is.EqualTo(10));
+            Assert.That(level.MathEvents[0].ProblemType, Is.EqualTo(ProblemType.ResourceOperationComparison));
+            Assert.That(level.MathEvents[0].TriggerGameTime, Is.EqualTo(10));
             Assert.That(level.BossEnemyId, Is.Null);
             Assert.That(level.RequiredMathAccuracy, Is.EqualTo(0f));
         }

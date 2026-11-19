@@ -431,11 +431,8 @@ namespace MathHorde.Infrastructure.Configuration
                     continue;
                 }
 
-                // WorldId/MathEvents/BossEnemyId/RequiredMathAccuracy have no backing field on
-                // LevelDefinitionSO yet — F1-09 deliberately left them out as F3/F5-tagged
-                // columns (see that file's own header comment). Using the documented
-                // "not present yet" defaults: WorldId empty (worlds.md: "null ⇒ kezdettől
-                // nyitva"), no math events, no boss, no math-accuracy minimum.
+                // F3 metadata overrides are resolved separately by MathEventConfigurationAdapter;
+                // Core keeps exactly the schedule fields defined in its contract. F5 world/boss remain absent.
                 catalog[asset.Id] = new LevelDefinition(
                     id: new LevelId(asset.Id),
                     // NOT `default(WorldId)` — that bypasses the constructor and leaves
@@ -445,7 +442,7 @@ namespace MathHorde.Infrastructure.Configuration
                     laneCount: asset.LaneCount,
                     targetDurationSeconds: asset.TargetDurationSeconds,
                     waves: waves,
-                    mathEvents: Array.Empty<MathEventScheduleEntry>(),
+                    mathEvents: asset.MathEvents.Select(entry => entry.ToDomain()).ToArray(),
                     bossEnemyId: null,
                     startingAmmo: asset.StartingAmmo,
                     maxAmmo: asset.MaxAmmo,
@@ -453,7 +450,7 @@ namespace MathHorde.Infrastructure.Configuration
                     maxHealth: asset.MaxHealth,
                     startingShield: asset.StartingShield,
                     maxShield: asset.MaxShield,
-                    requiredMathAccuracy: 0f,
+                    requiredMathAccuracy: asset.RequiredMathAccuracy,
                     weaponId: weaponId);
             }
 

@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5606a5ae5a47493bbc9fc47ee0df77db, type: 3}
+  m_Name: MathEventConfigDefault
+  m_EditorClassIdentifier: MathHorde.Infrastructure::MathHorde.Infrastructure.Configuration.MathEventConfigSO
+  _mathEventIntervalSeconds: 20
+  _mathEventIntervalJitter: 0.15
+  _mathEventCooldownSecondsFloor: 6
+  _maxConcurrentMathEvents: 1
+  _gateSpawnDepth: 30
+  _decisionZoneDepth: 3
+  _feedbackDisplaySeconds: 1.5
+  _goalIconLeadSeconds: 2
+  _maxConsecutiveSameProblemType: 2
+  _maxConsecutiveSameGateSide: 2
+  _nonObviousGatePairRatioMin: 0.3
+  _incorrectRewardAmount: 0
+  _resourceGateOperandMin: 2
+  _resourceGateOperandMax: 50
+  _resourceGateMultiplierMin: 2
+  _resourceGateMultiplierMax: 4

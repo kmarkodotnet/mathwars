@@ -37,7 +37,7 @@ namespace MathHorde.Infrastructure.Configuration
 
         public static void RequireRange(List<string> errors, string fieldName, float value, float min, float max)
         {
-            if (value < min || value > max)
+            if (float.IsNaN(value) || float.IsInfinity(value) || value < min || value > max)
             {
                 errors.Add($"{fieldName} tartománya [{min}, {max}], de a jelenlegi érték {value}.");
             }
