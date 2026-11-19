@@ -1,7 +1,7 @@
 # Math Horde (Számharcosok) — Architektúra
 
 > Státusz: ÉRVÉNYES (Fázis 1–3 mélységben kötelező érvényű, Fázis 4–7 vázlat)
-> Forrásspecifikáció: [`math-horde.md`](../math-horde.md) — 2., 3., 4., 5., 6., 13., 14., 15., 16., 19., 23. szakasz
+> Forrásspecifikáció: `math-horde.md` (gyárgyökér, a termékrepón kívül) — 2., 3., 4., 5., 6., 13., 14., 15., 16., 19., 23. szakasz
 > Kapcsolódó: [`docs/contracts/`](contracts/), [`docs/decisions/`](decisions/), `docs/GAME_DESIGN.md` (balance-designer), `docs/TESTING.md` (qa-unity)
 
 ---
@@ -248,7 +248,7 @@ is futhat (átfedő események), és ez az állapotgép **soha nem befolyásolja
 ```mermaid
 stateDiagram-v2
     [*] --> Inactive
-    Inactive --> Preview: Schedule(t0) — feladat kiírása a felső sávba
+    Inactive --> Preview: Schedule(t0) — resource céljelzés / más típus teljes feladata
     Preview --> Approaching: PreviewDuration letelt (kapuk/sávok spawnolnak)
     Approaching --> AwaitingDecision: kapuk belépnek a döntési zónába
     Approaching --> Expired: DeadlineReached (a játékos nem ért a zónába)
@@ -267,12 +267,12 @@ stateDiagram-v2
 | Állapot | Belépéskor | Kimenő adat |
 |---|---|---|
 | `Inactive` | példány létrejött, nincs vizuális elem | — |
-| `Preview` | `MathProblem` generálva, HUD kiírja a kifejezést | `MathEventPreviewStarted` |
-| `Approaching` | kapuk/sávhordozók spawnolnak, `ResourceSnapshot` **itt** rögzül | `MathEventGatesSpawned` |
+| `Preview` | resource: csak cél+erőforrás; más típus: a kész MathProblem kifejezése korán látható | `MathEventPreviewStarted` |
+| `Approaching` | resource: friss snapshot+Max, allokációmentes Bind és immutable binding; kapuk/sávhordozók spawnolnak | `MathEventGatesSpawned` |
 | `AwaitingDecision` | a játékos sávválasztása számít, `Deadline` fut | `MathEventDecisionWindowOpened` |
 | `Resolving` | `IGateResolutionService.Resolve(...)` → `GateResolution` | `MathEventResolved` |
-| `Completed` | jutalom feldolgozva (helyes vagy hibás válasz), `QuestionAttempt` naplózva | `MathEventCompleted` |
-| `Expired` | nincs jutalom, `Timeout = true` attempt naplózva | `MathEventExpired` |
+| `Completed` | jutalom feldolgozva, teljes attempt-adat sorba állítva; referenciatípusú naplómaterializáció Tick után | `MathEventCompleted` |
+| `Expired` | nincs jutalom; DEADLINE: timeout-attempt, PREPARATION_FAILED: diagnosztika gyermek-attempt nélkül | `MathEventExpired` |
 
 **Invariánsok (teszttel kikényszerítve):**
 1. `Completed` és `Expired` terminális — innen nincs visszatérés.
@@ -305,13 +305,20 @@ A `GameSessionService.Tick(float deltaTime)` **fix sorrendben**, egyetlen frame-
 3. _combatService.Tick(gameTime)          // mozgás, célzás, tüzelés, ütközés, halál
 4. _mathEventDirector.Tick(gameTime)      // állapotgép-példányok léptetése
 5. _resolutionQueue.Drain()               // sorba állt gate-feloldások feldolgozása
-6. _analyticsSink.Flush()                 // passzív naplózás
+6. _analyticsSink.Flush()                 // passzív struct-adat fogadása/aggregálása, G4 szerint
 ```
 
 Miért ez a sorrend: a harc **előbb** fut, mint a matek — így a feloldáskor már a frame
 aktuális, harc által módosított erőforrás-értékére íródik rá a `RewardDelta` (5.1).
 A 4. lépés soha nem módosít harci állapotot közvetlenül; csak a `_resolutionQueue`-ba tesz
 parancsot, amit az 5. lépés dolgoz fel — ez zárja ki a frame közbeni reentranciát.
+
+A külső GameplaySessionBootstrap a Tick **előtt**, külön előkészítési szakaszban
+hívja a `PrepareUpcomingEvents`-et; a Tick után üríti a Presentation/analitikai
+materializációs sorokat. Új MathAnswer/QuestionAttempt, UI-string vagy prefab
+nem a Tickből szinkron futó handlerben keletkezik. A sorba állított struct-válasz
+és immutable metaadat teljes, így a későbbi drain nem értékel újra feladatot.
+Pontos startup/frame/hibaág: [Presentation-kontrakt](contracts/presentation.md).
 
 ```mermaid
 sequenceDiagram
@@ -335,7 +342,7 @@ sequenceDiagram
     Q->>R: ApplyDelta(ResourceType, delta) — csak első, helyes jutalomnál
     R-->>Q: ResourceChange
     Q-->>S: RewardApplication (alkalmazott vagy kihagyott)
-    S->>A: Record(resolution.Answer)
+    S->>A: Record(MathAnswerSnapshot) — előre foglalt sor
     S->>M: OnRewardProcessed(application, t)
 ```
 
@@ -367,7 +374,8 @@ RewardService.ApplyReward(MathEventId id, RewardSpec spec):
 | Mikor indul a feladat | `MathEventDirector` ütemez a `LevelDefinition.MathEventSchedule` + `MathEventFrequency` alapján, a harctól függetlenül |
 | Mikor jelennek meg a kapuk | `Preview` → `Approaching` átmenetkor, `PreviewDurationSeconds` után |
 | Meddig választhat | `AwaitingDecision` belépésétől `DeadlineGameTime`-ig (= `ThinkTimeSeconds`, adaptívan skálázva) |
-| Határidő lejár | `Expired`, nincs jutalom, `QuestionAttempt{Timeout=true}` naplózva, kapuvizuálok lebomlanak |
+| Határidő lejár | `Expired(DEADLINE)`, nincs jutalom, `QuestionAttempt{Timeout=true}` naplózva, kapuvizuálok lebomlanak |
+| Előkészítési/binding-hiba | `Expired(PREPARATION_FAILED)` + diagnosztika; nincs gyermek-attempt/jutalom, a harc folytatódik (ADR-015) |
 | Jutalom jóváírása | `Resolving` → `RewardService.ApplyReward(eventId, …)` → attempt naplózása → `OnRewardProcessed` → `Completed`; hibás válasznál 0 jutalommal is befejeződik (ADR-015) |
 | Játékos közben meghal | `GameSessionService` `SessionEnded` jelzést küld, minden nem terminális esemény `Expired`; a már `Completed` nem vonódik vissza |
 | Nincs elég lőszer | A harc nem áll le, a karakter nem lő; a matematikai esemény normálisan fut tovább és fel tudja tölteni a lőszert (spec 1.3) |
@@ -379,6 +387,8 @@ RewardService.ApplyReward(MathEventId id, RewardSpec spec):
 
 ```
 Approaching belépéskor:  snapshot = ResourceService.Get(ResourceType.Ammo).Current   // pl. 20
+                        capacity = ResourceService.GetMax(ResourceType.Ammo)
+                        binding = BindResourceGate(prepared, snapshot, capacity)  // nulla allokáció
 Kapuk:                   Left = snapshot * 2 = 40 ;  Right = snapshot + 25 = 45
 Resolving (játékos a jobb kapuban, aktuális lőszer közben 8-ra csökkent):
     rewardDelta = OperationResult - SnapshotValue = 45 - 20 = +25
@@ -425,8 +435,10 @@ nincs publikus abszolút setter (ld. [`contracts/game-logic.md`](contracts/game-
   ciklusban nincs `Instantiate`/`Destroy`.
 - A GameLogic szimuláció struct-alapú entitásokat és előre allokált `List<T>` buffereket
   használ; `Tick`-ben nincs LINQ és nincs új allokáció.
-- A feladatgenerálás a `Preview` előtt **egy frame-mel korábban**, előre futtatva történik
-  (`MathEventDirector` prefetch), hogy ne okozzon akadást.
+- A teljes nem-resource feladat, illetve a resource gate immutable sablonja
+  Preview előtt, a külső host előkészítési szakaszában készül és cache-elhető.
+  Resource esetén a végleges readonly binding csak Approaching-belépéskor,
+  a harc utáni friss snapshot/Max párból jön létre, allokáció nélkül (ADR-015).
 - Presentation: `TextMeshPro`, canvas-szétválasztás (statikus HUD / dinamikus számok),
   `Canvas.willRenderCanvases` minimalizálás.
 

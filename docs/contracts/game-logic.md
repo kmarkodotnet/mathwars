@@ -55,12 +55,13 @@ public interface IGameEvent { double GameTime { get; } }
 | `WeaponDryFire` | CombatService | `double GameTime` (nincs lőszer) |
 | `PlayerDamaged` | CombatService | `int Damage, int RemainingHealth, double GameTime` |
 | `PlayerLaneChanged` | CombatService | `LaneIndex From, LaneIndex To, double GameTime` |
-| `MathEventPreviewStarted` | MathEventDirector | `MathEventId EventId, MathProblemId ProblemId, string DisplayExpression, double GameTime` |
+| `MathEventPreviewStarted` | MathEventDirector | `MathEventId EventId, ProblemType Type, MathProblemId? ProblemId, string DisplayExpression, ResourceType Resource, GateGoal Goal, int? TargetValue, double GameTime` |
 | `MathEventGatesSpawned` | MathEventDirector | `MathEventId EventId, int SnapshotValue, ResourceType SnapshotResource, double GameTime` |
 | `MathEventDecisionWindowOpened` | MathEventDirector | `MathEventId EventId, double DeadlineGameTime, double GameTime` |
 | `MathEventResolved` | GateResolutionService | `MathEventId EventId, LaneIndex SelectedLane, bool WasCorrect, double GameTime` |
 | `MathEventCompleted` | MathEventDirector | `MathEventId EventId, int AppliedDelta, ResourceType Resource, double GameTime` |
-| `MathEventExpired` | MathEventDirector | `MathEventId EventId, double GameTime` |
+| `MathEventExpired` | MathEventDirector | `MathEventId EventId, string ReasonCode, double GameTime` (`"DEADLINE"`, `"SESSION_ENDED"`, `"PREPARATION_FAILED"`) |
+| `MathEventPreparationFailed` | MathEventDirector | `MathEventId EventId, string ErrorCode, double GameTime` (tartalom-/kontrakthiba, nem gyermek-timeout) |
 | `RewardApplied` | RewardService | `MathEventId EventId, ResourceType Resource, int AppliedDelta, double GameTime` |
 | `RewardSkipped` | RewardService | `MathEventId EventId, string ReasonCode, double GameTime` (`"INCORRECT"`, `"ALREADY_APPLIED"`, `"EXPIRED"`) |
 | `ChallengeLevelChanged` | AdaptiveDifficultyService | `int Previous, int New, string Reason, double GameTime` (Fázis 4) |
@@ -290,6 +291,11 @@ public interface IMathEventDirector
     void Initialize(LevelDefinition level, DifficultyProfile difficulty,
                     IMathProblemGenerator generator, IRandomSource random);
 
+    /// KIZÁRÓLAG a session Ticken kívül. Minden még előkészítetlen, illetve
+    /// kapacitásváltozás miatt érvénytelen, még nem bindolt eseményt előkészít.
+    /// Ismételt, változatlan kontextusú hívás cache-találat; true = minden kész.
+    Result<bool> PrepareUpcomingEvents(double gameTime);
+
     /// Léptetés. NEM módosít harci állapotot és NEM hívja az IGameClock.Pause-t.
     /// A feloldásokat parancsként sorba állítja (PendingResolutions), nem alkalmazza.
     void Tick(double gameTime);
@@ -319,7 +325,13 @@ public sealed class ActiveMathEvent
 {
     public MathEventId EventId { get; }
     public MathEventState State { get; }
-    public MathProblem Problem { get; }
+    public ProblemType Type { get; }
+    public MathProblemId? ProblemId { get; } // resource gate-nél csak sikeres bindtól
+    public MathProblem Problem { get; } // nem resource típus: Preview-tól; resource: mindig null
+    public ResourceGateBinding? ResourceGate { get; } // resource: Approaching-tól; máskor null
+    public ResourceType RewardResource { get; }
+    public GateGoal Goal { get; }
+    public int? TargetValue { get; }
     public double PreviewStartedAt { get; }
     public double DecisionOpenedAt { get; }
     public double DeadlineGameTime { get; }
@@ -349,8 +361,8 @@ public readonly struct ResolveCommand
 **Állapotgép-időzítés:**
 
 ```
-t0                      : Inactive -> Preview            (MathEventScheduleEntry.TriggerGameTime)
-t0 + PreviewDuration    : Preview -> Approaching         (kapuk spawn, SNAPSHOT itt rögzül)
+t0                      : Inactive -> Preview (resource: cél+erőforrás; más: teljes feladat)
+t0 + PreviewDuration    : friss snapshot+Max, Bind -> Approaching (resource); kapuk spawn
 kapuk a döntési zónában : Approaching -> AwaitingDecision
 DecisionOpenedAt + ThinkTime : -> Expired, ha nincs választás
 LaneSelected            : AwaitingDecision -> Resolving  (ResolveCommand sorba állítva)
@@ -371,12 +383,11 @@ RewardProcessed         : Resolving -> Completed (Applied vagy SkippedIncorrect)
 > Döntés előtt a Presentation nem jeleníthet meg semmit belőle (spec 5.1: „A két kapu
 > eredményét a döntés előtt ne jelenítsd meg”). Ezt a code-reviewer ellenőrzi.
 
-### 5.1. Implementációs határok és nyitott életciklus-rések (ADR-015)
+### 5.1. Implementációs határok és lezárás (ADR-015)
 
-A konkrét `MathEventDirector` konstruktorának teljes szignatúráját ez a kontrakt nem
-rögzíti. A már előírt, Unity-mentes konfigurációs értékek és a meglévő
-`IResourceService`/`IGameEventSink` injektálása implementációs döntés; a konstruktor
-továbbra sem kaphat `ICombatService` vagy `IWaveDirector` referenciát. A konfigurációs
+A konkrét `MathEventDirector` konstruktora az 5.2. szerinti Unity-mentes beállítást
+és meglévő `IResourceService`/`IGameEventSink` függőséget kapja; továbbra sem kaphat
+`ICombatService` vagy `IWaveDirector` referenciát. A konfigurációs
 assetek későbbi implementációja nem jogosít beégetett balance-értékekre: a director
 tesztben explicit bemeneti értékekkel is létrehozható. Az F1-es, csak `Tick`-et
 tartalmazó kódbeli placeholder nem alternatív kontrakt; az F3-ban a fenti teljes
@@ -403,11 +414,105 @@ jutalmat, átmenetet vagy completion-eseményt. A már `Expired` esemény nem v�
 `Completed`-dé. A jelzés önmagában nem mutál erőforrást, és nem engedélyez
 Tick-allokációt. Indoklás: [ADR-015 4.](../decisions/ADR-015.md#4-resolving--completed-bejövő-visszajelzés).
 
-**Nyitott, az F3-02 teljes megvalósítását blokkoló kontraktpont:** a G4-et betartó,
-snapshotfüggő generálás/prefetch és a már látható Preview közötti adat-életciklus.
-A bizonyítékok és a konkrét, még nem elfogadott folyamat/API-javaslat az
-[ADR-015](../decisions/ADR-015.md)-ben szerepelnek. A javaslat nem hatályos kontrakt,
-és ez a pontosítás nem lazítja a fennálló követelményeket.
+### 5.2. Előkészítés, binding és hibák — végleges F3-02 szerződés
+
+```csharp
+// Namespace: MathHorde.GameLogic. Immutable, másolt olvasó nézetű konfiguráció.
+public sealed class MathEventDirectorSettings
+{
+    public MathEventDirectorSettings(int maxConcurrentMathEvents, float gateSpawnDepth,
+        float decisionZoneDepth, float gateApproachSpeed, float feedbackDisplaySeconds,
+        IReadOnlyDictionary<int, RewardSpec> rewardsByScheduleIndex,
+        IReadOnlyDictionary<int, int> targetsByScheduleIndex = null);
+    public int MaxConcurrentMathEvents { get; }
+    public float GateSpawnDepth { get; }
+    public float DecisionZoneDepth { get; }
+    public float GateApproachSpeed { get; }
+    public float FeedbackDisplaySeconds { get; }
+    public IReadOnlyDictionary<int, RewardSpec> RewardsByScheduleIndex { get; }
+    public IReadOnlyDictionary<int, int> TargetsByScheduleIndex { get; }
+}
+
+public MathEventDirector(IResourceService resources, IGameEventSink events,
+                         MathEventDirectorSettings settings);
+```
+
+A schedule-index az eredeti `LevelDefinition.MathEvents` lista 0-alapú indexe;
+idő szerinti rendezés után is ezt kell használni az ID-hez és a mapekhez. Az
+értékek/tartományok a SO-séma 5.1., 6., 6.1.-ből jönnek; SpawnDepth > ZoneDepth,
+sebesség pozitív és véges. Reward bejegyzés minden schedule-elemre kötelező;
+Resource/UseSnapshotDelta/FlatAmount/IncorrectAmount a feladattípusnak megfelelő,
+IncorrectAmount az MVP-ben 0. TargetValueSelection/ReachTarget esetén a targetmap
+bejegyzése kötelező, máskor nem alkalmazandó. A konfigurációs adapter oldja fel a
+SO override-jait/tábláit **Initialize előtt**, nem a director talál ki jutalmat vagy
+hiányzó célértéket. A MathEventConfig/Reward/TimePressure SO-k későbbi bekötése
+ezen értékek előállítása; F3-02 tesztben explicit beállítás adható.
+
+Initialize a teljes schedule méretéhez előre lefoglalja az eseményobjektumokat,
+állapotgépeket, legfeljebb négy carrier/hely per eseményt, pending command- és
+diagnosztikai buffereket. A Tick nem növelhet listakapacitást. Az EventId a session
+seedjéből és az eredeti schedule-indexből jön; a session seed az Initialize random
+forrásának Seed értéke (nem új húzás). Az esemény generálási seedje
+`random.Derive("math-event:" + index invariant-decimal)` forrás Seedje; ez a
+string és az ID is Initialize/Prepare alatt keletkezik, nem Tickben.
+
+Prepare az összes előkészítetlen schedule-elemet elkészíti: resource gate-hez a
+MathEngine 7.3. PrepareResourceGate-jét, minden más támogatott típushoz a meglévő
+Generate-et használja. A request időértéke a pozitív schedule-override, különben
+DifficultyProfile.BaseThinkTimeSeconds; az effektív szorzók csak Preview-belépéskor
+fagynak be. A resource pool támogatandó Maxát GetMax-ból olvassa. Poolhiány/Max=0
+GATE_CAPACITY_INVALID; hiányzó reward MATH_EVENT_CONFIG_INVALID, hiányzó target
+GATE_TARGET_MISSING. Nincs kitalált fallback resource/profil/jutalom.
+
+Resource Preview-ben Problem és ResourceGate null, ProblemId null, Carriers üres.
+A Preview-esemény DisplayExpression = string.Empty, és csak Resource/Goal/TargetValue
+előjelzésére használható. A prepared sablonokat a director belső állapota őrzi;
+a Presentation nem kap műveleteket vagy snapshotot ebből az állapotból.
+Nem-resource Preview-ben Problem/ProblemId és a teljes kifejezés már elérhető.
+
+A Preview lejártakor a resource director egyszer olvassa a `CaptureSnapshot` és
+`GetMax` párt a **harci rész után**, szinkron főszálon, majd BindResourceGate-et
+hív. Siker esetén az immutable binding rögzül, a carrier-label/lane a kiválasztott
+Template-ből jön, és az állapot Approaching lesz. Ez a konkrét feladat kezdete;
+MathEventGatesSpawned után a snapshot és a műveletek láthatók. Később nem rebindol.
+A pozíció a rögzített GateApproachSpeed * gateSpeedMultiplier és a játékidő-különbség
+alapján halad SpawnDepthtől ZoneDepthig; zónába lépéskor nyílik a döntési ablak.
+A GateApproachSeconds design-idő nem második, geometriafüggetlen ütközési óra.
+
+**Kapacitásváltozás:** a kompozíciós gyökér Maxot módosító parancsai a külső
+Prepare előtt futnak, nem wave/combat/math Tick közben. A következő Prepare a
+még nem bindolt resource események új Maxához új sablont készít. Preview-ben csak
+cél látszik, ezért ez nem módosít látható műveleti feladatot vagy rögzített időszorzót.
+A már bindolt esemény Snapshot/ResourceCapacity adata továbbra is változatlan.
+
+**Hibaág:** Prepare az első hibakódot Result.Fail-ként adja vissza, de minden
+schedule-elemet ellenőriz; a hibás elemeket megjelöli, a sikeres cache-t megőrzi.
+Még az első gameplay Tick előtt észlelt hiba esetén a host konfigurációs hibaként
+jelenti, és nem indít szimulációs frame-et. Ez nem játék közbeni matekszünet.
+Ha futó sessionben egy új kontextus előkészítése vagy egy Bind hibás, az érintett
+még nem véglegesített esemény Expired lesz, MathEventPreparationFailed és
+MathEventExpired(PREPARATION_FAILED) keletkezik. Nincs ResolveCommand, jutalom,
+MathAnswer/QuestionAttempt, vagy gyermek-timeout; a host a frame után jelzi a
+tartalomhibát. A harci Tick sorrendje és a többi érvényes esemény tovább fut.
+Előkészítés nélkül esedékes esemény ugyanezt az ágat használja
+MATH_EVENT_NOT_PREPARED kóddal, Tickbeli lusta generálás helyett.
+Ez nem normál pályaelfogadási siker: F3-integráció nem lehet zöld ilyen diagnosztikával.
+A deadline miatti Expired továbbra is TimedOut=true attempt; sessionvégi megszakítás
+SESSION_ENDED okú, és nem gyárt gyermek-timeoutot egy el nem indult feladatra.
+
+A host pontos hívási helye a [Presentation-kontrakt 1.](presentation.md)-ben van.
+A `Tick` belsejében és az onnan szinkron hívott eseménykezelőkben a G4 változatlan.
+
+Az ActiveEvents stabil, előre lefoglalt olvasó nézet: nem tartalmaz Inactive
+elemet; a terminális elemet FeedbackDisplaySeconds ideig még megtartja, hogy a
+Tick utáni render lássa. A párhuzamossági korlát a nem terminális eseményekre
+vonatkozik. Esedékes, de szabad helyre váró esemény Inactive marad, nem vész el;
+azonos triggeridőnél az eredeti schedule-index dönt. A PreviewStartedAt a tényleges
+belépési idő, ezért a várakozás nem rövidíti a Preview-t. Egyazon EventId választása,
+határideje és completion-je továbbra is legfeljebb egyszer kerül sorba.
+Előkészítési hibára/sessionvégre az F3-01 helper SessionEnded átmenete használható
+az Inactive/Preview → Expired lezáráshoz; a külső ReasonCode ettől függetlenül a
+valódi ok. Új állapotgép-trigger vagy Enum-érték nem szükséges.
 
 ---
 
@@ -439,7 +544,7 @@ public readonly struct GateResolution
     /// AnswerLaneSelection esetén = RewardSpec.FlatAmount.
     public int RewardDelta { get; }
     public ResourceType Resource { get; }
-    public MathAnswer Answer { get; }           // az Analytics/QuestionAttempt számára
+    public MathAnswerSnapshot Answer { get; }   // readonly struct; Analytics később materializálja
 }
 
 public enum GateResolutionOutcome
@@ -449,6 +554,16 @@ public enum GateResolutionOutcome
 ```
 
 **Feloldási szabályok:**
+
+Resource típusnál a feloldó csak a végleges `mathEvent.ResourceGate.Value`-ból
+olvas: Lane/OptionIndex a Template-ből, OperationResult a GetValue-ból,
+SnapshotValue/Resource a bindingból/Prepared.Rewardból. Nem dereferálhat null
+Problem-et, nem Bindolhat újra és nem generálhat MathProblem-et. Nem-resource
+esetén továbbra is Problem.Options/Reward használatos. A hiányzó binding normál
+választással nem oldható fel (az esemény még nem AwaitingDecision); a deadline-
+commandhoz a már véglegesített feladat metaadatai tartoznak. PREPARATION_FAILED
+nem timeout-command. A MathAnswerSnapshot ProblemId-je mindkét úton ugyanaz,
+amelyet az ActiveMathEvent a konkrét feladat kezdetétől publikál.
 
 | Eset | `Outcome` | `RewardDelta` |
 |---|---|---|
@@ -548,7 +663,7 @@ foreach (var res in _mathEventDirector.PendingResolutions)
 {
     var resolution = _gateResolutionService.Resolve(res, _mathEventDirector.Find(res.EventId));
     var application = _rewardService.ApplyReward(resolution); // idempotens
-    _performanceTracker.Record(resolution.Answer);   // Analytics, passzív
+    _performanceTracker.Record(resolution.Answer);   // struct + immutable metadata előre foglalt sorba
     _mathEventDirector.OnRewardProcessed(application, t);
 }
 _mathEventDirector.ClearPendingResolutions();

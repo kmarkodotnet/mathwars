@@ -308,6 +308,10 @@ public enum ValidationSeverity { Warning = 0, Error = 1 }
 
 **Kapacitásellenőrzés — mindkét validátorbelépésre kötelező (ADR-013):**
 
+Ez a meglévő MathProblem-et fogadó két belépés szerződése. Az ADR-015 bindingja
+saját rögzített ResourceCapacity-t hordoz és ugyanezeket az üzleti szabályokat
+allokációmentesen ellenőrzi (7.3.); nem kapacitás nélküli kivétel.
+
 - A kapacitás egyetlen forrása `problem.ResourceCapacity`; a validátor nem kap
   új paramétert, nem olvas session-/globális állapotot, és nem feltételez alapértéket.
   `IsValid(problem, profile) == Validate(problem, profile).IsValid`.
@@ -411,6 +415,11 @@ public interface IMathProblemGenerator
 
     /// Kötegelt generálás a prefetchhez és a fuzz-teszthez.
     IReadOnlyList<Result<MathProblem>> GenerateBatch(ProblemGenerationRequest request, int count);
+
+    // ADR-015: a valós idejű resource-gate út. Prepare allokálhat, Bind NEM.
+    Result<PreparedResourceGate> PrepareResourceGate(ResourceGatePreparationRequest request);
+    Result<ResourceGateBinding> BindResourceGate(
+        PreparedResourceGate prepared, int snapshotValue, int resourceCapacity);
 }
 
 public sealed class ProblemGenerationRequest
@@ -490,6 +499,73 @@ public sealed class ProblemGenerationRequest
 - `DisplayExpression` a „`7 × 8 = ?`” alak; a `=` és a `?` a megjelenítéshez tartozik.
 - `RewardSpec.FlatAmount` adja a jutalmat (a `RewardTableSO.LaneRewardBase` CL-enkénti értéke),
   `UseSnapshotDelta = false`.
+
+### 7.3. Valós idejű resource-gate Prepare/Bind (ADR-015, ELFOGADVA)
+
+A 7.1. teljes MathProblem-generálása változatlan offline API. A director resource
+gate-hez kizárólag a fenti új Prepare/Bind utat használja; nem hívhatja a Generate,
+GenerateBatch, Validate vagy Classify allokáló útját Tickből.
+
+```csharp
+// Namespace: MathHorde.MathEngine; a típus init-only request, nem élő állapot.
+public sealed class ResourceGatePreparationRequest
+{
+    public int Seed { get; init; }
+    public DifficultyProfile Difficulty { get; init; }
+    public SkillProfile SkillProfile { get; init; } // null megengedett, mint a régi requestnél
+    public int LaneCount { get; init; }
+    public float ThinkTimeSeconds { get; init; }
+    public ResourceType RewardResource { get; init; }
+    public RewardSpec Reward { get; init; }
+    public GateGoal Goal { get; init; }
+    public int? TargetValue { get; init; }
+    public int ResourceCapacity { get; init; }      // támogatandó Max, >0
+}
+```
+
+**Prepare:** ugyanazok a requestőrök, készség/operátor/aritmetikai korlátok és
+determinista RNG-ágak érvényesek, mint a 7.-ben. A Type implicit
+ResourceOperationComparison; UseSnapshotDelta kötelező. A MathProblemId a seedből,
+a sávpermutáció a külön lane-ágból származik; Bind nem sorsol új ID-t vagy sávot.
+Előkészíti az immutable jelölteket, címkéiket, készség- és statikus validációs
+adataikat, majd az összes `snapshot = 0..ResourceCapacity` értékre ellenőrzi,
+hogy a rögzített sorrendben legalább egy teljesen érvényes binding létezik.
+Csak teljes lefedettségű, változatlanul tárolható PreparedResourceGate adható vissza.
+A jelöltkeresés korlátja a meglévő 16 próbálkozás és determinisztikus egyszerűsítés;
+exhaustionra nincs korlátlan retry vagy profil-/célcsere. Nem tárol kötelezően
+snapshotonként új MathProblem-et: a lefedettségi bejárás a Bind fix méretű
+eredményét használhatja. A profil/kapacitás páros összeegyeztethetetlensége hiba,
+nem lazítható a gyermek nehézségi profilja emiatt.
+
+**Bind:** tiszta, determinisztikus, mind siker-, mind üzleti hibaágán **0 managed
+allokáció**. A PreparedCapacity egyezését és a `0 <= snapshot <= capacity`
+feltételt ellenőrzi, majd az első érvényes jelöltet választja. Checked aritmetika,
+előre elkészített EvaluationOptions és fix méretű értékbufferek használhatók;
+nincs faépítés, stringformázás, LINQ, boxing, Classify, ValidationReport vagy új
+gyűjtemény. A statikus ellenőrzések a Prepare-ből, a snapshotfüggő érték-/rés-/
+optimum-/kapacitás-/túlcsordulás-ellenőrzések a Bindből jönnek. A nyers és az
+effektív optimum ugyanaz az egyértelmű opció; a delta továbbra is nyers eredményből
+számítódik. Nem címkézhetünk át hibás nyers optimumot a kapacitás miatt.
+
+| Kimenet | Feltétel |
+|---|---|
+| `INVALID_REQUEST` | a régi requestnek megfelelő mező-/jutalom-/típusösszeférhetetlenség |
+| `GATE_CAPACITY_INVALID` | Prepare vagy Bind kapacitása <=0 |
+| `GATE_TARGET_MISSING` | ReachTarget célja hiányzik |
+| `GATE_CONTEXT_CHANGED` | pozitív Bind-kapacitás != PreparedCapacity; új Prepare szükséges |
+| `GATE_SNAPSHOT_INVALID` | snapshot <0 vagy > aktuális kapacitás |
+| `GENERATION_EXHAUSTED` | Prepare nem fed le minden snapshotot, vagy Bind nem talál érvényes jelöltet |
+
+Null kötelező referencia továbbra is programozói kivétel a P4 szerint; normál
+adat-/kapacitás-/aritmetikai kudarc Result.Fail, statikus hibakód-stringgel.
+A Bind sikeres kimenete a Core 3.1. teljes binding-invariánsát garantálja.
+A régi `IProblemValidator` két aláírása változatlan. Az implementáció a két út
+közös számítási/ellenőrzési magját használja; nem kell Bindben ideiglenes MathProblem
+vagy ValidationReport. Kötelező regresszió: azonos opciók/snapshot/profile mellett
+a régi validátor Error-szabályai és a binding elfogadása megegyeznek; a régi út
+csak az ellenőrzés Ticken kívüli teszt-orákuluma. 10 000 seedelt resource gate,
+határkapacitások, nullás snapshot, determinista helyessáv-eloszlás és mindkét
+Bind-kimenet mérhető nulla-allokációja a kapu része.
 
 ---
 

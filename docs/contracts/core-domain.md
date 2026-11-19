@@ -164,8 +164,10 @@ public interface IExpressionVisitor<out TResult>
 2. `EqualityNode` csak a fa **gyökereként** szerepelhet.
 3. `IntegerDivisionWithRemainder` csak **gyökér** vagy `EqualityNode` közvetlen gyermeke lehet
    (mert az eredménye pár, nem skalár).
-4. `UnknownNode` legfeljebb egy példányban, és kizárólag `ProblemType.MissingOperand` /
-   `EquationSolving` típusú feladatban.
+4. A megoldandó `UnknownNode` legfeljebb egy példányban, és kizárólag
+   `ProblemType.MissingOperand` / `EquationSolving` típusú feladatban szerepel.
+   A resource-gate műveleti sablon külön eset: opcióként pontosan egy UnknownNode
+   a még nem rögzített erőforrás-snapshot behelyettesítési helye (3.1., ADR-015).
 5. Az MVP bővítési pontja (spec 6.0.1–6.0.4): új csomóponttípus csak új `ExpressionNode`
    leszármazott + `IExpressionVisitor` bővítés, meglévő típus módosítása nélkül.
 
@@ -331,6 +333,106 @@ public sealed class MathAnswer
     public double AnsweredAtGameTime { get; }
 }
 ```
+
+---
+
+### 3.1. Előkészített resource gate és végleges binding (ADR-015, ELFOGADVA)
+
+Namespace: `MathHorde.Core.Problems`. Ezek **Unity- és MathEngine-független**
+Core típusok. A `MathProblem`, `AnswerOption`, `MathAnswer` meglévő aláírása és
+immutabilitása nem változik. A valós idejű `ResourceOperationComparison` a
+következő reprezentációt használja; a régi teljes MathProblem továbbra is
+érvényes offline generálási/validációs tesztadat lehet.
+
+```csharp
+public readonly struct ResourceGateOptionTemplate
+{
+    public int OptionIndex { get; }
+    public LaneIndex Lane { get; }
+    public ExpressionNode GateOperation { get; } // pontosan egy snapshot-UnknownNode
+    public string DisplayLabel { get; }          // előformázott: "+25", "×2"
+}
+
+public sealed class ResourceGateTemplate
+{
+    public IReadOnlyList<ResourceGateOptionTemplate> Options { get; } // 2..4
+    public IReadOnlyList<SkillTag> SkillTags { get; }
+}
+
+public sealed class PreparedResourceGate
+{
+    public MathProblemId Id { get; }
+    public int Seed { get; }
+    public DifficultyProfile Difficulty { get; }
+    public float ThinkTimeSeconds { get; }       // skálázatlan alapidő
+    public RewardSpec Reward { get; }
+    public GateGoal Goal { get; }
+    public int? TargetValue { get; }
+    public int PreparedCapacity { get; }         // támogatott kontextus, nem élő Max
+    public IReadOnlyList<ResourceGateTemplate> Candidates { get; } // determinisztikus sorrend
+    public IReadOnlyList<SkillTag> GetSkillTags(int candidateIndex, int snapshotValue);
+}
+
+public readonly struct ResourceGateBinding
+{
+    public PreparedResourceGate Prepared { get; }
+    public int CandidateIndex { get; }
+    public ResourceGateTemplate Template { get; } // Prepared.Candidates[CandidateIndex]
+    public MathProblemId ProblemId { get; }       // Prepared.Id
+    public int SnapshotValue { get; }
+    public int ResourceCapacity { get; }          // spawnkor ténylegesen rögzített Max
+    public int OptionCount { get; }
+    public int CorrectOptionIndex { get; }
+    public IReadOnlyList<SkillTag> SkillTags { get; } // előkészített, kontextushelyes lista
+    public EvaluationResult GetValue(int optionIndex);
+}
+```
+
+A két sealed osztály és a sablon-opció immutable; bemeneti listáikat másolt,
+visszakasztolással sem módosítható olvasó nézetben tárolják. A binding nem tartalmaz
+új listát vagy dobozolt interfész-adatot: négy readonly EvaluationResult mezőből
+olvas az indexelt getter; a nem használt mezők defaultok. Érvénytelen index
+programozói hiba. A default binding (`Prepared == null`) nem érvényes feladat.
+Az eseményazonosító GameLogic-adat, ezért a Core binding nem függ MathEventId-től:
+az `ActiveMathEvent` tartja össze az EventId-t és a binding ProblemId-jét.
+A GetSkillTags a Prepare során a konkrét snapshothoz és jelölthöz előre
+osztályozott immutable listát adja vissza, allokáció nélkül. A Template.SkillTags
+csak a szimbolikus műveletek tagje; a binding.SkillTags a régi validátorral
+egyezően a helyes konkrét kifejezés és minden szimbolikus kapuművelet uniója.
+Így az átlépés/többjegyűség tagje nem vész el, és Bindben nem fut Classify.
+
+Minden opció nyers értéke `EvaluateWith(GateOperation, SnapshotValue)`. A binding
+I2–I7, I9–I11 egyenértékű ellenőrzésén átmegy; I1-ben a kijelölt helyes opció
+behelyettesített művelete adja a helyes választ, I8 megoldandó ismeretlenje itt
+nem alkalmazandó. A sablonban még nincs Value/IsCorrect/ResourceCapacity:
+ezekről előkészítéskor nem szabad végleges snapshotadatot állítani. Az operandus-,
+eredmény-, készség-, kapacitás- és réskorlátok nem lazulnak. A binding egyszer
+keletkezik és utána változatlan; a későbbi harc sem értékeit, sem Maxát nem írja át.
+
+---
+
+### 3.2. Allokációmentes válaszadat a feloldási sorban
+
+```csharp
+// Namespace: MathHorde.Core.Problems
+public readonly struct MathAnswerSnapshot
+{
+    public MathProblemId ProblemId { get; }
+    public int? SelectedOptionIndex { get; }
+    public LaneIndex? SelectedLane { get; }
+    public bool WasCorrect { get; }
+    public float ResponseTimeSeconds { get; }
+    public bool TimedOut { get; }
+    public ErrorCategory ErrorCategory { get; }
+    public double AnsweredAtGameTime { get; }
+}
+```
+
+A mezőinvariánsok a meglévő MathAnsweréval azonosak; ez annak readonly struct
+adatátviteli párja, nem új kiértékelés. A GateResolution ezt viszi tovább Tickben.
+A meglévő sealed MathAnswer/QuestionAttempt csak a Ticken kívüli analitikai
+drainben materializálható; a feloldási út nem allokálhatja ezeket. Ez nem változtat
+a napló tartalmán, pontosságán vagy idempotenciáján.
 
 ---
 

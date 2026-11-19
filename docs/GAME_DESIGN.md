@@ -99,6 +99,11 @@ kiírva (pl. `×2`, `+25`). A kapu felett a HUD mutatja a **snapshot-értéket**
 A kapuk eredménye a döntés előtt **nem látható** (spec 5.1), csak az áthaladás utáni
 visszajelzésben.
 
+A resource gate Preview-ben csak cél- és erőforrás-előjelzés látható; a konkrét
+snapshot és a műveletek a kapuk megjelenésétől látszanak. Az immutable sablon előre
+készül, a snapshot/Max a spawnkor rögzül, allokációmentes bindinggal (ADR-015).
+A válaszsávos feladatok teljes, korai Preview-je változatlan.
+
 ### 3.2. Erőforrás-snapshot — a mechanika lelke
 
 ```
