@@ -257,9 +257,11 @@ stateDiagram-v2
     Resolving --> Completed: RewardApplied (idempotens)
     Completed --> [*]
     Expired --> [*]
+    Inactive --> Expired: SessionEnded
     Preview --> Expired: SessionEnded
     Approaching --> Expired: SessionEnded
     AwaitingDecision --> Expired: SessionEnded
+    Resolving --> Expired: SessionEnded
 ```
 
 | Állapot | Belépéskor | Kimenő adat |
@@ -274,7 +276,9 @@ stateDiagram-v2
 
 **Invariánsok (teszttel kikényszerítve):**
 1. `Completed` és `Expired` terminális — innen nincs visszatérés.
-2. `Resolving`-ból kizárólag `Completed` következhet.
+2. `Resolving`-ból normál feloldáskor `Completed` következik; `SessionEnded` esetén
+   minden nem terminális állapotból (az `Inactive` és `Resolving` állapotból is)
+   `Expired` következik (`IMathEventDirector.OnSessionEnded`, [ADR-014](decisions/ADR-014.md)).
 3. Egy `MathEventId`-hoz tartozó jutalom pontosan egyszer könyvelődik (6. szakasz).
 4. A játékos halála (`PlayerHealthZero`) a futó eseményeket `Expired`-be viszi, de a
    már `Completed` eseményt nem vonja vissza.
