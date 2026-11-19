@@ -173,10 +173,30 @@ namespace MathHorde.Tests.PlayMode.Integration
             session.Pause(); session.Tick(0.5f);
             Assert.That(clock.GameTime, Is.EqualTo(beforePause)); Assert.That(active.DeadlineGameTime, Is.EqualTo(deadline));
             session.Resume();
-            director.OnPlayerLaneSelected(active.Carriers[0].Lane, clock.GameTime);
+            LaneIndex selectedLane = default;
+            if (gate)
+                selectedLane = active.ResourceGate.Value.Template.Options[active.ResourceGate.Value.CorrectOptionIndex].Lane;
+            else
+                foreach (var option in active.Problem.Options)
+                    if (option.IsCorrect) selectedLane = option.Lane;
+            director.OnPlayerLaneSelected(selectedLane, clock.GameTime);
             Assert.That(active.State, Is.EqualTo(MathEventState.Resolving));
             Assert.That(director.PendingResolutions.Count, Is.EqualTo(1));
             Assert.That(director.PendingResolutions[0].TimedOut, Is.False);
+            var resolver = new GateResolutionService(bus, 1);
+            var rewards = new RewardService(resources, bus, clock, 1);
+            var resolution = resolver.Resolve(director.PendingResolutions[0], active);
+            int beforeReward = resources.GetCurrent(ResourceType.Ammo);
+            var application = rewards.ApplyReward(resolution);
+            Assert.That(application.Status, Is.EqualTo(RewardApplicationStatus.Applied));
+            Assert.That(application.RequestedDelta, Is.EqualTo(resolution.RewardDelta));
+            Assert.That(resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(beforeReward + application.AppliedDelta));
+            director.OnRewardProcessed(application, clock.GameTime);
+            Assert.That(active.State, Is.EqualTo(MathEventState.Completed));
+            var restoredRewards = new RewardService(resources, bus, clock, 1);
+            restoredRewards.RestoreAppliedRewards(rewards.AppliedRewardEventIds);
+            Assert.That(restoredRewards.ApplyReward(resolution).Status, Is.EqualTo(RewardApplicationStatus.AlreadyApplied));
+            Assert.That(resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(beforeReward + application.AppliedDelta));
         }
 
         [UnityTest]

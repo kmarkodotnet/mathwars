@@ -17,20 +17,51 @@ namespace MathHorde.GameLogic
     {
         private readonly IGameEventSink _eventSink;
         private readonly IGameClock _clock;
+        private readonly Dictionary<ResourceType, PoolValues> _pools;
         private ResourceState _state;
+
+        private readonly struct PoolValues
+        {
+            internal readonly int Current;
+            internal readonly int Max;
+            internal readonly int Min;
+            internal PoolValues(int current, int max, int min = 0)
+            { Current = current; Max = max; Min = min; }
+        }
 
         public ResourceService(IGameEventSink eventSink, IGameClock clock)
         {
             _eventSink = eventSink ?? throw new ArgumentNullException(nameof(eventSink));
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
-            _state = new ResourceState(new Dictionary<ResourceType, ResourcePool>());
+            // Reserve every defined resource type, including pools introduced after F1.
+            // Updating these value entries never allocates during combat or math rewards.
+            _pools = new Dictionary<ResourceType, PoolValues>(Enum.GetValues(typeof(ResourceType)).Length);
         }
 
-        public ResourceState State => _state;
+        /// <summary>
+        /// Immutable snapshot for readers outside Tick. Materialize only on demand after
+        /// a mutation; Tick consumers use GetCurrent/GetMax and ResourceChanged instead.
+        /// Previously returned snapshots never change when the live pools change.
+        /// </summary>
+        public ResourceState State
+        {
+            get
+            {
+                if (_state == null)
+                {
+                    var pools = new Dictionary<ResourceType, ResourcePool>(_pools.Count);
+                    foreach (var entry in _pools)
+                        pools.Add(entry.Key, new ResourcePool(entry.Key, entry.Value.Current,
+                            entry.Value.Max, entry.Value.Min));
+                    _state = new ResourceState(pools);
+                }
+                return _state;
+            }
+        }
 
-        public int GetCurrent(ResourceType type) => _state.GetCurrent(type);
+        public int GetCurrent(ResourceType type) => _pools.TryGetValue(type, out var pool) ? pool.Current : 0;
 
-        public int GetMax(ResourceType type) => _state.GetMax(type);
+        public int GetMax(ResourceType type) => _pools.TryGetValue(type, out var pool) ? pool.Max : 0;
 
         public void Initialize(LevelDefinition level)
         {
@@ -39,11 +70,9 @@ namespace MathHorde.GameLogic
                 throw new ArgumentNullException(nameof(level));
             }
 
-            var pools = new Dictionary<ResourceType, ResourcePool>
-            {
-                [ResourceType.Ammo] = new ResourcePool(ResourceType.Ammo, level.StartingAmmo, level.MaxAmmo),
-                [ResourceType.Health] = new ResourcePool(ResourceType.Health, level.StartingHealth, level.MaxHealth),
-            };
+            _pools.Clear();
+            _pools.Add(ResourceType.Ammo, new PoolValues(level.StartingAmmo, level.MaxAmmo));
+            _pools.Add(ResourceType.Health, new PoolValues(level.StartingHealth, level.MaxHealth));
 
             // Contract game-logic.md 2.2: the Shield pool is created ONLY when
             // MaxShield > 0. MaxShield == 0 means the level has no shield
@@ -52,14 +81,15 @@ namespace MathHorde.GameLogic
             // Max = max(StartingShield, 1) workaround, which is forbidden).
             if (level.MaxShield > 0)
             {
-                pools[ResourceType.Shield] = new ResourcePool(ResourceType.Shield, level.StartingShield, level.MaxShield);
+                _pools.Add(ResourceType.Shield, new PoolValues(level.StartingShield, level.MaxShield));
             }
 
-            _state = new ResourceState(pools);
+            _state = null;
 
-            foreach (var pool in pools.Values)
+            foreach (var entry in _pools)
             {
-                PublishChange(pool.Type, 0, pool.Current, pool.Current, pool.Current, wasClamped: false, "LEVEL_INIT");
+                var pool = entry.Value;
+                PublishChange(entry.Key, 0, pool.Current, pool.Current, pool.Current, wasClamped: false, "LEVEL_INIT");
             }
         }
 
@@ -67,13 +97,13 @@ namespace MathHorde.GameLogic
         {
             var pool = GetPoolOrDefault(type);
             int previous = pool.Current;
-            int rawTarget = previous + delta;
+            long rawTarget = (long)previous + delta;
             int clampedTarget = Clamp(rawTarget, pool.Min, pool.Max);
             bool wasClamped = clampedTarget != rawTarget;
             int appliedDelta = clampedTarget - previous;
 
-            var newPool = new ResourcePool(type, clampedTarget, pool.Max, pool.Min);
-            _state = _state.WithPool(newPool);
+            _pools[type] = new PoolValues(clampedTarget, pool.Max, pool.Min);
+            _state = null;
 
             return PublishChange(type, previous, clampedTarget, delta, appliedDelta, wasClamped, reasonCode);
         }
@@ -112,8 +142,8 @@ namespace MathHorde.GameLogic
             int clampedCurrent = Clamp(previous, pool.Min, newMax);
             bool wasClamped = clampedCurrent != previous;
 
-            var newPool = new ResourcePool(type, clampedCurrent, newMax, pool.Min);
-            _state = _state.WithPool(newPool);
+            _pools[type] = new PoolValues(clampedCurrent, newMax, pool.Min);
+            _state = null;
 
             return PublishChange(type, previous, clampedCurrent, requestedDelta: 0, clampedCurrent - previous, wasClamped, reasonCode);
         }
@@ -125,9 +155,9 @@ namespace MathHorde.GameLogic
             return GetCurrent(type);
         }
 
-        private ResourcePool GetPoolOrDefault(ResourceType type)
+        private PoolValues GetPoolOrDefault(ResourceType type)
         {
-            if (_state.Pools.TryGetValue(type, out var pool))
+            if (_pools.TryGetValue(type, out var pool))
             {
                 return pool;
             }
@@ -138,7 +168,7 @@ namespace MathHorde.GameLogic
             // starts at 0 with an effectively unbounded Max, rather than
             // throwing. This is never hit by the Initialize → gameplay flow
             // the contract describes; it is a defensive fallback only.
-            return new ResourcePool(type, current: 0, max: int.MaxValue, min: 0);
+            return new PoolValues(current: 0, max: int.MaxValue);
         }
 
         private ResourceChange PublishChange(
@@ -155,14 +185,14 @@ namespace MathHorde.GameLogic
             return change;
         }
 
-        private static int Clamp(int value, int min, int max)
+        private static int Clamp(long value, int min, int max)
         {
             if (value < min)
             {
                 return min;
             }
 
-            return value > max ? max : value;
+            return value > max ? max : (int)value;
         }
     }
 }

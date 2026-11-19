@@ -150,7 +150,9 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(f.Resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(8));
             Assert.That(f.Event.State, Is.EqualTo(MathEventState.Resolving));
             Assert.That(f.Generator.Binds, Is.EqualTo(1));
-            f.Resources.ApplyDelta(result.Resource, result.RewardDelta, "MATH_GATE");
+            var application = new RewardService(f.Resources, new EmptySink(), new GameClock(), 1).ApplyReward(result);
+            Assert.That(application.RequestedDelta, Is.EqualTo(25));
+            Assert.That(application.AppliedDelta, Is.EqualTo(25));
             Assert.That(f.Resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(33));
         }
 

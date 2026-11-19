@@ -190,6 +190,42 @@ namespace MathHorde.Tests.EditMode.GameLogic
         }
 
         [Test]
+        public void State_IsCachedUntilMutation_AndPreviousSnapshotsRemainImmutable()
+        {
+            var service = CreateService(out _, out _);
+            service.Initialize(BuildLevel(startingAmmo: 20));
+            var original = service.State;
+            Assert.That(service.State, Is.SameAs(original));
+            service.ApplyDelta(ResourceType.Ammo, 25, "MATH_GATE");
+            var updated = service.State;
+            Assert.That(updated.GetCurrent(ResourceType.Ammo), Is.EqualTo(45));
+            Assert.That(original.GetCurrent(ResourceType.Ammo), Is.EqualTo(20));
+            Assert.That(service.State, Is.SameAs(updated));
+            service.SetMax(ResourceType.Ammo, 30, "UPGRADE");
+            Assert.That(service.State.GetCurrent(ResourceType.Ammo), Is.EqualTo(30));
+            Assert.That(updated.GetMax(ResourceType.Ammo), Is.EqualTo(200));
+            service.Initialize(BuildLevel(startingAmmo: 10, maxShield: 0));
+            Assert.That(service.State.GetCurrent(ResourceType.Ammo), Is.EqualTo(10));
+            Assert.That(service.State.Pools.ContainsKey(ResourceType.Shield), Is.False);
+            Assert.That(original.Pools.ContainsKey(ResourceType.Shield), Is.True);
+        }
+
+        [Test]
+        public void UnconfiguredPools_KeepZeroReadsAndCanBeAddedWithoutChangingOldSnapshot()
+        {
+            var service = CreateService(out _, out _);
+            var empty = service.State;
+            Assert.That(empty.Pools.Count, Is.EqualTo(0));
+            Assert.That(service.GetCurrent(ResourceType.Energy), Is.EqualTo(0));
+            Assert.That(service.GetMax(ResourceType.Energy), Is.EqualTo(0));
+            service.ApplyDelta(ResourceType.Energy, 10, "MATH_GATE");
+            Assert.That(service.GetCurrent(ResourceType.Energy), Is.EqualTo(10));
+            Assert.That(service.GetMax(ResourceType.Energy), Is.EqualTo(int.MaxValue));
+            Assert.That(service.State.Pools.Count, Is.EqualTo(1));
+            Assert.That(empty.Pools.Count, Is.EqualTo(0));
+        }
+
+        [Test]
         public void SnapshotBasedGateReward_ReferenceScenario_MatchesContract()
         {
             // Contract game-logic.md 2.2:
