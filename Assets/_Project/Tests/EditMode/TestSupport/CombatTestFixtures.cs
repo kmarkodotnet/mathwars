@@ -22,7 +22,8 @@ namespace MathHorde.Tests.EditMode.TestSupport
             float requiredMathAccuracy = 0f,
             IReadOnlyList<WaveDefinition> waves = null,
             string bossEnemyId = null,
-            string weaponId = "basic_weapon")
+            string weaponId = "basic_weapon",
+            IReadOnlyList<MathEventScheduleEntry> mathEvents = null)
         {
             return new LevelDefinition(
                 id: new LevelId("w1-l01"),
@@ -31,7 +32,7 @@ namespace MathHorde.Tests.EditMode.TestSupport
                 laneCount: laneCount,
                 targetDurationSeconds: 200,
                 waves: waves,
-                mathEvents: null,
+                mathEvents: mathEvents,
                 bossEnemyId: bossEnemyId,
                 startingAmmo: startingAmmo,
                 maxAmmo: maxAmmo,

@@ -221,12 +221,12 @@ namespace MathHorde.MathEngine
                 for (int j = i + 1; j < problem.Options.Count; j++)
                 {
                     long a = problem.Options[i].Value.Value, b = problem.Options[j].Value.Value;
-                    if (a == b) Add(issues, "GATE_TIE", "Two raw gate values are equal.");
+                    if (GateMathRules.IsTie(a, b, null)) Add(issues, "GATE_TIE", "Two raw gate values are equal.");
                     if (!capacityValid) continue;
                     a = Math.Min(a, problem.ResourceCapacity.Value);
                     b = Math.Min(b, problem.ResourceCapacity.Value);
-                    if (a == b) Add(issues, "GATE_TIE", "Two effective gate values are equal.");
-                    if (Math.Abs(a - b) < profile.MinGateGap)
+                    if (GateMathRules.IsTie(a, b, null)) Add(issues, "GATE_TIE", "Two effective gate values are equal.");
+                    if (GateMathRules.GapTooSmall(a, b, problem.ResourceCapacity.Value, profile.MinGateGap))
                         Add(issues, "GATE_GAP_TOO_SMALL", "An effective gate pair is closer than MinGateGap.");
                 }
             }
@@ -252,8 +252,7 @@ namespace MathHorde.MathEngine
             {
                 long value = problem.Options[i].Value.Value;
                 if (capacity.HasValue) value = Math.Min(value, capacity.Value);
-                long score = problem.Goal == GateGoal.Maximize ? -value
-                    : problem.Goal == GateGoal.Minimize ? value : Math.Abs(value - problem.TargetValue.Value);
+                long score = GateMathRules.Score(value, problem.Goal, problem.TargetValue);
                 if (score < best) { best = score; winner = i; tie = false; }
                 else if (score == best) tie = true;
             }

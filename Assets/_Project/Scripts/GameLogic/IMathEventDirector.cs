@@ -1,46 +1,38 @@
+﻿using System;
+using System.Collections.Generic;
+using MathHorde.Core.Common;
+using MathHorde.Core.Levels;
+using MathHorde.Core.Skills;
+using MathHorde.MathEngine;
+
 namespace MathHorde.GameLogic
 {
-    /// <summary>
-    /// PHASE 1 PLACEHOLDER — not the contract's full interface.
-    ///
-    /// game-logic.md 5. specifies the full IMathEventDirector (ActiveEvents,
-    /// PendingResolutions/ResolveCommand, OnPlayerLaneSelected,
-    /// OnSessionEnded, ApplyTimePressure, ...), built against MathProblem,
-    /// IMathProblemGenerator and DifficultyProfile — none of which exist in
-    /// this codebase yet (MathEngine/Problems layer, Phase 3, a different
-    /// agent's scope). Per this package's brief: "a 4–5. lépés most
-    /// üres/no-op kiterjesztési pont legyen, tiszta interfész mögött" — so
-    /// this narrow slice is deliberately all GameSessionService needs for
-    /// its Tick order (ARCHITECTURE 6.1 step 4) today: a tick hook that is
-    /// guaranteed to never touch combat state.
-    ///
-    /// When F3 lands the real IMathEventDirector, GameSessionService should
-    /// be updated to depend on the full contract (Tick/PendingResolutions/
-    /// ClearPendingResolutions) instead of this placeholder — this type
-    /// should then be retired, not extended.
-    /// </summary>
     public interface IMathEventDirector
     {
-        /// <summary>
-        /// Must NEVER modify combat state and must NEVER call
-        /// IGameClock.Pause() (game-logic.md 5. independence contract) —
-        /// enforced here simply by this method taking no combat-service
-        /// reference at all.
-        /// </summary>
+        void Initialize(LevelDefinition level, DifficultyProfile difficulty, IMathProblemGenerator generator, IRandomSource random);
+        Result<bool> PrepareUpcomingEvents(double gameTime);
         void Tick(double gameTime);
+        void OnPlayerLaneSelected(LaneIndex lane, double gameTime);
+        void OnSessionEnded(double gameTime);
+        void OnRewardProcessed(in RewardApplication application, double gameTime);
+        IReadOnlyList<ActiveMathEvent> ActiveEvents { get; }
+        IReadOnlyList<ResolveCommand> PendingResolutions { get; }
+        void ClearPendingResolutions();
+        void ApplyTimePressure(float thinkTimeMultiplier, float gateSpeedMultiplier);
     }
 
-    /// <summary>
-    /// Meaningful no-op implementation (NOT a TODO) — correct for every
-    /// level until F3 introduces real math events: there are none, so
-    /// there is nothing to tick.
-    /// </summary>
-    public sealed class NullMathEventDirector : IMathEventDirector
+    /// <summary>Explicit empty-schedule adapter for the F1 scene until F3-12 composition.</summary>
+    public class NullMathEventDirector : IMathEventDirector
     {
-        public void Tick(double gameTime)
-        {
-            // Intentionally empty: no math-event state machine exists yet
-            // (Phase 3). This is the documented extension point, not a gap.
-        }
+        public IReadOnlyList<ActiveMathEvent> ActiveEvents => Array.Empty<ActiveMathEvent>();
+        public IReadOnlyList<ResolveCommand> PendingResolutions => Array.Empty<ResolveCommand>();
+        public virtual void Initialize(LevelDefinition level, DifficultyProfile difficulty, IMathProblemGenerator generator, IRandomSource random) { }
+        public virtual Result<bool> PrepareUpcomingEvents(double gameTime) => Result<bool>.Ok(true);
+        public virtual void Tick(double gameTime) { }
+        public virtual void OnPlayerLaneSelected(LaneIndex lane, double gameTime) { }
+        public virtual void OnSessionEnded(double gameTime) { }
+        public virtual void OnRewardProcessed(in RewardApplication application, double gameTime) { }
+        public virtual void ClearPendingResolutions() { }
+        public virtual void ApplyTimePressure(float thinkTimeMultiplier, float gateSpeedMultiplier) { }
     }
 }

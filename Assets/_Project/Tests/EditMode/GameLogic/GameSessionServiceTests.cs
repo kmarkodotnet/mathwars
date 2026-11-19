@@ -84,7 +84,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             public void ApplyCombatModifiers(CombatModifiers modifiers) => _inner.ApplyCombatModifiers(modifiers);
         }
 
-        private sealed class RecordingMathEventDirector : IMathEventDirector
+        private sealed class RecordingMathEventDirector : NullMathEventDirector
         {
             public List<string> Log { get; }
 
@@ -93,7 +93,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 Log = log;
             }
 
-            public void Tick(double gameTime)
+            public override void Tick(double gameTime)
             {
                 Log.Add("math");
             }

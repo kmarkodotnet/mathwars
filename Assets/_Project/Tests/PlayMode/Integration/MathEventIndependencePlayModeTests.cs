@@ -25,7 +25,12 @@ using MathHorde.Core.Common;
 using MathHorde.Core.Levels;
 using MathHorde.Core.Progress;
 using MathHorde.Core.Resources;
+using MathHorde.Core.Expressions;
+using MathHorde.Core.Problems;
+using MathHorde.Core.Skills;
 using MathHorde.GameLogic;
+using MathHorde.GameLogic.Events;
+using MathHorde.MathEngine;
 using MathHorde.Infrastructure.Common;
 using MathHorde.Presentation.Events;
 using NUnit.Framework;
@@ -39,13 +44,13 @@ namespace MathHorde.Tests.PlayMode.Integration
         /// Supplies semantic lifecycle inputs to the production state machine,
         /// using only the shared game time, with no combat/clock reference.
         /// </summary>
-        private sealed class LifecycleDriver : IMathEventDirector
+        private sealed class LifecycleDriver : NullMathEventDirector
         {
             public int TickCount { get; private set; }
             public MathEventStateMachine Machine { get; } = new MathEventStateMachine(MathEventId.Create(7, 0));
             private double _decisionOpenedAt;
 
-            public void Tick(double gameTime)
+            public override void Tick(double gameTime)
             {
                 TickCount++;
                 switch (Machine.State)
@@ -71,7 +76,7 @@ namespace MathHorde.Tests.PlayMode.Integration
             }
         }
 
-        private static LevelDefinition BuildLevel(IReadOnlyList<WaveDefinition> waves)
+        private static LevelDefinition BuildLevel(IReadOnlyList<WaveDefinition> waves, IReadOnlyList<MathEventScheduleEntry> mathEvents = null)
         {
             return new LevelDefinition(
                 id: new LevelId("w1-l01"),
@@ -80,7 +85,7 @@ namespace MathHorde.Tests.PlayMode.Integration
                 laneCount: 3,
                 targetDurationSeconds: 200,
                 waves: waves,
-                mathEvents: null,
+                mathEvents: mathEvents,
                 bossEnemyId: null,
                 startingAmmo: 500,
                 maxAmmo: 500,
@@ -90,6 +95,88 @@ namespace MathHorde.Tests.PlayMode.Integration
                 maxShield: 0,
                 requiredMathAccuracy: 0f,
                 weaponId: "basic_weapon");
+        }
+
+        [UnityTest]
+        public IEnumerator RealResourceDirector_KeepsCombatRunningAcrossPreviewBindingAndDecision()
+            => RunRealDirector(ProblemType.ResourceOperationComparison);
+
+        [UnityTest]
+        public IEnumerator RealLaneDirector_KeepsCombatRunningWithFullEarlyPreview()
+            => RunRealDirector(ProblemType.AnswerLaneSelection);
+
+        private static IEnumerator RunRealDirector(ProblemType type)
+        {
+            var waves = new[] { new WaveDefinition(0, 0, 1000, spawns: new[]
+            { new WaveSpawnEntry("basic_bot", 20, 0.05f, new[] { new LaneIndex(0) }) }) };
+            var level = BuildLevel(waves, new[] { new MathEventScheduleEntry(0, type, 0.05f, 2f, ResourceType.Ammo, GateGoal.Maximize) });
+            var profile = new DifficultyProfile(4, 4, 4, 4,
+                new[] { BinaryOperator.Addition, BinaryOperator.Modulo }, (SkillTag[])System.Enum.GetValues(typeof(SkillTag)),
+                0, 500, 2000, 2, 2, false, 0, false, 0, false, 2, 2f, 1, true);
+            var bus = new GameEventBus(); var clock = new UnityGameClock();
+            var resources = new ResourceService(bus, clock);
+            var combat = new CombatService(resources, bus);
+            bool gate = type == ProblemType.ResourceOperationComparison;
+            var settings = new MathEventDirectorSettings(1, 5f, 3f, 20f, 1f,
+                new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Ammo, gate ? 0 : 10, gate) });
+            var director = new MathEventDirector(resources, bus, settings);
+            var session = new GameSessionService(clock, new WaveDirector(), combat, director, resources, bus);
+            var enemy = new EnemyDefinition("basic_bot", EnemyType.Basic, 1000, 1f, 5, 1f, 1, "prefab_basic_bot");
+            var weapon = new WeaponDefinition("basic_weapon", 1, 20f, 20f, 1, 0f, TargetingMode.OwnLaneThenAdjacent, "fx_basic");
+            session.StartSession(level, weapon, new Dictionary<string, EnemyDefinition> { ["basic_bot"] = enemy }, 7);
+            director.Initialize(level, profile, new MathProblemGenerator(), new DeterministicRandomSource(7));
+            var startup = director.PrepareUpcomingEvents(clock.GameTime);
+            Assert.That(startup.IsSuccess, Is.True, startup.ErrorCode);
+            int diagnostics = 0;
+            bus.Subscribe<MathEventPreparationFailed>(_ => diagnostics++);
+            bool sawPreview = false, sawSpawn = false;
+            int ammoAtDecision = -1, snapshot = -1;
+            double openedAt = 0;
+            ActiveMathEvent active = null;
+            float wallDeadline = Time.realtimeSinceStartup + 5f;
+            while (Time.realtimeSinceStartup < wallDeadline)
+            {
+                var prepared = director.PrepareUpcomingEvents(clock.GameTime);
+                session.Tick(Time.deltaTime);
+                Assert.That(prepared.IsSuccess, Is.True, prepared.ErrorCode);
+                if (director.ActiveEvents.Count > 0)
+                {
+                    active = director.ActiveEvents[0];
+                    if (active.State == MathEventState.Preview)
+                    {
+                        sawPreview = true;
+                        Assert.That(active.Problem == null, Is.EqualTo(gate));
+                        Assert.That(active.Carriers.Count, Is.EqualTo(0));
+                    }
+                    if (!sawSpawn && active.State == MathEventState.Approaching)
+                    {
+                        sawSpawn = true;
+                        snapshot = active.SnapshotValue;
+                        if (gate) Assert.That(snapshot, Is.EqualTo(resources.GetCurrent(ResourceType.Ammo)), "Snapshot must follow this frame's combat.");
+                    }
+                    if (active.State == MathEventState.AwaitingDecision)
+                    {
+                        if (ammoAtDecision < 0) { ammoAtDecision = resources.GetCurrent(ResourceType.Ammo); openedAt = clock.GameTime; }
+                        if (clock.GameTime - openedAt >= 0.25) break;
+                    }
+                }
+                yield return null;
+            }
+            Assert.That(active, Is.Not.Null);
+            Assert.That(sawPreview, Is.True); Assert.That(sawSpawn, Is.True);
+            Assert.That(active.State, Is.EqualTo(MathEventState.AwaitingDecision));
+            Assert.That(resources.GetCurrent(ResourceType.Ammo), Is.LessThan(ammoAtDecision));
+            Assert.That(combat.ActiveEnemies.Count, Is.GreaterThan(0)); Assert.That(session.IsRunning, Is.True);
+            Assert.That(clock.IsPaused, Is.False); Assert.That(diagnostics, Is.EqualTo(0));
+            if (gate) Assert.That(active.ResourceGate.Value.SnapshotValue, Is.EqualTo(snapshot));
+            double beforePause = clock.GameTime, deadline = active.DeadlineGameTime;
+            session.Pause(); session.Tick(0.5f);
+            Assert.That(clock.GameTime, Is.EqualTo(beforePause)); Assert.That(active.DeadlineGameTime, Is.EqualTo(deadline));
+            session.Resume();
+            director.OnPlayerLaneSelected(active.Carriers[0].Lane, clock.GameTime);
+            Assert.That(active.State, Is.EqualTo(MathEventState.Resolving));
+            Assert.That(director.PendingResolutions.Count, Is.EqualTo(1));
+            Assert.That(director.PendingResolutions[0].TimedOut, Is.False);
         }
 
         [UnityTest]

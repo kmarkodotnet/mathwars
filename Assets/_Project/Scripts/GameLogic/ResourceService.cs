@@ -17,7 +17,6 @@ namespace MathHorde.GameLogic
     {
         private readonly IGameEventSink _eventSink;
         private readonly IGameClock _clock;
-        private readonly Dictionary<ResourceType, int> _snapshots = new Dictionary<ResourceType, int>();
         private ResourceState _state;
 
         public ResourceService(IGameEventSink eventSink, IGameClock clock)
@@ -57,7 +56,6 @@ namespace MathHorde.GameLogic
             }
 
             _state = new ResourceState(pools);
-            _snapshots.Clear();
 
             foreach (var pool in pools.Values)
             {
@@ -122,9 +120,9 @@ namespace MathHorde.GameLogic
 
         public int CaptureSnapshot(ResourceType type)
         {
-            int current = GetCurrent(type);
-            _snapshots[type] = current;
-            return current;
+            // The returned value is the snapshot. Retaining another dictionary
+            // copy serves no reader and would allocate on the first math Tick.
+            return GetCurrent(type);
         }
 
         private ResourcePool GetPoolOrDefault(ResourceType type)

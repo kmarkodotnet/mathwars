@@ -121,11 +121,9 @@ namespace MathHorde.GameLogic
             // Step 3: combat — intentionally BEFORE the math step (spec 5.1 snapshot mechanics).
             _combatService.Tick(t, deltaTime);
 
-            // Steps 4-5: math-event state machine tick + resolution drain.
-            // IMathEventDirector is the Phase-1 no-op placeholder today (see
-            // IMathEventDirector.cs) — there is no PendingResolutions queue
-            // to drain yet, and IGameEventSink.Publish is synchronous (no
-            // analytics buffer to flush), so step 6 has nothing to do either.
+            // Step 4: prepared math lifecycle, after combat's resource changes.
+            // The resolution/reward/analytics composition remains F3-12 work;
+            // its commands stay available on the director until explicitly drained.
             _mathEventDirector.Tick(t);
 
             EvaluateVictoryOrDefeat(t);
@@ -192,6 +190,7 @@ namespace MathHorde.GameLogic
             Result = result;
             FailureReason = reason;
             IsRunning = false;
+            _mathEventDirector.OnSessionEnded(gameTime);
             _eventSink.Publish(new SessionEnded(SessionId, result, reason, gameTime));
         }
     }

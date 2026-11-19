@@ -79,6 +79,11 @@ namespace MathHorde.Presentation.Bootstrap
         [SerializeField] private int _seed = 20261117;
 
         private IGameSessionService _session;
+        private IMathEventDirector _mathEventDirector;
+        private IGameClock _clock;
+        private bool _mathPreparedAtStartup;
+        private string _pendingMathPreparationError;
+        public string LastMathPreparationError { get; private set; }
         private AutosaveScheduler _autosave;
         private GameSessionAppFlowBinder _appFlowBinder;
         private SessionOutcomeBridge _outcomeBridge;
@@ -100,8 +105,10 @@ namespace MathHorde.Presentation.Bootstrap
         private void Start()
         {
             _eventBus = new GameEventBus();
+            _eventBus.Subscribe<MathHorde.GameLogic.Events.MathEventPreparationFailed>(HandleMathPreparationFailed);
             var localization = new ResourcesLocalizationService();
             var clock = new UnityGameClock();
+            _clock = clock;
 
             var configRepository = new GameConfigurationRepository(
                 _enemyAssets, _weaponAssets, new[] { _levelAsset }, _combatBalance);
@@ -115,6 +122,7 @@ namespace MathHorde.Presentation.Bootstrap
             var combatService = new CombatService(Resources, _eventBus);
             Combat = combatService;
             var mathEventDirector = new NullMathEventDirector();
+            _mathEventDirector = mathEventDirector;
 
             _session = new GameSessionService(clock, waveDirector, combatService, mathEventDirector, Resources, _eventBus);
 
@@ -147,17 +155,44 @@ namespace MathHorde.Presentation.Bootstrap
             AppStateMachine.Fire(AppTrigger.LevelSelected);
 
             _session.StartSession(level, weapon, enemyCatalog, _seed);
+            // F3-12 supplies the real director/configuration/presenters here.
+            // Resource initialization must precede this external startup gate.
+            var preparation = _mathEventDirector.PrepareUpcomingEvents(clock.GameTime);
+            _mathPreparedAtStartup = preparation.IsSuccess;
+            ReportMathPreparation(preparation);
         }
 
         private void Update()
         {
             float deltaTime = Time.deltaTime;
-            _session?.Tick(deltaTime);
+            if (_mathPreparedAtStartup && _session != null && _session.IsRunning && !_clock.IsPaused)
+            {
+                var preparation = _mathEventDirector.PrepareUpcomingEvents(_clock.GameTime);
+                _session.Tick(deltaTime);
+                // RenderPending and analytics materialization attach here in F3-12.
+                ReportMathPreparation(preparation);
+            }
             _autosave?.Tick(deltaTime);
+        }
+
+        private void ReportMathPreparation(Result<bool> preparation)
+        {
+            string error = _pendingMathPreparationError ?? (preparation.IsSuccess ? null : preparation.ErrorCode);
+            _pendingMathPreparationError = null;
+            if (error != null && error != LastMathPreparationError) Debug.LogError(error, this);
+            LastMathPreparationError = error;
+        }
+
+        private void HandleMathPreparationFailed(MathHorde.GameLogic.Events.MathEventPreparationFailed failure)
+        {
+            // Synchronous Tick callback: retain only immutable metadata. Log/UI
+            // work is deferred until the session Tick has returned.
+            _pendingMathPreparationError = failure.ErrorCode;
         }
 
         private void OnDestroy()
         {
+            _eventBus?.Unsubscribe<MathHorde.GameLogic.Events.MathEventPreparationFailed>(HandleMathPreparationFailed);
             if (_hud != null)
             {
                 _hud.PauseRequested -= HandlePauseRequested;

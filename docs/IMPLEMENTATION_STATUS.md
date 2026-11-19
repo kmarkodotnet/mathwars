@@ -1,14 +1,21 @@
 # IMPLEMENTATION_STATUS.md — Math Horde
 
-Utolsó frissítés: **2026-11-19** · Aktuális fázis: **F2 — matematikai alapmotor, folyamatban**
+Utolsó frissítés: **2026-11-19** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
 
 Az aktuális feladatonkénti állapotot a [generált backlog](backlog.md) tartalmazza.
-A megszakadt **F2-10 elkészült**: szerkeszthető tízszintes nehézségtábla,
-immutable Core `DifficultyProfile`, repository-fordítás és készségszűrés.
-A teljes `scripts/test.ps1 -Full` kapu eredménye: **.NET 530/530,
-Unity EditMode 529/529, Unity PlayMode 225/225**, mindenütt 0 hiba.
-Részletes bizonyíték: [F2-10 napló](backlog/done/F2-10.md);
-döntések és fennmaradó integrációs feladatok: [ADR-012](decisions/ADR-012.md).
+**F3-02 elkészült**: determinisztikus `MathEventDirector`, külső Prepare,
+snapshotfüggő és allokációmentes resource Bind, carrier-mozgás, deadline,
+idempotens feloldási parancs és jutalomfeldolgozási visszajelzés.
+A teljes `scripts/test.ps1 -Full` kapu eredménye: **.NET 750/750,
+Unity EditMode 749/749, Unity PlayMode 227/227**, mindenütt 0 hiba.
+Tízezer resource gate 110 000 bindingja átment az offline validátoron;
+a két valódi directoros PlayMode teszt alatt a harc folyamatos maradt.
+Részletes bizonyíték: [F3-02 napló](backlog/done/F3-02.md),
+elfogadott életciklus: [ADR-015](decisions/ADR-015.md).
+A scene teljes feloldási/jutalom/presenter/analitikai bekötése **F3-12**;
+a Bootstrapben az előkészítési és Tick utáni diagnosztikai hívási hely készült el.
+Az F1 SO-adatok teljes snapshot-lefedettsége nem automatikus: az inkompatibilis
+profil/Max pár őszinte `GENERATION_EXHAUSTED` hibát ad; az assetintegráció F3-07/F3-12.
 
 > Az alábbi 0–7. szakasz a **2026-11-16-i F0-átadás történeti pillanatképe**.
 > Az ottani feladatszámok, hiánylisták és következő lépések nem a jelenlegi

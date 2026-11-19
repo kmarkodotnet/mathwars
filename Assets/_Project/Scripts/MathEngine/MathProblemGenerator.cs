@@ -16,7 +16,7 @@ namespace MathHorde.MathEngine
     /// Batch item zero replays Generate(request); later items use independent
     /// derived seeds, so prefetch size and failed items cannot shift a prefix.
     /// </summary>
-    public sealed class MathProblemGenerator : IMathProblemGenerator
+    public sealed partial class MathProblemGenerator : IMathProblemGenerator
     {
         private const int AttemptsPerStage = 16;
         private readonly IExpressionGenerator _expressions;
