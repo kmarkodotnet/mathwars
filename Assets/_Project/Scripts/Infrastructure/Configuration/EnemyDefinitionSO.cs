@@ -39,9 +39,6 @@ namespace MathHorde.Infrastructure.Configuration
         [Range(0.0f, 10.0f)]
         [SerializeField] private float _attackCooldownSeconds = 1.0f;
 
-        [Tooltip("Lőszer-visszatérítés kill-enként (ApplyCombatReward(Ammo, ..., \"KILL_REFUND\")), nem pontszám.")]
-        [Range(0, 1000)]
-        [SerializeField] private int _rewardValue = 1;
 
         [SerializeField] private GameObject _prefab;
 
@@ -61,7 +58,6 @@ namespace MathHorde.Infrastructure.Configuration
         public float MovementSpeed => _movementSpeed;
         public int ContactDamage => _contactDamage;
         public float AttackCooldownSeconds => _attackCooldownSeconds;
-        public int RewardValue => _rewardValue;
         public GameObject Prefab => _prefab;
         public Color TintColor => _tintColor;
         public float ScaleMultiplier => _scaleMultiplier;
@@ -78,7 +74,6 @@ namespace MathHorde.Infrastructure.Configuration
             ConfigValidation.RequireRange(errors, nameof(MovementSpeed), _movementSpeed, 0.1f, 20.0f);
             ConfigValidation.RequireRange(errors, nameof(ContactDamage), _contactDamage, 0, 1000);
             ConfigValidation.RequireRange(errors, nameof(AttackCooldownSeconds), _attackCooldownSeconds, 0.0f, 10.0f);
-            ConfigValidation.RequireRange(errors, nameof(RewardValue), _rewardValue, 0, 1000);
             ConfigValidation.RequireRange(errors, nameof(ScaleMultiplier), _scaleMultiplier, 0.2f, 5.0f);
             ConfigValidation.RequireRange(errors, nameof(SpawnGroupSize), _spawnGroupSize, 1, 8);
 

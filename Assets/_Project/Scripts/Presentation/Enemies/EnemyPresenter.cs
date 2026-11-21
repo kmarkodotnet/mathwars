@@ -3,7 +3,7 @@
 // EnemyDamaged/EnemyKilled, contract game-logic.md 1.) and maps them to
 // pooled EnemyView instances. Purely visual: it never decides whether an
 // enemy is alive, how much health it has, or what it is worth — it only
-// reads the InstanceId/EnemyId/Position/RewardValue fields the event already
+// reads the InstanceId/EnemyId/Position fields the event already
 // carries and reflects them on screen (unity-ui skill: "a Presenter csak
 // vizuális állapotot állít be").
 //

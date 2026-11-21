@@ -68,3 +68,8 @@ is látható marad a kérdés. A 9:16 és 9:19.5 Safe Area elrendezést és a TM
 túlcsordulását automatikus geometriai ellenőrzés igazolja. A helyi batch-render
 korlátja miatt ez nem szín- vagy valós eszközös K jóváhagyás; az a végső
 scene-kompozícióval együtt manuálisan ellenőrizendő.
+
+F1-20-ban a pozitív fixture-ök nem-ammo erőforrásra migráltak. Az Ammo-t tartalmazó
+legacy esemény és beágyazott lane-jutalom a rajzolás előtt elutasított; a folyamatos
+tüzelés/sebzés és a korábbi snapshot/időzítés/G4 elvárások a friss teljes kapuban zöldek.
+[F1-20 bizonyíték](TESTING.md#f1-20-friss-migrációs-bizonyíték--2026-11-21).

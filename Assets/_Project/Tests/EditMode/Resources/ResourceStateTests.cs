@@ -12,7 +12,7 @@ namespace MathHorde.Tests.EditMode.Resources
         {
             var state = new ResourceState(new Dictionary<ResourceType, ResourcePool>());
 
-            Assert.That(state.GetCurrent(ResourceType.Ammo), Is.EqualTo(0));
+            Assert.That(state.GetCurrent(ResourceType.Health), Is.EqualTo(0));
         }
 
         [Test]
@@ -20,31 +20,31 @@ namespace MathHorde.Tests.EditMode.Resources
         {
             var state = new ResourceState(new Dictionary<ResourceType, ResourcePool>());
 
-            Assert.That(state.GetMax(ResourceType.Ammo), Is.EqualTo(0));
+            Assert.That(state.GetMax(ResourceType.Health), Is.EqualTo(0));
         }
 
         [Test]
         public void WithPool_ReturnsNewInstance_OriginalStateUnchanged()
         {
             var original = new ResourceState(new Dictionary<ResourceType, ResourcePool>());
-            var updatedPool = new ResourcePool(ResourceType.Ammo, current: 50, max: 200, min: 0);
+            var updatedPool = new ResourcePool(ResourceType.Health, current: 50, max: 200, min: 0);
 
             var updated = original.WithPool(updatedPool);
 
-            Assert.That(original.GetCurrent(ResourceType.Ammo), Is.EqualTo(0));
-            Assert.That(updated.GetCurrent(ResourceType.Ammo), Is.EqualTo(50));
+            Assert.That(original.GetCurrent(ResourceType.Health), Is.EqualTo(0));
+            Assert.That(updated.GetCurrent(ResourceType.Health), Is.EqualTo(50));
         }
 
         [Test]
         public void WithPool_ReplacesExistingTypeEntry()
         {
-            var initialPool = new ResourcePool(ResourceType.Ammo, current: 20, max: 200, min: 0);
-            var state = new ResourceState(new Dictionary<ResourceType, ResourcePool> { [ResourceType.Ammo] = initialPool });
+            var initialPool = new ResourcePool(ResourceType.Health, current: 20, max: 200, min: 0);
+            var state = new ResourceState(new Dictionary<ResourceType, ResourcePool> { [ResourceType.Health] = initialPool });
 
-            var replacedPool = new ResourcePool(ResourceType.Ammo, current: 33, max: 200, min: 0);
+            var replacedPool = new ResourcePool(ResourceType.Health, current: 33, max: 200, min: 0);
             var updated = state.WithPool(replacedPool);
 
-            Assert.That(updated.GetCurrent(ResourceType.Ammo), Is.EqualTo(33));
+            Assert.That(updated.GetCurrent(ResourceType.Health), Is.EqualTo(33));
             Assert.That(updated.Pools.Count, Is.EqualTo(1));
         }
     }

@@ -56,7 +56,7 @@ namespace MathHorde.Tests.PlayMode.Integration
         }
 
         [UnityTest]
-        public IEnumerator CriterionA_EnemySpawns_PlayerAutoFires_AmmoDepletes_EnemyIsDamaged()
+        public IEnumerator CriterionA_EnemySpawns_PlayerAutoFires_SustainsFireWithoutAmmoPool_EnemyIsDamaged()
         {
             SceneManager.LoadScene(SceneName, LoadSceneMode.Single);
             yield return null;
@@ -80,16 +80,16 @@ namespace MathHorde.Tests.PlayMode.Integration
             bootstrap.Events.Subscribe<EnemyDamaged>(OnDamaged);
             bootstrap.Events.Subscribe<EnemyKilled>(OnKilled);
 
-            int startingAmmo = bootstrap.Resources.GetCurrent(ResourceType.Ammo);
+            Assert.That(bootstrap.Resources.State.Pools.ContainsKey(ResourceType.Ammo), Is.False);
 
             float deadline = Time.realtimeSinceStartup + 10f;
             while (Time.realtimeSinceStartup < deadline
-                   && !(spawnedCount > 0 && firedCount > 0 && damagedCount > 0))
+                   && !(spawnedCount > 0 && firedCount >= 6 && damagedCount > 0 && killedCount > 0))
             {
                 yield return null;
             }
 
-            int ammoAfter = bootstrap.Resources.GetCurrent(ResourceType.Ammo);
+            Assert.That(bootstrap.Resources.State.Pools.ContainsKey(ResourceType.Ammo), Is.False);
 
             bootstrap.Events.Unsubscribe<EnemySpawned>(OnSpawned);
             bootstrap.Events.Unsubscribe<WeaponFired>(OnFired);
@@ -99,7 +99,12 @@ namespace MathHorde.Tests.PlayMode.Integration
             Assert.That(spawnedCount, Is.GreaterThan(0), "Nem spawnolt ellenség a valós scene-ben (WaveDirector -> CombatService).");
             Assert.That(firedCount, Is.GreaterThan(0), "A karakter nem tüzelt automatikusan a szemből érkező ellenségre.");
             Assert.That(damagedCount + killedCount, Is.GreaterThan(0), "Egyetlen ellenség sem sebződött/halt meg — a lövés nem ért célba.");
-            Assert.That(ammoAfter, Is.LessThan(startingAmmo), "A lőszernek fogynia kell a tüzeléssel (kritérium A).");
+            Assert.That(firedCount, Is.GreaterThanOrEqualTo(6));
+            Assert.That(killedCount, Is.GreaterThan(0));
+            var hud = Object.FindAnyObjectByType<MathHorde.Presentation.Hud.GameplayHUD>();
+            Assert.That(hud, Is.Not.Null);
+            Assert.That(hud.transform.Find("SafeAreaRoot/StatsPanel/AmmoRow"), Is.Null);
+            Assert.That(bootstrap.Resources.GetMax(ResourceType.Shield), Is.EqualTo(50));
             Assert.That(bootstrap.Combat.IsPlayerAlive, Is.True, "A játékosnak életben kell maradnia ennyi idő alatt.");
         }
 
@@ -117,19 +122,22 @@ namespace MathHorde.Tests.PlayMode.Integration
             var bootstrap = Object.FindAnyObjectByType<GameplaySessionBootstrap>();
             Assert.That(bootstrap, Is.Not.Null);
 
-            int startingAmmo = bootstrap.Resources.GetCurrent(ResourceType.Ammo);
+            int firedCount = 0;
+            void OnFired(WeaponFired e) => firedCount++;
+            bootstrap.Events.Subscribe<WeaponFired>(OnFired);
+            int startingShots = firedCount;
 
             // Várjunk, amíg a harc TÉNYLEGESEN fogyaszt lőszert — enélkül a
             // "szünetben nem változik" állítás üresen is igaz lenne.
             float runningDeadline = Time.realtimeSinceStartup + 10f;
             while (Time.realtimeSinceStartup < runningDeadline
-                   && bootstrap.Resources.GetCurrent(ResourceType.Ammo) >= startingAmmo)
+                   && firedCount <= startingShots)
             {
                 yield return null;
             }
 
-            int ammoBeforePause = bootstrap.Resources.GetCurrent(ResourceType.Ammo);
-            Assert.That(ammoBeforePause, Is.LessThan(startingAmmo), "Ez az előfeltétel: a harcnak ténylegesen fogyasztania kellett lőszert szünet előtt.");
+            int shotsBeforePause = firedCount;
+            Assert.That(shotsBeforePause, Is.GreaterThan(startingShots), "Ez az előfeltétel: a harcnak ténylegesen fogyasztania kellett lőszert szünet előtt.");
 
             bootstrap.AppStateMachine.Fire(AppTrigger.PausePressed);
             Assert.That(bootstrap.AppStateMachine.Current, Is.EqualTo(AppState.Pause));
@@ -139,12 +147,16 @@ namespace MathHorde.Tests.PlayMode.Integration
                 yield return null;
             }
 
-            int ammoAfterPauseWait = bootstrap.Resources.GetCurrent(ResourceType.Ammo);
-            Assert.That(ammoAfterPauseWait, Is.EqualTo(ammoBeforePause),
+            int shotsAfterPauseWait = firedCount;
+            Assert.That(shotsAfterPauseWait, Is.EqualTo(shotsBeforePause),
                 "Szünetben a lőszer (és így a harci szimuláció) nem változhat — a GameSessionService.Pause() valóban megállította.");
 
             bootstrap.AppStateMachine.Fire(AppTrigger.ResumePressed);
             Assert.That(bootstrap.AppStateMachine.Current, Is.EqualTo(AppState.Gameplay));
+            float resumeDeadline = Time.realtimeSinceStartup + 3;
+            while (Time.realtimeSinceStartup < resumeDeadline && firedCount == shotsBeforePause) yield return null;
+            Assert.That(firedCount, Is.GreaterThan(shotsBeforePause));
+            bootstrap.Events.Unsubscribe<WeaponFired>(OnFired);
         }
     }
 }

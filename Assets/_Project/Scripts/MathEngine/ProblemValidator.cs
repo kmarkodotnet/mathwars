@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MathHorde.Core.Common;
 using MathHorde.Core.Expressions;
 using MathHorde.Core.Problems;
+using MathHorde.Core.Resources;
 using MathHorde.Core.Skills;
 
 namespace MathHorde.MathEngine
@@ -38,6 +39,8 @@ namespace MathHorde.MathEngine
             if (profile == null) throw new ArgumentNullException(nameof(profile));
 
             var issues = new List<ValidationIssue>();
+            string rewardError = ResourceRules.ValidateRewardPair(problem.Reward.Resource, problem.Reward.Resource);
+            if (rewardError != null) Add(issues, rewardError, "Ammunition is not mathematical content.");
             var evaluation = new EvaluationOptions
             {
                 AllowNegativeIntermediate = true,

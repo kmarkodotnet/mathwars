@@ -2,7 +2,7 @@ using MathHorde.Core.Common;
 
 namespace MathHorde.GameLogic.Events
 {
-    /// <summary>Contract game-logic.md 1. Emitted by the (future, F1-06) CombatService.</summary>
+    /// <summary>Contract game-logic.md 1. Emitted by CombatService.</summary>
     public readonly struct EnemyDamaged : IGameEvent
     {
         public int EnemyInstanceId { get; }
@@ -19,24 +19,22 @@ namespace MathHorde.GameLogic.Events
         }
     }
 
-    /// <summary>Contract game-logic.md 1. Emitted by the (future, F1-06) CombatService.</summary>
+    /// <summary>Contract game-logic.md 1. Emitted by CombatService.</summary>
     public readonly struct EnemyKilled : IGameEvent
     {
         public int EnemyInstanceId { get; }
         public string EnemyId { get; }
-        public int RewardValue { get; }
         public double GameTime { get; }
 
-        public EnemyKilled(int enemyInstanceId, string enemyId, int rewardValue, double gameTime)
+        public EnemyKilled(int enemyInstanceId, string enemyId, double gameTime)
         {
             EnemyInstanceId = enemyInstanceId;
             EnemyId = enemyId;
-            RewardValue = rewardValue;
             GameTime = gameTime;
         }
     }
 
-    /// <summary>Contract game-logic.md 1. Emitted by the (future, F1-06) CombatService.</summary>
+    /// <summary>Contract game-logic.md 1. Emitted by CombatService.</summary>
     public readonly struct EnemyReachedPlayer : IGameEvent
     {
         public int EnemyInstanceId { get; }
@@ -51,33 +49,24 @@ namespace MathHorde.GameLogic.Events
         }
     }
 
-    /// <summary>Contract game-logic.md 1. Emitted by the (future, F1-06) CombatService.</summary>
+    /// <summary>Contract game-logic.md 1. Emitted by CombatService.</summary>
     public readonly struct WeaponFired : IGameEvent
     {
         public int TargetEnemyInstanceId { get; }
-        public int AmmoUsed { get; }
+        public string WeaponId { get; }
+        public int Damage { get; }
         public double GameTime { get; }
 
-        public WeaponFired(int targetEnemyInstanceId, int ammoUsed, double gameTime)
+        public WeaponFired(int targetEnemyInstanceId, string weaponId, int damage, double gameTime)
         {
             TargetEnemyInstanceId = targetEnemyInstanceId;
-            AmmoUsed = ammoUsed;
+            WeaponId = weaponId;
+            Damage = damage;
             GameTime = gameTime;
         }
     }
 
-    /// <summary>Contract game-logic.md 1. Emitted by the (future, F1-06) CombatService when there is no ammo.</summary>
-    public readonly struct WeaponDryFire : IGameEvent
-    {
-        public double GameTime { get; }
-
-        public WeaponDryFire(double gameTime)
-        {
-            GameTime = gameTime;
-        }
-    }
-
-    /// <summary>Contract game-logic.md 1. Emitted by the (future, F1-06) CombatService.</summary>
+    /// <summary>Contract game-logic.md 1. Emitted by CombatService.</summary>
     public readonly struct PlayerDamaged : IGameEvent
     {
         public int Damage { get; }
@@ -92,7 +81,7 @@ namespace MathHorde.GameLogic.Events
         }
     }
 
-    /// <summary>Contract game-logic.md 1. Emitted by the (future, F1-06) CombatService.</summary>
+    /// <summary>Contract game-logic.md 1. Emitted by CombatService.</summary>
     public readonly struct PlayerLaneChanged : IGameEvent
     {
         public LaneIndex From { get; }

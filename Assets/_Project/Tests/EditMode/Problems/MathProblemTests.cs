@@ -52,7 +52,7 @@ namespace MathHorde.Tests.EditMode.Problems
                 difficultyLevel: difficultyLevel,
                 skillTags: skillTags ?? new[] { SkillTag.Multiplication },
                 thinkTimeSeconds: thinkTimeSeconds,
-                reward: new RewardSpec(ResourceType.Ammo, 30, useSnapshotDelta: false),
+                reward: new RewardSpec(ResourceType.Health, 30, useSnapshotDelta: false),
                 seed: 12345,
                 goal: goal,
                 targetValue: targetValue,
@@ -162,7 +162,7 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(
                 () => new MathProblem(
                     new MathProblemId(Guid.NewGuid()), ProblemType.AnswerLaneSelection, null, "x", new EvaluationResult(1),
-                    SampleOptions(), 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Ammo, 1, false), 1,
+                    SampleOptions(), 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Health, 1, false), 1,
                     GateGoal.Maximize, null, null),
                 Throws.TypeOf<ArgumentNullException>());
         }
@@ -173,7 +173,7 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(
                 () => new MathProblem(
                     new MathProblemId(Guid.NewGuid()), ProblemType.AnswerLaneSelection, SampleExpression(), "x", new EvaluationResult(1),
-                    null, 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Ammo, 1, false), 1,
+                    null, 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Health, 1, false), 1,
                     GateGoal.Maximize, null, null),
                 Throws.TypeOf<ArgumentNullException>());
         }
@@ -184,7 +184,7 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(
                 () => new MathProblem(
                     new MathProblemId(Guid.NewGuid()), ProblemType.AnswerLaneSelection, SampleExpression(), "x", new EvaluationResult(1),
-                    SampleOptions(), 1, null, 1f, new RewardSpec(ResourceType.Ammo, 1, false), 1,
+                    SampleOptions(), 1, null, 1f, new RewardSpec(ResourceType.Health, 1, false), 1,
                     GateGoal.Maximize, null, null),
                 Throws.TypeOf<ArgumentNullException>());
         }
@@ -206,7 +206,7 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(
                 () => new MathProblem(
                     new MathProblemId(Guid.NewGuid()), ProblemType.AnswerLaneSelection, SampleExpression(), null, new EvaluationResult(1),
-                    SampleOptions(), 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Ammo, 1, false), 1,
+                    SampleOptions(), 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Health, 1, false), 1,
                     GateGoal.Maximize, null, null),
                 Throws.TypeOf<ArgumentNullException>());
         }

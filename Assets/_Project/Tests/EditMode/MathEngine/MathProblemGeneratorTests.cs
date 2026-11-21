@@ -332,7 +332,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
         {
             bool gate = type == ProblemType.ResourceOperationComparison;
             bool unknown = type == ProblemType.MissingOperand || type == ProblemType.EquationSolving;
-            var resource = gate && goal == GateGoal.Minimize ? ResourceType.EnemyArmor : ResourceType.Ammo;
+            var resource = gate && goal == GateGoal.Minimize ? ResourceType.EnemyArmor : ResourceType.Health;
             return new ProblemGenerationRequest
             {
                 Seed = seed, Type = type,

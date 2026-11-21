@@ -17,7 +17,6 @@ MonoBehaviour:
   _enemyDamageMultiplier: 1
   _waveSizeMultiplier: 1
   _spawnRateMultiplier: 1
-  _ammoConsumptionMultiplier: 1
   _maxWaveGapSeconds: 2
   _playerLaneChangeSpeed: 10
   _enemyDespawnDepth: -2

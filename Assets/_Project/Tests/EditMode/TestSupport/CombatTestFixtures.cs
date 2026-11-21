@@ -13,8 +13,6 @@ namespace MathHorde.Tests.EditMode.TestSupport
     {
         public static LevelDefinition BuildLevel(
             int laneCount = 3,
-            int startingAmmo = 20,
-            int maxAmmo = 200,
             int startingHealth = 100,
             int maxHealth = 100,
             int startingShield = 0,
@@ -34,8 +32,6 @@ namespace MathHorde.Tests.EditMode.TestSupport
                 waves: waves,
                 mathEvents: mathEvents,
                 bossEnemyId: bossEnemyId,
-                startingAmmo: startingAmmo,
-                maxAmmo: maxAmmo,
                 startingHealth: startingHealth,
                 maxHealth: maxHealth,
                 startingShield: startingShield,
@@ -49,11 +45,10 @@ namespace MathHorde.Tests.EditMode.TestSupport
             int damage = 10,
             float fireRate = 10f,
             float range = 20f,
-            int ammoPerShot = 1,
             float projectileSpeed = 0f,
             TargetingMode targetingMode = TargetingMode.OwnLaneThenAdjacent)
         {
-            return new WeaponDefinition(weaponId, damage, fireRate, range, ammoPerShot, projectileSpeed, targetingMode, "fx_basic");
+            return new WeaponDefinition(weaponId, damage, fireRate, range, projectileSpeed, targetingMode, "fx_basic");
         }
 
         public static EnemyDefinition BuildEnemy(
@@ -62,10 +57,9 @@ namespace MathHorde.Tests.EditMode.TestSupport
             int maxHealth = 10,
             float movementSpeed = 1f,
             int contactDamage = 5,
-            float attackCooldownSeconds = 1f,
-            int rewardValue = 1)
+            float attackCooldownSeconds = 1f)
         {
-            return new EnemyDefinition(enemyId, type, maxHealth, movementSpeed, contactDamage, attackCooldownSeconds, rewardValue, "prefab_" + enemyId);
+            return new EnemyDefinition(enemyId, type, maxHealth, movementSpeed, contactDamage, attackCooldownSeconds, "prefab_" + enemyId);
         }
 
         public static IReadOnlyDictionary<string, EnemyDefinition> BuildCatalog(params EnemyDefinition[] enemies)

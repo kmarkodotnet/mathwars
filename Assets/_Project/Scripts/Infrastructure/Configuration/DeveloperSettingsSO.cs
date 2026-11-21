@@ -26,9 +26,6 @@ namespace MathHorde.Infrastructure.Configuration
         [Range(0, 10)]
         [SerializeField] private int _forceChallengeLevel;
 
-        [Tooltip("-1 = nincs kényszerítés.")]
-        [Range(-1, 999)]
-        [SerializeField] private int _forceAmmo = -1;
 
         [Tooltip("-1 = nincs kényszerítés.")]
         [Range(-1, 999)]
@@ -41,7 +38,6 @@ namespace MathHorde.Infrastructure.Configuration
         [SerializeField] private int _forceSeed;
 
         [SerializeField] private bool _godMode;
-        [SerializeField] private bool _infiniteAmmo;
 
         [Range(0.1f, 5.0f)]
         [SerializeField] private float _timeScale = 1.0f;
@@ -54,7 +50,6 @@ namespace MathHorde.Infrastructure.Configuration
 
         public bool EnableDevTools => _enableDevTools;
         public int ForceChallengeLevel => _forceChallengeLevel;
-        public int ForceAmmo => _forceAmmo;
         public int ForceHealth => _forceHealth;
 
         public ProblemType? ForceNextProblemType =>
@@ -62,7 +57,6 @@ namespace MathHorde.Infrastructure.Configuration
 
         public int ForceSeed => _forceSeed;
         public bool GodMode => _godMode;
-        public bool InfiniteAmmo => _infiniteAmmo;
         public float TimeScale => _timeScale;
         public int SkipToWaveIndex => _skipToWaveIndex;
         public bool ShowDebugOverlay => _showDebugOverlay;
@@ -73,7 +67,6 @@ namespace MathHorde.Infrastructure.Configuration
             var errors = new List<string>();
 
             ConfigValidation.RequireRange(errors, nameof(ForceChallengeLevel), _forceChallengeLevel, 0, 10);
-            ConfigValidation.RequireRange(errors, nameof(ForceAmmo), _forceAmmo, -1, 999);
             ConfigValidation.RequireRange(errors, nameof(ForceHealth), _forceHealth, -1, 999);
             ConfigValidation.RequireRange(errors, nameof(TimeScale), _timeScale, 0.1f, 5.0f);
             ConfigValidation.RequireRange(errors, nameof(SkipToWaveIndex), _skipToWaveIndex, 0, 49);

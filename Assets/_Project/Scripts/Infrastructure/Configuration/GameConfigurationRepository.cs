@@ -117,8 +117,7 @@ namespace MathHorde.Infrastructure.Configuration
                     combatBalance.EnemySpeedMultiplier,
                     combatBalance.EnemyHealthMultiplier,
                     combatBalance.EnemyDamageMultiplier,
-                    combatBalance.SpawnRateMultiplier,
-                    combatBalance.AmmoConsumptionMultiplier);
+                    combatBalance.SpawnRateMultiplier);
                 _hasCombatModifiers = true;
             }
         }
@@ -298,7 +297,6 @@ namespace MathHorde.Infrastructure.Configuration
                     movementSpeed: asset.MovementSpeed,
                     contactDamage: asset.ContactDamage,
                     attackCooldownSeconds: asset.AttackCooldownSeconds,
-                    rewardValue: asset.RewardValue,
                     // No PrefabKey field exists on EnemyDefinitionSO (it carries a direct
                     // Prefab reference for the editor instead) — EnemyId already IS the
                     // catalog key Presentation resolves against (EnemyVisualCatalogSO,
@@ -346,7 +344,6 @@ namespace MathHorde.Infrastructure.Configuration
                     damage: asset.Damage,
                     fireRate: asset.FireRate,
                     range: asset.Range,
-                    ammoPerShot: asset.AmmoPerShot,
                     projectileSpeed: asset.ProjectileSpeed,
                     targetingMode: asset.TargetingMode,
                     visualEffectKey: asset.MuzzleEffectKey);
@@ -444,8 +441,6 @@ namespace MathHorde.Infrastructure.Configuration
                     waves: waves,
                     mathEvents: asset.MathEvents.Select(entry => entry.ToDomain()).ToArray(),
                     bossEnemyId: null,
-                    startingAmmo: asset.StartingAmmo,
-                    maxAmmo: asset.MaxAmmo,
                     startingHealth: asset.StartingHealth,
                     maxHealth: asset.MaxHealth,
                     startingShield: asset.StartingShield,

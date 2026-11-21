@@ -1,6 +1,6 @@
 // GameplayHUD.cs
-// F1-15 — the always-on combat HUD (math-horde.md 3.2): health, ammo,
-// shield, wave/pálya, pause button. Thin MonoBehaviour shell around
+// F1-15 / ADR-017 — the always-on combat HUD: health, shield,
+// wave/level and pause button. Thin MonoBehaviour shell around
 // GameplayHudModel — this class only wires Canvas/TMP references to model
 // values and forwards the pause button tap; it makes no gameplay decisions
 // (unity-ui skill). The math-question/challenge-level areas are
@@ -25,10 +25,6 @@ namespace MathHorde.Presentation.Hud
         [Header("Élet")]
         [SerializeField] private TMP_Text _healthLabelText;
         [SerializeField] private TMP_Text _healthValueText;
-
-        [Header("Lőszer")]
-        [SerializeField] private TMP_Text _ammoLabelText;
-        [SerializeField] private TMP_Text _ammoValueText;
 
         [Header("Pajzs (elrejtve, ha a pályán nincs pajzs-mechanika)")]
         [SerializeField] private GameObject _shieldGroup;
@@ -114,7 +110,6 @@ namespace MathHorde.Presentation.Hud
         private void RefreshStaticLabels()
         {
             SetText(_healthLabelText, _model.HealthLabel);
-            SetText(_ammoLabelText, _model.AmmoLabel);
             SetText(_shieldLabelText, _model.ShieldLabel);
             SetText(_pauseButtonText, _model.PauseLabel);
         }
@@ -123,7 +118,6 @@ namespace MathHorde.Presentation.Hud
         {
             _resourceService = resourceService;
             RefreshValueFor(ResourceType.Health);
-            RefreshValueFor(ResourceType.Ammo);
             RefreshValueFor(ResourceType.Shield);
 
             SetText(_waveText, _model.WaveText);
@@ -136,9 +130,6 @@ namespace MathHorde.Presentation.Hud
             {
                 case ResourceType.Health:
                     SetText(_healthValueText, _model.HealthValueText);
-                    break;
-                case ResourceType.Ammo:
-                    SetText(_ammoValueText, _model.AmmoValueText);
                     break;
                 case ResourceType.Shield:
                     SetText(_shieldValueText, _model.ShieldValueText);

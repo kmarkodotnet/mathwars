@@ -336,7 +336,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             expr = expr ?? DefaultExpression();
             return new MathProblem(new MathProblemId(new Guid("08080808-0808-0808-0808-080808080808")), type,
                 expr, expr.ToDisplayString(), answer ?? new EvaluationResult(50), options ?? Options(50, 1, 48, 50, 53), 4,
-                tags ?? new SkillClassifier().Classify(expr, type), thinkTime, new RewardSpec(ResourceType.Ammo, 0, type == ProblemType.ResourceOperationComparison, 0),
+                tags ?? new SkillClassifier().Classify(expr, type), thinkTime, new RewardSpec(ResourceType.Health, 0, type == ProblemType.ResourceOperationComparison, 0),
                 seed, goal, target, null, capacity);
         }
 

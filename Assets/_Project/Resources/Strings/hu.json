@@ -1,6 +1,5 @@
 {
   "hud.health": "Életerő",
-  "hud.ammo": "Lőszer",
   "hud.shield": "Pajzs",
   "hud.wave": "{0}. hullám",
   "hud.level": "{0}. pálya",
@@ -14,7 +13,6 @@
   "result.nextLevel": "Következő pálya",
   "result.backToWorlds": "Vissza a világokhoz",
   "gate.resource.Health": "Életerő",
-  "gate.resource.Ammo": "Lőszer",
   "gate.resource.Shield": "Pajzs",
   "gate.resource.EnemyArmor": "Páncél",
   "gate.resource.Energy": "Energia",

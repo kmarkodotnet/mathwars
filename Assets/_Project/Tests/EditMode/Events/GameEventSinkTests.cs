@@ -31,12 +31,12 @@ namespace MathHorde.Tests.EditMode.Events
             var sink = new RecordingGameEventSink();
 
             sink.Publish(new WaveStarted(0, 0.0));
-            sink.Publish(new EnemyKilled(enemyInstanceId: 7, enemyId: "basic_bot", rewardValue: 5, gameTime: 1.0));
-            sink.Publish(new WeaponDryFire(gameTime: 2.0));
+            sink.Publish(new EnemyKilled(enemyInstanceId: 7, enemyId: "basic_bot", gameTime: 1.0));
+            sink.Publish(new WeaponFired(1, "weapon", 5, gameTime: 2.0));
 
             Assert.That(sink.PublishedCount, Is.EqualTo(3));
             Assert.That(sink.OfType<EnemyKilled>().Count, Is.EqualTo(1));
-            Assert.That(sink.OfType<WeaponDryFire>().Count, Is.EqualTo(1));
+            Assert.That(sink.OfType<WeaponFired>().Count, Is.EqualTo(1));
             Assert.That(sink.OfType<WaveCleared>(), Is.Empty);
         }
 

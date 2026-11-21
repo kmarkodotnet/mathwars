@@ -1,6 +1,6 @@
 # Math Horde — Feladatlista (backlog index)
 
-> **Állapot (2026-11-19): 48 kész / 94 feladat (46 nyitott).**
+> **Állapot (2026-11-21): 49 kész / 94 feladat (45 nyitott).**
 >
 > Ez a fájl **generált index**. Minden feladat önálló fájlban él, és a fájl
 > HELYE jelzi az állapotát:
@@ -26,7 +26,7 @@
 | [F0-04](backlog/done/F0-04.md) | .gitignore, scripts/build.ps1, scripts/test.ps1, gyökér README.md a… | `mobile-build-engineer` | F0-01 | PAR | S | — | ✅ **KÉSZ** |
 | [F0-05](backlog/done/F0-05.md) | Resources/Strings/hu.json váz + ILocalizationService kulcsfeloldó | `ui-dev` | F0-02 | PAR | S | — | ✅ **KÉSZ** |
 
-## Fázis 1 — Játszható harci alap  ·  19/21 kész
+## Fázis 1 — Harci alap  ·  20/21 kész
 
 | ID | Feladat | Agent | Függ | Mód | Becs. | Krit. | Állapot |
 |---|---|---|---|---|---|---|---|
@@ -49,7 +49,7 @@
 | [F1-17](backlog/done/F1-17.md) | Gameplay scene összeállítása Editor-eszközzel (reprodukálható, nem kézi) | `gameplay-dev` | F1-08, F1-13, F1-14, F1-15 | SZEKV | M | A, K | ✅ **KÉSZ** |
 | [F1-18](backlog/done/F1-18.md) | Harci EditMode + PlayMode tesztek (spec 17.4) | `qa-unity` | F1-17 | SZEKV | M | A, F, G | ✅ **KÉSZ** |
 | [F1-19](backlog/done/F1-19.md) | TextMeshPro betűtípus és magyar glyph-lefedettség | `ui-dev` | F1-16 | PAR | S | K | ✅ **KÉSZ** |
-| [F1-20](backlog/F1-20.md) | Mindig végtelen tüzelés és az ammo teljes kivezetése a matekból | `gameplay-dev` | F1-19, F3-11 | SZEKV | XL | A, B, C, F, G, K | ⬜ nyitott |
+| [F1-20](backlog/done/F1-20.md) | Mindig végtelen tüzelés és az ammo teljes kivezetése a matekból | `gameplay-dev` | F1-19, F3-11 | SZEKV | XL | A, B, C, F, G, K | ✅ **KÉSZ** |
 | [F1-21](backlog/F1-21.md) | Valódi HUD-fegyverváltás és erősebb konfigurált típus | `gameplay-dev` | F1-20 | SZEKV | L | A, F, K | ⬜ nyitott |
 
 ## Fázis 2 — Matematikai alapmotor  ·  13/13 kész

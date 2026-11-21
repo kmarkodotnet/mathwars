@@ -174,15 +174,15 @@ public static class GameplaySceneBuilder
         EnsureFolder(EnemyConfigFolder);
 
         var basic = GetOrCreateEnemy("basic_bot", "Enemy_Basic", MathHorde.Core.Levels.EnemyType.Basic,
-            maxHealth: 10, movementSpeed: 2.0f, contactDamage: 10, rewardValue: 1, spawnGroupSize: 1);
+            maxHealth: 10, movementSpeed: 2.0f, contactDamage: 10, spawnGroupSize: 1);
         var fast = GetOrCreateEnemy("fast_bot", "Enemy_Fast", MathHorde.Core.Levels.EnemyType.Fast,
-            maxHealth: 8, movementSpeed: 4.0f, contactDamage: 8, rewardValue: 1, spawnGroupSize: 1);
+            maxHealth: 8, movementSpeed: 4.0f, contactDamage: 8, spawnGroupSize: 1);
         var armored = GetOrCreateEnemy("armored_bot", "Enemy_Armored", MathHorde.Core.Levels.EnemyType.Armored,
-            maxHealth: 30, movementSpeed: 1.0f, contactDamage: 15, rewardValue: 2, spawnGroupSize: 1);
+            maxHealth: 30, movementSpeed: 1.0f, contactDamage: 15, spawnGroupSize: 1);
         var boss = GetOrCreateEnemy("boss_bot", "Enemy_Boss", MathHorde.Core.Levels.EnemyType.Boss,
-            maxHealth: 150, movementSpeed: 1.0f, contactDamage: 25, rewardValue: 10, spawnGroupSize: 1);
+            maxHealth: 150, movementSpeed: 1.0f, contactDamage: 25, spawnGroupSize: 1);
         var swarmlet = GetOrCreateEnemy("swarmlet_bot", "Enemy_Swarmlet", MathHorde.Core.Levels.EnemyType.Swarmlet,
-            maxHealth: 1, movementSpeed: 3.0f, contactDamage: 5, rewardValue: 0, spawnGroupSize: 4);
+            maxHealth: 1, movementSpeed: 3.0f, contactDamage: 5, spawnGroupSize: 4);
 
         WeaponConfigSO weapon = GetOrCreateWeapon();
         CombatBalanceSO combatBalance = GetOrCreateCombatBalance();
@@ -196,7 +196,7 @@ public static class GameplaySceneBuilder
 
     private static EnemyDefinitionSO GetOrCreateEnemy(
         string id, string prefabFileName, MathHorde.Core.Levels.EnemyType type,
-        int maxHealth, float movementSpeed, int contactDamage, int rewardValue, int spawnGroupSize)
+        int maxHealth, float movementSpeed, int contactDamage, int spawnGroupSize)
     {
         string path = $"{EnemyConfigFolder}/{id}.asset";
         var existing = AssetDatabase.LoadAssetAtPath<EnemyDefinitionSO>(path);
@@ -214,7 +214,6 @@ public static class GameplaySceneBuilder
         SetPrivateField(enemy, "_maxHealth", maxHealth);
         SetPrivateField(enemy, "_movementSpeed", movementSpeed);
         SetPrivateField(enemy, "_contactDamage", contactDamage);
-        SetPrivateField(enemy, "_rewardValue", rewardValue);
         SetPrivateField(enemy, "_spawnGroupSize", spawnGroupSize);
         SetPrivateField(enemy, "_prefab", prefab);
 
@@ -275,12 +274,10 @@ public static class GameplaySceneBuilder
         SetPrivateField(level, "_displayNameKey", "level.w1l01.name");
         SetPrivateField(level, "_laneCount", 3); // egyezik az ArenaConfigSO alap LaneCount-jával (lásd Napló)
         SetPrivateField(level, "_targetDurationSeconds", 150f);
-        SetPrivateField(level, "_startingAmmo", 60);
-        SetPrivateField(level, "_maxAmmo", 200);
         SetPrivateField(level, "_startingHealth", 100);
         SetPrivateField(level, "_maxHealth", 100);
         SetPrivateField(level, "_startingShield", 0);
-        SetPrivateField(level, "_maxShield", 0);
+        SetPrivateField(level, "_maxShield", 50);
         SetPrivateField(level, "_weapon", weapon);
         SetPrivateField(level, "_environmentPrefab", environmentPrefab);
 
@@ -292,6 +289,22 @@ public static class GameplaySceneBuilder
         var wave1 = NewWaveDefinitionEntry(waveIndex: 1, startGameTime: 60f, duration: 60f, wave1SpawnFast, wave1SpawnArmored);
 
         SetPrivateField(level, "_waves", new List<LevelDefinitionSO.WaveDefinitionEntry> { wave0, wave1 });
+        // Match the shipped schedule's original indexes/timing. F3-12 owns the
+        // CL1/full-capacity coverage issue; this only migrates its resource data.
+        var mathEvents = new List<LevelDefinitionSO.MathEventScheduleEntry>();
+        for (int i = 0; i < 10; i++)
+        {
+            var entry = new LevelDefinitionSO.MathEventScheduleEntry();
+            bool resourceGate = i % 2 == 0;
+            SetPrivateField(entry, "_triggerGameTime", 4f + 14f * i);
+            SetPrivateField(entry, "_problemType", resourceGate
+                ? MathHorde.Core.Problems.ProblemType.ResourceOperationComparison
+                : MathHorde.Core.Problems.ProblemType.AnswerLaneSelection);
+            SetPrivateField(entry, "_rewardResource", resourceGate
+                ? MathHorde.Core.Resources.ResourceType.Shield : MathHorde.Core.Resources.ResourceType.Health);
+            mathEvents.Add(entry);
+        }
+        SetPrivateField(level, "_mathEvents", mathEvents);
 
         AssetDatabase.CreateAsset(level, LevelAssetPath);
         EditorUtility.SetDirty(level);

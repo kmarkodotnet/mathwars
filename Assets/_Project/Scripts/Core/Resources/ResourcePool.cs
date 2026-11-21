@@ -22,6 +22,7 @@ namespace MathHorde.Core.Resources
 
         public ResourcePool(ResourceType type, int current, int max, int min = 0)
         {
+            ResourceRules.RequireActive(type);
             if (min < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(min), min, "Min nem lehet negatív.");

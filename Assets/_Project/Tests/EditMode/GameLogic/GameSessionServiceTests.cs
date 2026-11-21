@@ -188,7 +188,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                     new WaveSpawnEntry("brute", count: 1, spawnIntervalSeconds: 1f, allowedLanes: new[] { new LaneIndex(0) })
                 })
             };
-            var level = CombatTestFixtures.BuildLevel(waves: waves, startingAmmo: 0, startingHealth: 10, maxHealth: 10);
+            var level = CombatTestFixtures.BuildLevel(waves: waves, startingHealth: 10, maxHealth: 10);
             var service = CreateService(level, out _, out var sink, out _, out _);
             var weapon = CombatTestFixtures.BuildWeapon(projectileSpeed: 0f);
             var brute = CombatTestFixtures.BuildEnemy(enemyId: "brute", maxHealth: 1000, contactDamage: 50, movementSpeed: 100f);
@@ -208,14 +208,14 @@ namespace MathHorde.Tests.EditMode.GameLogic
         }
 
         [Test]
-        public void Tick_AmmoDepletedAlone_DoesNotEndTheSession()
+        public void Tick_NoAmmoPool_DoesNotEndTheSession()
         {
             // spec 1.3: "a lőszer kifogyása önmagában nem vereség".
             var waves = new List<WaveDefinition>
             {
                 new WaveDefinition(0, startGameTime: 0.0, durationSeconds: 100.0)
             };
-            var level = CombatTestFixtures.BuildLevel(waves: waves, startingAmmo: 0, startingHealth: 100, maxHealth: 100);
+            var level = CombatTestFixtures.BuildLevel(waves: waves, startingHealth: 100, maxHealth: 100);
             var service = CreateService(level, out _, out _, out _, out var resourceService);
             var weapon = CombatTestFixtures.BuildWeapon();
             service.StartSession(level, weapon, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
@@ -225,7 +225,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 service.Tick(0.1f);
             }
 
-            Assert.That(resourceService.GetCurrent(ResourceType.Ammo), Is.EqualTo(0));
+            Assert.That(resourceService.State.Pools.ContainsKey(ResourceType.Ammo), Is.False);
             Assert.That(service.IsRunning, Is.True, "Lőszerhiány önmagában nem állítja meg a sessiont.");
             Assert.That(service.Result, Is.EqualTo(SessionResult.InProgress));
         }

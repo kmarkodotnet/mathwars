@@ -43,7 +43,6 @@ namespace MathHorde.Tests.EditMode.Levels
                 movementSpeed: 1.5f,
                 contactDamage: 5,
                 attackCooldownSeconds: 1.0f,
-                rewardValue: 2,
                 prefabKey: "enemy_basic");
 
             Assert.That(enemy.EnemyId, Is.EqualTo("basic_bot"));
@@ -55,7 +54,7 @@ namespace MathHorde.Tests.EditMode.Levels
         public void EnemyDefinition_NonPositiveMaxHealth_Throws(int maxHealth)
         {
             Assert.That(
-                () => new EnemyDefinition("basic_bot", EnemyType.Basic, maxHealth, 1f, 0, 0f, 0, "key"),
+                () => new EnemyDefinition("basic_bot", EnemyType.Basic, maxHealth, 1f, 0, 0f, "key"),
                 Throws.TypeOf<ArgumentOutOfRangeException>());
         }
 
@@ -63,7 +62,7 @@ namespace MathHorde.Tests.EditMode.Levels
         public void EnemyDefinition_EmptyEnemyId_Throws()
         {
             Assert.That(
-                () => new EnemyDefinition(string.Empty, EnemyType.Basic, 10, 1f, 0, 0f, 0, "key"),
+                () => new EnemyDefinition(string.Empty, EnemyType.Basic, 10, 1f, 0, 0f, "key"),
                 Throws.TypeOf<ArgumentException>());
         }
 
@@ -75,20 +74,19 @@ namespace MathHorde.Tests.EditMode.Levels
                 damage: 10,
                 fireRate: 2f,
                 range: 15f,
-                ammoPerShot: 1,
                 projectileSpeed: 0f,
                 targetingMode: TargetingMode.OwnLaneThenAdjacent,
                 visualEffectKey: "fx_basic");
 
-            Assert.That(weapon.AmmoPerShot, Is.EqualTo(1));
+            Assert.That(typeof(WeaponDefinition).GetProperty("AmmoPerShot"), Is.Null);
             Assert.That(weapon.ProjectileSpeed, Is.EqualTo(0f), "0 => hitscan, explicitly allowed by the contract.");
         }
 
         [Test]
-        public void WeaponDefinition_AmmoPerShotLessThanOne_Throws()
+        public void WeaponDefinition_NonPositiveDamage_Throws()
         {
             Assert.That(
-                () => new WeaponDefinition("w", 10, 1f, 10f, ammoPerShot: 0, projectileSpeed: 0f, TargetingMode.GlobalNearest, "fx"),
+                () => new WeaponDefinition("w", 0, 1f, 10f, projectileSpeed: 0f, TargetingMode.GlobalNearest, "fx"),
                 Throws.TypeOf<ArgumentOutOfRangeException>());
         }
 
@@ -138,9 +136,9 @@ namespace MathHorde.Tests.EditMode.Levels
         }
 
         [Test]
-        public void LevelDefinition_StartingAmmoAboveMaxAmmo_Throws()
+        public void LevelDefinition_StartingHealthAboveMaxHealth_Throws()
         {
-            Assert.That(() => BuildLevel(startingAmmo: 999, maxAmmo: 200), Throws.TypeOf<ArgumentOutOfRangeException>());
+            Assert.That(() => BuildLevel(startingHealth: 999, maxHealth: 200), Throws.TypeOf<ArgumentOutOfRangeException>());
         }
 
         [Test]
@@ -188,8 +186,8 @@ namespace MathHorde.Tests.EditMode.Levels
 
         private static LevelDefinition BuildLevel(
             int laneCount = 3,
-            int startingAmmo = 20,
-            int maxAmmo = 200,
+            int startingHealth = 100,
+            int maxHealth = 100,
             int startingShield = 0,
             int maxShield = 50)
         {
@@ -202,10 +200,8 @@ namespace MathHorde.Tests.EditMode.Levels
                 waves: null,
                 mathEvents: null,
                 bossEnemyId: null,
-                startingAmmo: startingAmmo,
-                maxAmmo: maxAmmo,
-                startingHealth: 100,
-                maxHealth: 100,
+                startingHealth: startingHealth,
+                maxHealth: maxHealth,
                 startingShield: startingShield,
                 maxShield: maxShield,
                 requiredMathAccuracy: 0f,

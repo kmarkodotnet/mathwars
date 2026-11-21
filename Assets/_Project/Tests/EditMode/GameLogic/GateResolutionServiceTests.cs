@@ -50,7 +50,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
 
             internal Fixture(ProblemType type = ProblemType.ResourceOperationComparison, int count = 1,
                 IGameEventSink sink = null, GateGoal goal = GateGoal.Maximize,
-                ResourceType resource = ResourceType.Ammo, bool decreasing = false,
+                ResourceType resource = ResourceType.Shield, bool decreasing = false,
                 ErrorCategory? distractor = ErrorCategory.OnesDigitError, int incorrectAmount = 0,
                 int seed = 7)
             {
@@ -97,7 +97,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                     else if (type == ProblemType.TargetValueSelection) targets[i] = 42;
                 }
                 Resources = new ResourceService(sink, new GameClock());
-                var level = CombatTestFixtures.BuildLevel(startingAmmo: 20, maxAmmo: 43,
+                var level = CombatTestFixtures.BuildLevel(startingShield: 20, maxShield: 43,
                     startingHealth: 20, maxHealth: 43, mathEvents: entries);
                 Resources.Initialize(level);
                 Director = new MathEventDirector(Resources, sink,
@@ -128,8 +128,8 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var f = new Fixture();
             f.Open();
             Assert.That(f.Event.Problem, Is.Null);
-            f.Resources.ApplyDelta(ResourceType.Ammo, -12, "WEAPON_FIRE");
-            f.Resources.SetMax(ResourceType.Ammo, 60, "UPGRADE");
+            f.Resources.ApplyDelta(ResourceType.Shield, -12, "WEAPON_FIRE");
+            f.Resources.SetMax(ResourceType.Shield, 60, "UPGRADE");
             var command = f.Choose();
             var result = new GateResolutionService(new EmptySink(), 1).Resolve(command, f.Event);
             Assert.That(result.Outcome, Is.EqualTo(GateResolutionOutcome.CorrectRewarded));
@@ -138,7 +138,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(result.OperationResult, Is.EqualTo(45)); // raw, not the frozen Max=43
             Assert.That(result.SnapshotValue, Is.EqualTo(20));
             Assert.That(result.RewardDelta, Is.EqualTo(25));
-            Assert.That(result.Resource, Is.EqualTo(ResourceType.Ammo));
+            Assert.That(result.Resource, Is.EqualTo(ResourceType.Shield));
             Assert.That(result.Answer.ProblemId, Is.EqualTo(f.Event.ProblemId.Value));
             Assert.That(result.Answer.SelectedOptionIndex, Is.EqualTo(1));
             Assert.That(result.Answer.SelectedLane, Is.EqualTo(new LaneIndex(0)));
@@ -147,13 +147,13 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(result.Answer.ResponseTimeSeconds, Is.EqualTo(1.25f));
             Assert.That(result.Answer.AnsweredAtGameTime, Is.EqualTo(3.25));
             Assert.That(result.Answer.TimedOut, Is.False);
-            Assert.That(f.Resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(8));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(8));
             Assert.That(f.Event.State, Is.EqualTo(MathEventState.Resolving));
             Assert.That(f.Generator.Binds, Is.EqualTo(1));
             var application = new RewardService(f.Resources, new EmptySink(), new GameClock(), 1).ApplyReward(result);
             Assert.That(application.RequestedDelta, Is.EqualTo(25));
             Assert.That(application.AppliedDelta, Is.EqualTo(25));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(33));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(33));
         }
 
         [Test]
@@ -167,7 +167,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(result.RewardDelta, Is.EqualTo(0));
             Assert.That(result.Answer.WasCorrect, Is.False);
             Assert.That(result.Answer.ErrorCategory, Is.EqualTo(ErrorCategory.Unclassified));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(20));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(20));
         }
 
         [TestCase(GateGoal.Maximize, 0, 45, 25)]

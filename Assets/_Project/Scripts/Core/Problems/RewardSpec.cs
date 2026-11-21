@@ -13,7 +13,7 @@ namespace MathHorde.Core.Problems
         public ResourceType Resource { get; }
 
         /// <summary>
-        /// Fixed amount for an AnswerLaneSelection option (e.g. +30 ammo).
+        /// Fixed amount for an AnswerLaneSelection option (e.g. +15 health).
         /// For ResourceOperationComparison this is always 0 — there the
         /// delta is computed from the resolved gate operations, not fixed
         /// here (see UseSnapshotDelta).

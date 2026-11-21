@@ -12,7 +12,6 @@ namespace MathHorde.Core.Levels
         public int Damage { get; }
         public float FireRate { get; }
         public float Range { get; }
-        public int AmmoPerShot { get; }
         public float ProjectileSpeed { get; }
         public TargetingMode TargetingMode { get; }
         public string VisualEffectKey { get; }
@@ -22,7 +21,6 @@ namespace MathHorde.Core.Levels
             int damage,
             float fireRate,
             float range,
-            int ammoPerShot,
             float projectileSpeed,
             TargetingMode targetingMode,
             string visualEffectKey)
@@ -47,10 +45,6 @@ namespace MathHorde.Core.Levels
                 throw new ArgumentOutOfRangeException(nameof(range), range, "Range > 0 kötelező.");
             }
 
-            if (ammoPerShot < 1)
-            {
-                throw new ArgumentOutOfRangeException(nameof(ammoPerShot), ammoPerShot, "AmmoPerShot >= 1 kötelező.");
-            }
 
             if (projectileSpeed < 0)
             {
@@ -61,7 +55,6 @@ namespace MathHorde.Core.Levels
             Damage = damage;
             FireRate = fireRate;
             Range = range;
-            AmmoPerShot = ammoPerShot;
             ProjectileSpeed = projectileSpeed;
             TargetingMode = targetingMode;
             VisualEffectKey = visualEffectKey;

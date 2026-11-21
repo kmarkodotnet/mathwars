@@ -7,7 +7,7 @@ namespace MathHorde.Core.Levels
     /// <summary>
     /// Contract core-domain.md 7. / spec 10., 16.
     /// Revision r2 (ADR-009): MaxShield added as its own field, mirroring the
-    /// StartingAmmo/MaxAmmo and StartingHealth/MaxHealth pairs — it is never
+    /// StartingHealth/MaxHealth pair — it is never
     /// derived from StartingShield. MaxShield == 0 means the level has no
     /// shield mechanic at all (ResourceService.Initialize then creates no
     /// Shield pool — see core-domain.md's note after invariant L4/L5).
@@ -22,8 +22,6 @@ namespace MathHorde.Core.Levels
         public IReadOnlyList<WaveDefinition> Waves { get; }
         public IReadOnlyList<MathEventScheduleEntry> MathEvents { get; }
         public string BossEnemyId { get; }
-        public int StartingAmmo { get; }
-        public int MaxAmmo { get; }
         public int StartingHealth { get; }
         public int MaxHealth { get; }
         public int StartingShield { get; }
@@ -47,8 +45,6 @@ namespace MathHorde.Core.Levels
             IReadOnlyList<WaveDefinition> waves,
             IReadOnlyList<MathEventScheduleEntry> mathEvents,
             string bossEnemyId,
-            int startingAmmo,
-            int maxAmmo,
             int startingHealth,
             int maxHealth,
             int startingShield,
@@ -66,20 +62,12 @@ namespace MathHorde.Core.Levels
                 throw new ArgumentOutOfRangeException(nameof(targetDurationSeconds), targetDurationSeconds, "TargetDurationSeconds > 0 kötelező.");
             }
 
-            if (maxAmmo <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(maxAmmo), maxAmmo, "MaxAmmo > 0 kötelező.");
-            }
 
             if (maxHealth <= 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(maxHealth), maxHealth, "MaxHealth > 0 kötelező.");
             }
 
-            if (startingAmmo < 0 || startingAmmo > maxAmmo)
-            {
-                throw new ArgumentOutOfRangeException(nameof(startingAmmo), startingAmmo, "StartingAmmo-nak 0..MaxAmmo között kell lennie.");
-            }
 
             if (startingHealth < 0 || startingHealth > maxHealth)
             {
@@ -109,8 +97,6 @@ namespace MathHorde.Core.Levels
             Waves = waves ?? Array.Empty<WaveDefinition>();
             MathEvents = mathEvents ?? Array.Empty<MathEventScheduleEntry>();
             BossEnemyId = bossEnemyId;
-            StartingAmmo = startingAmmo;
-            MaxAmmo = maxAmmo;
             StartingHealth = startingHealth;
             MaxHealth = maxHealth;
             StartingShield = startingShield;

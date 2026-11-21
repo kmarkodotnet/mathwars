@@ -21,7 +21,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
                 depth: 0, allowNegative: negative, operators: operators ?? new[] { BinaryOperator.Addition, BinaryOperator.Modulo }, skills: skills);
 
         internal static ResourceGatePreparationRequest Request(int seed = 17, int capacity = 30, DifficultyProfile profile = null,
-            GateGoal goal = GateGoal.Maximize, int? target = null, ResourceType resource = ResourceType.Ammo)
+            GateGoal goal = GateGoal.Maximize, int? target = null, ResourceType resource = ResourceType.Health)
             => new ResourceGatePreparationRequest
             {
                 Seed = seed, Difficulty = profile ?? Profile(capacity: Math.Max(1, capacity)), LaneCount = 4,
@@ -69,7 +69,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
         {
             var generator = new MathProblemGenerator();
             var profile = goal == GateGoal.Minimize ? Profile(negative: true, operators: new[] { BinaryOperator.Subtraction }) : Profile();
-            var resource = goal == GateGoal.Minimize ? ResourceType.EnemyArmor : ResourceType.Ammo;
+            var resource = goal == GateGoal.Minimize ? ResourceType.EnemyArmor : ResourceType.Health;
             var prepared = generator.PrepareResourceGate(Request(profile: profile, goal: goal,
                 target: goal == GateGoal.ReachTarget ? 0 : (int?)null, resource: resource));
             Assert.That(prepared.IsSuccess, Is.True, prepared.ErrorCode);
@@ -232,7 +232,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             var template = new ResourceGateTemplate(options, tags);
             var metadata = new IReadOnlyList<SkillTag>[] { tags, tags, tags };
             var prepared = new PreparedResourceGate(new MathProblemId(Guid.Empty), 1,
-                Profile(capacity: int.MaxValue, maxResult: int.MaxValue), 1f, new RewardSpec(ResourceType.Ammo, 0, true),
+                Profile(capacity: int.MaxValue, maxResult: int.MaxValue), 1f, new RewardSpec(ResourceType.Health, 0, true),
                 GateGoal.Maximize, null, 2, new[] { template }, new[] { metadata });
             var generator = new MathProblemGenerator();
             generator.BindResourceGate(prepared, 2, 2);
@@ -254,7 +254,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             var metadata = new IReadOnlyList<SkillTag>[] { tags, tags };
             var nested = new List<IReadOnlyList<SkillTag>[]> { metadata };
             var prepared = new PreparedResourceGate(new MathProblemId(Guid.Empty), 7, Profile(), 6f,
-                new RewardSpec(ResourceType.Ammo, 0, true), GateGoal.Maximize, null, 1, candidates, nested);
+                new RewardSpec(ResourceType.Health, 0, true), GateGoal.Maximize, null, 1, candidates, nested);
             options[0] = default; tags.Clear(); candidates.Clear(); metadata[0] = null; nested.Clear();
             Assert.That(prepared.Candidates.Count, Is.EqualTo(1));
             Assert.That(template.Options[0].DisplayLabel, Is.EqualTo("+1")); Assert.That(template.SkillTags.Count, Is.EqualTo(1));
@@ -334,7 +334,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             }
             return new PreparedResourceGate(new MathProblemId(Guid.Empty), 1, Profile(capacity: Math.Max(100, capacity), gap: gap,
                     operators: new[] { BinaryOperator.Multiplication, BinaryOperator.Addition }), 6f,
-                new RewardSpec(ResourceType.Ammo, 0, true), goal, target, capacity, new[] { template }, new[] { metadata });
+                new RewardSpec(ResourceType.Health, 0, true), goal, target, capacity, new[] { template }, new[] { metadata });
         }
     }
 }

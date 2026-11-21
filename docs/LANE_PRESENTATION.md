@@ -74,6 +74,7 @@ miatt a színek és a végső mobilos olvashatóság manuális Editor Game View 
 valós eszköz ellenőrzése a K kapu része marad; ez a jegy nem állít ilyen
 jóváhagyást, Android buildet vagy teljes session-integrációt.
 
-**ADR-017:** ez a futási bizonyíték történeti. F1-20 az ammo-adatokat és az ammo
-feladatmegjelenítést kivezeti; a folyamatos tüzelés/sebzés nem-ammo fixture-ökkel
-ugyanilyen szigorúan újraigazolandó. A scene-integráció továbbra is F3-12.
+**ADR-017:** a fenti futási bizonyíték történeti. F1-20 nem-ammo fixture-ökkel
+újraigazolta a folyamatos tüzelést/sebzést és a jelölők megmaradását.
+[F1-20 bizonyíték](TESTING.md#f1-20-friss-migrációs-bizonyíték--2026-11-21).
+A teljes math scene-integráció továbbra is F3-12.

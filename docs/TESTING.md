@@ -535,7 +535,7 @@ architekturálisan kritikus, könnyen regresszálható invariáns
 
 ## ADR-017 utáni kötelező regresszió — F1-20/F1-21
 
-A fenti aktív tesztterv a célállapot, nem az új működés már lefutott bizonyítéka.
+A fegyverváltási tesztterv továbbra is F1-21 célállapota. Az F1-20 friss bizonyítéka alább.
 A történeti F3-05/06/07 futásszámok és done naplók változatlan történeti adatok.
 
 - F1-20: mindkét requestmező és generátorbelépés, GenerateBatch, Prepare/Bind,
@@ -556,3 +556,40 @@ A történeti F3-05/06/07 futásszámok és done naplók változatlan történet
   seedelt math invariáns és a teljes kötelező minőségi kapu; valós parancs és
   total/passed/failed napló. Az új Android/eszközös bizonyíték korlátját őszintén
   kell jelezni. F3-12 külön bizonyítja a szállított scene 10+ eseményét/mindkét típust.
+
+## F1-20 friss migrációs bizonyíték — 2026-11-21
+
+Parancs a gyár gyökeréből:
+`powershell -NoProfile -ExecutionPolicy Bypass -File game/scripts/test.ps1 -Full -LogDir F:/Claude/math-horde/game/artifacts/dev/F1-20-ea3260f9b73c`.
+.NET **843/843/0**, Unity EditMode **842/842/0** (total/passed/failed).
+Az első PlayMode kör **352/346/6** volt: maradék régi felirat-/fogyasztásvárások és
+egy negatív lane fixture téves prepared-gate hozzáférése. Javítás után kizárólag az
+érintett teljes PlayMode kapu ismétlődött `Unity.exe -batchmode -nographics
+-projectPath F:/Claude/math-horde/game -runTests -testPlatform PlayMode
+-testResults F:/Claude/math-horde/game/artifacts/dev/F1-20-ea3260f9b73c/results-playmode.xml
+-logFile F:/Claude/math-horde/game/artifacts/dev/F1-20-ea3260f9b73c/test-playmode.log`
+argumentumokkal, PowerShell `Start-Process -WindowStyle Hidden -Wait -PassThru` hívásból.
+A friss XML: **Passed, 352/352/0, skipped=0**. Az EditMode XML szintén
+**Passed, 842/842/0, skipped=0**; a .NET oldal további egy meglévő
+`MirrorSolution_CompilesAndRuns` infrastruktúra-smoke tesztet tartalmaz
+(`tests/MathHorde.Tests.Unit/SmokeTests.cs`). Az első hibás log/XML `*-initial.*` néven megőrzött.
+
+Az `AmmoRetirementTests` minden ProblemType/Goal kombináción ellenőrzi mindkét
+requestmezőt, a GenerateBatch-et, Prepare/Bind-et és mindkét validátorbelépést.
+A pool/state/resource és reward elutasítása nem módosít állapotot/eseménynaplót;
+ugyanaz az event-id érvényes nem-ammo jutalommal később felhasználható.
+A schedule és adapter Ammo-t és hiányzó/letiltott poolt is elutasít. Mindhárom
+math presenter sérült legacy esemény/jutalom esetén rajzolás előtt hibát jelez.
+A korábbi pozitív fixture-ök Health/Shield adatra migráltak, az aritmetikai,
+snapshot-, skill-, gap-, cap-, idempotencia- és G4 elvárások megmaradtak.
+Mindkét 10 000 seedelt generátor-oracle és a 110 000 snapshot-binding zöld.
+
+A valódi `GameplayHUD.prefab` és `Gameplay.unity` a módosított builderekkel
+újragenerált, a scene lövést/sebzést/killt és pause/resume-ot igazol ammo pool
+nélkül. A Core combat teszt 1000 lövést ellenőriz készletszámláló nélkül;
+a kill nem hoz `ResourceChanged` eseményt. A valós assetteszt öt Shield és öt
+Health bejegyzést, eredeti triggereket, MaxShield50-et és Health15 adapterbemenetet
+ellenőriz; az eredeti CL1 teljes coverage továbbra is `GENERATION_EXHAUSTED`.
+A RewardTableSO/host és mindkét matekmechanika valós Gameplay-bekötése F3-12,
+a valódi fegyverválasztás F1-21 marad. A mentési kompatibilitást a névként és
+ordinal-szövegként tárolt legacy `AmmoStarvation` round-trip igazolja verzióemelés nélkül.

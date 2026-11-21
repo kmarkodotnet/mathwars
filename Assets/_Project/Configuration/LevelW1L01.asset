@@ -43,7 +43,7 @@ MonoBehaviour:
     _problemType: 0
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 0
+    _rewardResource: 2
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -51,7 +51,7 @@ MonoBehaviour:
     _problemType: 1
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 0
+    _rewardResource: 1
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -59,7 +59,7 @@ MonoBehaviour:
     _problemType: 0
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 0
+    _rewardResource: 2
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -67,7 +67,7 @@ MonoBehaviour:
     _problemType: 1
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 0
+    _rewardResource: 1
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -75,7 +75,7 @@ MonoBehaviour:
     _problemType: 0
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 0
+    _rewardResource: 2
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -83,7 +83,7 @@ MonoBehaviour:
     _problemType: 1
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 0
+    _rewardResource: 1
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -91,7 +91,7 @@ MonoBehaviour:
     _problemType: 0
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 0
+    _rewardResource: 2
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -99,7 +99,7 @@ MonoBehaviour:
     _problemType: 1
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 0
+    _rewardResource: 1
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -107,7 +107,7 @@ MonoBehaviour:
     _problemType: 0
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 0
+    _rewardResource: 2
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -115,16 +115,14 @@ MonoBehaviour:
     _problemType: 1
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 0
+    _rewardResource: 1
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
   _requiredMathAccuracy: 0
-  _startingAmmo: 60
-  _maxAmmo: 200
   _startingHealth: 100
   _maxHealth: 100
   _startingShield: 0
-  _maxShield: 0
+  _maxShield: 50
   _weapon: {fileID: 11400000, guid: 0b89f75d1a684d84393446b8e73b6fca, type: 2}
   _environmentPrefab: {fileID: 7025003356192807735, guid: f2d41b9ad558e364c998705c2eed7919, type: 3}

@@ -59,6 +59,7 @@ namespace MathHorde.GameLogic
 
         public RewardApplication ApplyReward(in GateResolution resolution)
         {
+            ResourceRules.RequireActive(resolution.Resource);
             if (_appliedRewards.Contains(resolution.EventId))
                 return Skip(resolution, RewardApplicationStatus.AlreadyApplied, "ALREADY_APPLIED");
             if (resolution.Outcome < GateResolutionOutcome.CorrectRewarded
@@ -89,7 +90,10 @@ namespace MathHorde.GameLogic
         }
 
         public ResourceChange ApplyCombatReward(ResourceType type, int amount, string reasonCode)
-            => _resources.ApplyDelta(type, amount, reasonCode);
+        {
+            ResourceRules.RequireActive(type);
+            return _resources.ApplyDelta(type, amount, reasonCode);
+        }
 
         private RewardApplication Skip(in GateResolution resolution, RewardApplicationStatus status,
             string reasonCode)

@@ -19,7 +19,6 @@ MonoBehaviour:
   _movementSpeed: 1
   _contactDamage: 25
   _attackCooldownSeconds: 1
-  _rewardValue: 10
   _prefab: {fileID: 4195685913782134092, guid: 923567d94841c3047b819f3f897a70b1, type: 3}
   _tintColor: {r: 1, g: 1, b: 1, a: 1}
   _scaleMultiplier: 1

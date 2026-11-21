@@ -28,8 +28,6 @@ namespace MathHorde.Presentation.Hud
 
         public int Health { get; private set; }
         public int MaxHealth { get; private set; }
-        public int Ammo { get; private set; }
-        public int MaxAmmo { get; private set; }
         public int Shield { get; private set; }
         public int MaxShield { get; private set; }
         public int WaveIndex { get; private set; }
@@ -43,14 +41,12 @@ namespace MathHorde.Presentation.Hud
         public bool HasShield => MaxShield > 0;
 
         public string HealthLabel => _localization.Resolve("hud.health");
-        public string AmmoLabel => _localization.Resolve("hud.ammo");
         public string ShieldLabel => _localization.Resolve("hud.shield");
         public string PauseLabel => _localization.Resolve("hud.pause");
         public string WaveText => _localization.Resolve("hud.wave", WaveIndex);
         public string LevelText => _localization.Resolve("hud.level", LevelNumber);
 
         public string HealthValueText => FormatCurrentOverMax(Health, MaxHealth);
-        public string AmmoValueText => FormatCurrentOverMax(Ammo, MaxAmmo);
         public string ShieldValueText => FormatCurrentOverMax(Shield, MaxShield);
 
         public GameplayHudModel(ILocalizationService localization)
@@ -62,7 +58,6 @@ namespace MathHorde.Presentation.Hud
         public void Initialize(IResourceService resourceService)
         {
             SyncResource(resourceService, ResourceType.Health);
-            SyncResource(resourceService, ResourceType.Ammo);
             SyncResource(resourceService, ResourceType.Shield);
         }
 
@@ -84,6 +79,7 @@ namespace MathHorde.Presentation.Hud
 
         private void SyncResource(IResourceService resourceService, ResourceType type)
         {
+            if (type != ResourceType.Health && type != ResourceType.Shield) return;
             int current = resourceService.GetCurrent(type);
             int max = resourceService.GetMax(type);
 
@@ -92,10 +88,6 @@ namespace MathHorde.Presentation.Hud
                 case ResourceType.Health:
                     Health = current;
                     MaxHealth = max;
-                    break;
-                case ResourceType.Ammo:
-                    Ammo = current;
-                    MaxAmmo = max;
                     break;
                 case ResourceType.Shield:
                     Shield = current;

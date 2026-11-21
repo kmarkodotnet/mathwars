@@ -139,5 +139,25 @@ namespace MathHorde.Tests.PlayMode.Persistence
             string path = Path.Combine(_tempDir.Path, LocalStatisticsRepository.DefaultFileName);
             Assert.That(File.Exists(path), Is.False);
         }
+        [TestCase("AmmoStarvation")]
+        [TestCase("1")]
+        public void LegacyAmmoDiagnosisRemainsReadableAndRewritableInTheCurrentSchema(string legacyValue)
+        {
+            var repository = new LocalStatisticsRepository(_tempDir.Path);
+            var original = BuildSampleSession(); repository.Append(original);
+            string path = Path.Combine(_tempDir.Path, LocalStatisticsRepository.DefaultFileName);
+            string legacy = File.ReadAllText(path).Replace("\"LossDiagnosis\": \"None\"", "\"LossDiagnosis\": \"" + legacyValue + "\"");
+            Assert.That(legacy, Does.Contain(legacyValue));
+            File.WriteAllText(path, legacy);
+            var loaded = repository.LoadAll();
+            Assert.That(loaded.Count, Is.EqualTo(1));
+            Assert.That(loaded[0].SessionId, Is.EqualTo(original.SessionId));
+            Assert.That(loaded[0].LossDiagnosis, Is.EqualTo(LossDiagnosis.AmmoStarvation));
+            repository.Append(BuildSampleSession());
+            Assert.That(repository.LoadAll()[0].LossDiagnosis, Is.EqualTo(LossDiagnosis.AmmoStarvation));
+            Assert.That(StatisticsSaveData.CurrentSchemaVersion, Is.EqualTo(1));
+            Assert.That(PlayerProfileSaveData.CurrentSchemaVersion, Is.EqualTo(2));
+        }
+
     }
 }

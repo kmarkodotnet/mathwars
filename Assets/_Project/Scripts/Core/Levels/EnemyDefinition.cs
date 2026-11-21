@@ -21,13 +21,6 @@ namespace MathHorde.Core.Levels
         public int ContactDamage { get; }
         public float AttackCooldownSeconds { get; }
 
-        /// <summary>
-        /// Kill refund: this many AMMO are credited back via
-        /// ApplyCombatReward(Ammo, RewardValue, "KILL_REFUND") when the enemy
-        /// dies (game-logic.md 3./7., difficulty-model.md 5. "killRefund").
-        /// This is NOT score — score is a separate, F5 ScoringService concern.
-        /// </summary>
-        public int RewardValue { get; }
 
         public string PrefabKey { get; }
 
@@ -38,7 +31,6 @@ namespace MathHorde.Core.Levels
             float movementSpeed,
             int contactDamage,
             float attackCooldownSeconds,
-            int rewardValue,
             string prefabKey)
         {
             if (string.IsNullOrEmpty(enemyId))
@@ -66,10 +58,6 @@ namespace MathHorde.Core.Levels
                 throw new ArgumentOutOfRangeException(nameof(attackCooldownSeconds), attackCooldownSeconds, "AttackCooldownSeconds nem lehet negatív.");
             }
 
-            if (rewardValue < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(rewardValue), rewardValue, "RewardValue nem lehet negatív.");
-            }
 
             EnemyId = enemyId;
             Type = type;
@@ -77,7 +65,6 @@ namespace MathHorde.Core.Levels
             MovementSpeed = movementSpeed;
             ContactDamage = contactDamage;
             AttackCooldownSeconds = attackCooldownSeconds;
-            RewardValue = rewardValue;
             PrefabKey = prefabKey;
         }
     }

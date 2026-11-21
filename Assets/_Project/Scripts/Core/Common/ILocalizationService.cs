@@ -4,7 +4,7 @@
 //
 // Key convention (documented here so every layer follows the same scheme):
 //   "<area>.<item>" in lowerCamelCase segments, e.g.:
-//     hud.health, hud.ammo, hud.shield, hud.wave, hud.level,
+//     hud.health, hud.shield, hud.wave, hud.level,
 //     hud.pause, hud.challengeLevel, result.gameOver,
 //     result.gameOverEncouragement, result.victory, result.victoryEncouragement,
 //     result.retry, result.nextLevel, result.backToWorlds

@@ -10,7 +10,8 @@
 >
 > **v1.2 — ADR-017 (2026-11-19):** a felhasználó döntése alapján minden fegyver
 > mindig végtelen lőszerrel működik. A matek nem használ lőszert; a választható típusok
-> egyre erősebbek lehetnek. F1-20/F1-21 implementációja még nyitott.
+> egyre erősebbek lehetnek. A végtelen tüzelés és ammo-kivezetés F1-20-ban elkészült;
+> a tényleges fegyverválasztás F1-21-ben még nyitott.
 >
 > **Dokumentum-hierarchia:** ütközés esetén a `docs/contracts/*` az irányadó; ez a
 > dokumentum a *miért*-et és az értékeket adja, a kontrakt a *nevet és a típust* (ADR-009).

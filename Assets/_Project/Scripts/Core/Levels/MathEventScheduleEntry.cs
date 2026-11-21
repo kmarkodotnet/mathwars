@@ -22,6 +22,7 @@ namespace MathHorde.Core.Levels
             ResourceType rewardResource,
             GateGoal goal)
         {
+            ResourceRules.RequireActive(rewardResource);
             if (triggerGameTime < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(triggerGameTime), triggerGameTime, "TriggerGameTime nem lehet negatív.");

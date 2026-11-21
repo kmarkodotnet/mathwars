@@ -137,7 +137,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
                         ErrorCategory.NeighbourInTimesTable, "63")
                 },
                 3, new[] { SkillTag.Multiplication, SkillTag.TimesTable7 }, 6f,
-                new RewardSpec(ResourceType.Ammo, 30, false), 213, GateGoal.Maximize, null, null);
+                new RewardSpec(ResourceType.Health, 30, false), 213, GateGoal.Maximize, null, null);
         }
 
         private static MathAnswer Answer(MathProblem problem, bool correct, bool timedOut)

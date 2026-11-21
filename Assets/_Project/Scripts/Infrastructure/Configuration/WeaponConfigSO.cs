@@ -1,14 +1,7 @@
 // WeaponConfigSO.cs
 // F1-09 — contract scriptable-object-schema.md 2. WeaponConfigSO (F1).
 //
-// Scope note: the contract's balance rule under this section checks the
-// weapon's DPS (Damage x FireRate) against GameBalanceSO.ReferenceDps and warns
-// on >5% deviation. GameBalanceSO is one of the seven new assets introduced by
-// the architect's r2 revision and is NOT part of this task's header
-// (EnemyDefinitionSO, WeaponConfigSO, CombatBalanceSO, LevelDefinitionSO,
-// DeveloperSettingsSO + IValidatableConfig) — it has no backing asset yet, so
-// that cross-asset DPS check is deliberately deferred to whichever task
-// introduces GameBalanceSO, rather than guessed at here.
+// ADR-017: weapon types may have different DPS; ammunition is always unlimited.
 using System.Collections.Generic;
 using MathHorde.Core.Levels;
 using UnityEngine;
@@ -31,8 +24,6 @@ namespace MathHorde.Infrastructure.Configuration
         [Range(1.0f, 100.0f)]
         [SerializeField] private float _range = 25.0f;
 
-        [Range(1, 20)]
-        [SerializeField] private int _ammoPerShot = 1;
 
         [Tooltip("0 = hitscan.")]
         [Range(0.0f, 200.0f)]
@@ -54,7 +45,6 @@ namespace MathHorde.Infrastructure.Configuration
         public int Damage => _damage;
         public float FireRate => _fireRate;
         public float Range => _range;
-        public int AmmoPerShot => _ammoPerShot;
         public float ProjectileSpeed => _projectileSpeed;
         public TargetingMode TargetingMode => _targetingMode;
         public float AdjacentLanePenalty => _adjacentLanePenalty;
@@ -71,7 +61,6 @@ namespace MathHorde.Infrastructure.Configuration
             ConfigValidation.RequireRange(errors, nameof(Damage), _damage, 1, 1000);
             ConfigValidation.RequireRange(errors, nameof(FireRate), _fireRate, 0.1f, 30.0f);
             ConfigValidation.RequireRange(errors, nameof(Range), _range, 1.0f, 100.0f);
-            ConfigValidation.RequireRange(errors, nameof(AmmoPerShot), _ammoPerShot, 1, 20);
             ConfigValidation.RequireRange(errors, nameof(ProjectileSpeed), _projectileSpeed, 0.0f, 200.0f);
             ConfigValidation.RequireRange(errors, nameof(AdjacentLanePenalty), _adjacentLanePenalty, 0.0f, 1.0f);
 

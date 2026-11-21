@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace MathHorde.Core.Resources
 {
@@ -17,20 +19,36 @@ namespace MathHorde.Core.Resources
 
         public ResourceState(IReadOnlyDictionary<ResourceType, ResourcePool> pools)
         {
-            _pools = pools ?? new Dictionary<ResourceType, ResourcePool>();
+            var copy = new Dictionary<ResourceType, ResourcePool>();
+            if (pools != null)
+                foreach (var entry in pools)
+                {
+                    ResourceRules.RequireActive(entry.Key);
+                    if (entry.Value == null) throw new ArgumentException("A resource pool cannot be null.", nameof(pools));
+                    ResourceRules.RequireActive(entry.Value.Type);
+                    copy.Add(entry.Key, entry.Value);
+                }
+            _pools = new ReadOnlyDictionary<ResourceType, ResourcePool>(copy);
         }
 
         /// <summary>Unknown/never-initialized resource type returns 0, never throws.</summary>
-        public int GetCurrent(ResourceType type) =>
-            _pools.TryGetValue(type, out var pool) ? pool.Current : 0;
+        public int GetCurrent(ResourceType type)
+        {
+            ResourceRules.RequireActive(type);
+            return _pools.TryGetValue(type, out var pool) ? pool.Current : 0;
+        }
 
         /// <summary>Unknown/never-initialized resource type returns 0, never throws.</summary>
-        public int GetMax(ResourceType type) =>
-            _pools.TryGetValue(type, out var pool) ? pool.Max : 0;
+        public int GetMax(ResourceType type)
+        {
+            ResourceRules.RequireActive(type);
+            return _pools.TryGetValue(type, out var pool) ? pool.Max : 0;
+        }
 
         /// <summary>Returns a new ResourceState with the given pool replacing (or adding) its type's entry.</summary>
         public ResourceState WithPool(ResourcePool pool)
         {
+            ResourceRules.RequireActive(pool.Type);
             var next = new Dictionary<ResourceType, ResourcePool>(_pools)
             {
                 [pool.Type] = pool

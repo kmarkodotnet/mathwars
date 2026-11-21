@@ -33,8 +33,6 @@ namespace MathHorde.Infrastructure.Configuration
         [Range(0.5f, 3.0f)]
         [SerializeField] private float _spawnRateMultiplier = 1.0f;
 
-        [Range(0.5f, 2.0f)]
-        [SerializeField] private float _ammoConsumptionMultiplier = 1.0f;
 
         [Range(0.0f, 10.0f)]
         [SerializeField] private float _maxWaveGapSeconds = 2.0f;
@@ -71,7 +69,6 @@ namespace MathHorde.Infrastructure.Configuration
         public float EnemyDamageMultiplier => _enemyDamageMultiplier;
         public float WaveSizeMultiplier => _waveSizeMultiplier;
         public float SpawnRateMultiplier => _spawnRateMultiplier;
-        public float AmmoConsumptionMultiplier => _ammoConsumptionMultiplier;
         public float MaxWaveGapSeconds => _maxWaveGapSeconds;
         public float PlayerLaneChangeSpeed => _playerLaneChangeSpeed;
         public float EnemyDespawnDepth => _enemyDespawnDepth;
@@ -92,7 +89,6 @@ namespace MathHorde.Infrastructure.Configuration
             ConfigValidation.RequireRange(errors, nameof(EnemyDamageMultiplier), _enemyDamageMultiplier, 0.5f, 2.0f);
             ConfigValidation.RequireRange(errors, nameof(WaveSizeMultiplier), _waveSizeMultiplier, 0.5f, 3.0f);
             ConfigValidation.RequireRange(errors, nameof(SpawnRateMultiplier), _spawnRateMultiplier, 0.5f, 3.0f);
-            ConfigValidation.RequireRange(errors, nameof(AmmoConsumptionMultiplier), _ammoConsumptionMultiplier, 0.5f, 2.0f);
             ConfigValidation.RequireRange(errors, nameof(MaxWaveGapSeconds), _maxWaveGapSeconds, 0.0f, 10.0f);
             ConfigValidation.RequireRange(errors, nameof(PlayerLaneChangeSpeed), _playerLaneChangeSpeed, 1.0f, 30.0f);
             ConfigValidation.RequireRange(errors, nameof(EnemyDespawnDepth), _enemyDespawnDepth, -20.0f, 0.0f);

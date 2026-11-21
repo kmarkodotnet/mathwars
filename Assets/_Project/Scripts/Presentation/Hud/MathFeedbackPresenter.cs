@@ -1,6 +1,7 @@
 using System;
 using MathHorde.Core.Common;
 using MathHorde.Core.Problems;
+using MathHorde.Core.Resources;
 using MathHorde.GameLogic;
 using MathHorde.GameLogic.Events;
 using MathHorde.Infrastructure;
@@ -72,6 +73,8 @@ namespace MathHorde.Presentation.Hud
             {
                 ref var record = ref _records[i];
                 var item = record.Used && !_ended ? Find(record.Id) : null;
+                if (item != null) MathContentGuard.RequireActive(item);
+                if (record.Completed) ResourceRules.RequireActive(record.Completion.Resource);
                 bool visible = record.Resolved && record.Completed && !record.Cancelled
                     && item != null && item.State == MathEventState.Completed;
                 if (visible)

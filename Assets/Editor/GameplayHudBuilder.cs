@@ -72,8 +72,7 @@ public static class GameplayHudBuilder
 
         GameObject statsPanel = CreateAnchoredChild(safeAreaRoot.transform, "StatsPanel", 0f, 0.74f, 0.46f, 0.90f);
         AddPanelBackground(statsPanel);
-        BuildStatRow(statsPanel.transform, "HealthRow", 2, out TMP_Text healthLabel, out TMP_Text healthValue);
-        BuildStatRow(statsPanel.transform, "AmmoRow", 1, out TMP_Text ammoLabel, out TMP_Text ammoValue);
+        BuildStatRow(statsPanel.transform, "HealthRow", 1, out TMP_Text healthLabel, out TMP_Text healthValue);
         GameObject shieldRow = BuildStatRow(statsPanel.transform, "ShieldRow", 0, out TMP_Text shieldLabel, out TMP_Text shieldValue);
 
         // Reserved, empty layout slots for later phases (left deliberately
@@ -88,8 +87,6 @@ public static class GameplayHudBuilder
         var so = new SerializedObject(hud);
         so.FindProperty("_healthLabelText").objectReferenceValue = healthLabel;
         so.FindProperty("_healthValueText").objectReferenceValue = healthValue;
-        so.FindProperty("_ammoLabelText").objectReferenceValue = ammoLabel;
-        so.FindProperty("_ammoValueText").objectReferenceValue = ammoValue;
         so.FindProperty("_shieldGroup").objectReferenceValue = shieldRow;
         so.FindProperty("_shieldLabelText").objectReferenceValue = shieldLabel;
         so.FindProperty("_shieldValueText").objectReferenceValue = shieldValue;

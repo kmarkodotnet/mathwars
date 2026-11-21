@@ -81,6 +81,8 @@ ellenőrizni az F3-12 kompozícióban.
 A helyi batch-render korlát miatt ez nem manuális szín-, eszközös olvashatóság-
 vagy teljes K kapujóváhagyás, és nem Android build-igazolás.
 
-**ADR-017:** ez a futási bizonyíték történeti. F1-20 az ammo-adatokat és az ammo
-feladatmegjelenítést kivezeti; a folyamatos tüzelés/sebzés nem-ammo fixture-ökkel
-ugyanilyen szigorúan újraigazolandó. A scene-integráció továbbra is F3-12.
+**ADR-017:** a fenti futási bizonyíték történeti. F1-20 kivezette az ammo-adatokat
+és az ammo feladatmegjelenítést; a folyamatos tüzelés/sebzés, nyers eredmény/live cap,
+G4 és negatív Ammo regresszió a friss teljes kapuban zöld.
+[F1-20 bizonyíték](TESTING.md#f1-20-friss-migrációs-bizonyíték--2026-11-21).
+A teljes math scene-integráció továbbra is F3-12.

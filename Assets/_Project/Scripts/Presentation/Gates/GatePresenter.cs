@@ -82,6 +82,7 @@ namespace MathHorde.Presentation.Gates
             for (int e = 0; e < active.Count; e++)
             {
                 var mathEvent = active[e];
+                MathContentGuard.RequireActive(mathEvent);
                 if (!Visible(mathEvent.State)) continue;
                 for (int c = 0; c < mathEvent.Carriers.Count; c++)
                 {

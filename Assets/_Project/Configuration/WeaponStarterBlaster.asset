@@ -17,7 +17,6 @@ MonoBehaviour:
   _damage: 5
   _fireRate: 3
   _range: 25
-  _ammoPerShot: 1
   _projectileSpeed: 0
   _targetingMode: 1
   _adjacentLanePenalty: 0

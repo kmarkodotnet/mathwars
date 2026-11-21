@@ -117,7 +117,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
             Assert.That(enemy.MovementSpeed, Is.EqualTo(enemySo.MovementSpeed));
             Assert.That(enemy.ContactDamage, Is.EqualTo(enemySo.ContactDamage));
             Assert.That(enemy.AttackCooldownSeconds, Is.EqualTo(enemySo.AttackCooldownSeconds));
-            Assert.That(enemy.RewardValue, Is.EqualTo(enemySo.RewardValue));
+            Assert.That(typeof(MathHorde.Core.Levels.EnemyDefinition).GetProperty("RewardValue"), Is.Null);
             // No PrefabKey field on EnemyDefinitionSO (direct Prefab reference instead) —
             // EnemyId doubles as the catalog key (see GameConfigurationRepository header note).
             Assert.That(enemy.PrefabKey, Is.EqualTo("basic_bot"));
@@ -168,7 +168,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
             Assert.That(weapon.Damage, Is.EqualTo(weaponSo.Damage));
             Assert.That(weapon.FireRate, Is.EqualTo(weaponSo.FireRate));
             Assert.That(weapon.Range, Is.EqualTo(weaponSo.Range));
-            Assert.That(weapon.AmmoPerShot, Is.EqualTo(weaponSo.AmmoPerShot));
+            Assert.That(typeof(MathHorde.Core.Levels.WeaponDefinition).GetProperty("AmmoPerShot"), Is.Null);
             Assert.That(weapon.ProjectileSpeed, Is.EqualTo(weaponSo.ProjectileSpeed));
             Assert.That(weapon.TargetingMode, Is.EqualTo(weaponSo.TargetingMode));
             // Core.Levels.WeaponDefinition has one VisualEffectKey field, the SO has two
@@ -318,7 +318,6 @@ namespace MathHorde.Tests.PlayMode.Configuration
             ConfigTestReflection.SetField(combatBalance, "_enemyHealthMultiplier", 1.4f);
             ConfigTestReflection.SetField(combatBalance, "_enemyDamageMultiplier", 1.5f);
             ConfigTestReflection.SetField(combatBalance, "_spawnRateMultiplier", 1.6f);
-            ConfigTestReflection.SetField(combatBalance, "_ammoConsumptionMultiplier", 1.2f);
 
             var repository = new GameConfigurationRepository(
                 new[] { enemySo }, new[] { weaponSo }, new[] { levelSo }, combatBalance);
@@ -329,7 +328,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
             Assert.That(modifiers.EnemyHealthMultiplier, Is.EqualTo(1.4f));
             Assert.That(modifiers.EnemyDamageMultiplier, Is.EqualTo(1.5f));
             Assert.That(modifiers.SpawnRateMultiplier, Is.EqualTo(1.6f));
-            Assert.That(modifiers.AmmoConsumptionMultiplier, Is.EqualTo(1.2f));
+            Assert.That(typeof(MathHorde.GameLogic.CombatModifiers).GetProperty("AmmoConsumptionMultiplier"), Is.Null);
         }
 
         [Test]

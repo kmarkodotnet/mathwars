@@ -87,12 +87,10 @@ namespace MathHorde.Tests.PlayMode.Integration
                 waves: waves,
                 mathEvents: mathEvents,
                 bossEnemyId: null,
-                startingAmmo: 500,
-                maxAmmo: 500,
                 startingHealth: 1000,
                 maxHealth: 1000,
-                startingShield: 0,
-                maxShield: 0,
+                startingShield: 500,
+                maxShield: 500,
                 requiredMathAccuracy: 0f,
                 weaponId: "basic_weapon");
         }
@@ -109,7 +107,7 @@ namespace MathHorde.Tests.PlayMode.Integration
         {
             var waves = new[] { new WaveDefinition(0, 0, 1000, spawns: new[]
             { new WaveSpawnEntry("basic_bot", 20, 0.05f, new[] { new LaneIndex(0) }) }) };
-            var level = BuildLevel(waves, new[] { new MathEventScheduleEntry(0, type, 0.05f, 2f, ResourceType.Ammo, GateGoal.Maximize) });
+            var level = BuildLevel(waves, new[] { new MathEventScheduleEntry(0, type, 0.05f, 2f, ResourceType.Shield, GateGoal.Maximize) });
             var profile = new DifficultyProfile(4, 4, 4, 4,
                 new[] { BinaryOperator.Addition, BinaryOperator.Modulo }, (SkillTag[])System.Enum.GetValues(typeof(SkillTag)),
                 0, 500, 2000, 2, 2, false, 0, false, 0, false, 2, 2f, 1, true);
@@ -118,11 +116,11 @@ namespace MathHorde.Tests.PlayMode.Integration
             var combat = new CombatService(resources, bus);
             bool gate = type == ProblemType.ResourceOperationComparison;
             var settings = new MathEventDirectorSettings(1, 5f, 3f, 20f, 1f,
-                new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Ammo, gate ? 0 : 10, gate) });
+                new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Shield, gate ? 0 : 10, gate) });
             var director = new MathEventDirector(resources, bus, settings);
             var session = new GameSessionService(clock, new WaveDirector(), combat, director, resources, bus);
-            var enemy = new EnemyDefinition("basic_bot", EnemyType.Basic, 1000, 1f, 5, 1f, 1, "prefab_basic_bot");
-            var weapon = new WeaponDefinition("basic_weapon", 1, 20f, 20f, 1, 0f, TargetingMode.OwnLaneThenAdjacent, "fx_basic");
+            var enemy = new EnemyDefinition("basic_bot", EnemyType.Basic, 1000, 1f, 5, 1f, "prefab_basic_bot");
+            var weapon = new WeaponDefinition("basic_weapon", 1, 20f, 20f, 0f, TargetingMode.OwnLaneThenAdjacent, "fx_basic");
             session.StartSession(level, weapon, new Dictionary<string, EnemyDefinition> { ["basic_bot"] = enemy }, 7);
             director.Initialize(level, profile, new MathProblemGenerator(), new DeterministicRandomSource(7));
             var startup = director.PrepareUpcomingEvents(clock.GameTime);
@@ -130,7 +128,8 @@ namespace MathHorde.Tests.PlayMode.Integration
             int diagnostics = 0;
             bus.Subscribe<MathEventPreparationFailed>(_ => diagnostics++);
             bool sawPreview = false, sawSpawn = false;
-            int ammoAtDecision = -1, snapshot = -1;
+            int shots = 0; bus.Subscribe<WeaponFired>(_ => shots++);
+            int shotsAtDecision = -1, snapshot = -1;
             double openedAt = 0;
             ActiveMathEvent active = null;
             float wallDeadline = Time.realtimeSinceStartup + 5f;
@@ -152,11 +151,11 @@ namespace MathHorde.Tests.PlayMode.Integration
                     {
                         sawSpawn = true;
                         snapshot = active.SnapshotValue;
-                        if (gate) Assert.That(snapshot, Is.EqualTo(resources.GetCurrent(ResourceType.Ammo)), "Snapshot must follow this frame's combat.");
+                        if (gate) Assert.That(snapshot, Is.EqualTo(resources.GetCurrent(ResourceType.Shield)), "Snapshot must follow this frame's combat.");
                     }
                     if (active.State == MathEventState.AwaitingDecision)
                     {
-                        if (ammoAtDecision < 0) { ammoAtDecision = resources.GetCurrent(ResourceType.Ammo); openedAt = clock.GameTime; }
+                        if (shotsAtDecision < 0) { shotsAtDecision = shots; openedAt = clock.GameTime; }
                         if (clock.GameTime - openedAt >= 0.25) break;
                     }
                 }
@@ -165,7 +164,7 @@ namespace MathHorde.Tests.PlayMode.Integration
             Assert.That(active, Is.Not.Null);
             Assert.That(sawPreview, Is.True); Assert.That(sawSpawn, Is.True);
             Assert.That(active.State, Is.EqualTo(MathEventState.AwaitingDecision));
-            Assert.That(resources.GetCurrent(ResourceType.Ammo), Is.LessThan(ammoAtDecision));
+            Assert.That(shots, Is.GreaterThan(shotsAtDecision));
             Assert.That(combat.ActiveEnemies.Count, Is.GreaterThan(0)); Assert.That(session.IsRunning, Is.True);
             Assert.That(clock.IsPaused, Is.False); Assert.That(diagnostics, Is.EqualTo(0));
             if (gate) Assert.That(active.ResourceGate.Value.SnapshotValue, Is.EqualTo(snapshot));
@@ -186,17 +185,17 @@ namespace MathHorde.Tests.PlayMode.Integration
             var resolver = new GateResolutionService(bus, 1);
             var rewards = new RewardService(resources, bus, clock, 1);
             var resolution = resolver.Resolve(director.PendingResolutions[0], active);
-            int beforeReward = resources.GetCurrent(ResourceType.Ammo);
+            int beforeReward = resources.GetCurrent(ResourceType.Shield);
             var application = rewards.ApplyReward(resolution);
             Assert.That(application.Status, Is.EqualTo(RewardApplicationStatus.Applied));
             Assert.That(application.RequestedDelta, Is.EqualTo(resolution.RewardDelta));
-            Assert.That(resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(beforeReward + application.AppliedDelta));
+            Assert.That(resources.GetCurrent(ResourceType.Shield), Is.EqualTo(beforeReward + application.AppliedDelta));
             director.OnRewardProcessed(application, clock.GameTime);
             Assert.That(active.State, Is.EqualTo(MathEventState.Completed));
             var restoredRewards = new RewardService(resources, bus, clock, 1);
             restoredRewards.RestoreAppliedRewards(rewards.AppliedRewardEventIds);
             Assert.That(restoredRewards.ApplyReward(resolution).Status, Is.EqualTo(RewardApplicationStatus.AlreadyApplied));
-            Assert.That(resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(beforeReward + application.AppliedDelta));
+            Assert.That(resources.GetCurrent(ResourceType.Shield), Is.EqualTo(beforeReward + application.AppliedDelta));
         }
 
         [UnityTest]
@@ -210,8 +209,8 @@ namespace MathHorde.Tests.PlayMode.Integration
                 })
             };
             var level = BuildLevel(waves);
-            var weapon = new WeaponDefinition("basic_weapon", damage: 1, fireRate: 20f, range: 20f, ammoPerShot: 1, projectileSpeed: 0f, TargetingMode.OwnLaneThenAdjacent, "fx_basic");
-            var enemy = new EnemyDefinition("basic_bot", EnemyType.Basic, maxHealth: 1000, movementSpeed: 1f, contactDamage: 5, attackCooldownSeconds: 1f, rewardValue: 1, "prefab_basic_bot");
+            var weapon = new WeaponDefinition("basic_weapon", damage: 1, fireRate: 20f, range: 20f, projectileSpeed: 0f, TargetingMode.OwnLaneThenAdjacent, "fx_basic");
+            var enemy = new EnemyDefinition("basic_bot", EnemyType.Basic, maxHealth: 1000, movementSpeed: 1f, contactDamage: 5, attackCooldownSeconds: 1f, "prefab_basic_bot");
             var catalog = new Dictionary<string, EnemyDefinition> { ["basic_bot"] = enemy };
 
             var sink = new GameEventBus();
@@ -223,39 +222,40 @@ namespace MathHorde.Tests.PlayMode.Integration
             var session = new GameSessionService(clock, waveDirector, combatService, mathEventDirector, resourceService, sink);
 
             session.StartSession(level, weapon, catalog, seed: 7);
-            int startingAmmo = resourceService.GetCurrent(ResourceType.Ammo);
+            int shots = 0; sink.Subscribe<WeaponFired>(_ => shots++);
+            int startingShots = shots;
 
             int framesRun = 0;
-            int ammoAtDecisionOpen = -1;
-            int ammoAtResolution = -1;
+            int shotsAtDecisionOpen = -1;
+            int shotsAtResolution = -1;
             float deadline = Time.realtimeSinceStartup + 5f;
             while (Time.realtimeSinceStartup < deadline
                    && (mathEventDirector.Machine.State != MathEventState.Completed
-                       || resourceService.GetCurrent(ResourceType.Ammo) >= startingAmmo || combatService.ActiveEnemies.Count == 0))
+                       || shots <= startingShots || combatService.ActiveEnemies.Count == 0))
             {
                 session.Tick(Time.deltaTime);
-                if (mathEventDirector.Machine.State == MathEventState.AwaitingDecision && ammoAtDecisionOpen < 0)
-                    ammoAtDecisionOpen = resourceService.GetCurrent(ResourceType.Ammo);
+                if (mathEventDirector.Machine.State == MathEventState.AwaitingDecision && shotsAtDecisionOpen < 0)
+                    shotsAtDecisionOpen = shots;
                 if (mathEventDirector.Machine.State == MathEventState.Resolving)
-                    ammoAtResolution = resourceService.GetCurrent(ResourceType.Ammo);
+                    shotsAtResolution = shots;
                 framesRun++;
                 yield return null;
             }
 
-            int ammoAfter = resourceService.GetCurrent(ResourceType.Ammo);
+            int shotsAfter = shots;
 
             Assert.That(framesRun, Is.GreaterThan(0), "A tesztnek legalább egy valós motor-frame-et le kellett futtatnia.");
             Assert.That(mathEventDirector.TickCount, Is.EqualTo(framesRun),
                 "A matek-léptetésnek minden valós frame-ben pontosan egyszer kell futnia — ha ez elmarad, a 14. szakasz szinkronizációs követelménye sérül.");
-            Assert.That(ammoAfter, Is.LessThan(startingAmmo),
+            Assert.That(shotsAfter, Is.GreaterThan(startingShots),
                 "A lőszernek fogynia kellett valós motor-frame-eken át, FÜGGETLENÜL attól, hogy a matek-direktor minden tick-ben dolgozott (kritérium F).");
             Assert.That(combatService.ActiveEnemies.Count, Is.GreaterThan(0),
                 "Legalább egy ellenségnek életben kellett maradnia / spawn-olnia a mérési ablakban.");
             Assert.That(session.IsRunning, Is.True, "A session nem állhat meg csak attól, hogy a matek-direktor minden frame-ben dolgozik.");
             Assert.That(mathEventDirector.Machine.State, Is.EqualTo(MathEventState.Completed));
-            Assert.That(ammoAtDecisionOpen, Is.GreaterThan(0));
-            Assert.That(ammoAtResolution, Is.GreaterThanOrEqualTo(0));
-            Assert.That(ammoAtResolution, Is.LessThan(ammoAtDecisionOpen),
+            Assert.That(shotsAtDecisionOpen, Is.GreaterThan(0));
+            Assert.That(shotsAtResolution, Is.GreaterThanOrEqualTo(0));
+            Assert.That(shotsAtResolution, Is.GreaterThan(shotsAtDecisionOpen),
                 "Combat must keep firing while the actual lifecycle is AwaitingDecision.");
             Assert.That(clock.IsPaused, Is.False);
         }

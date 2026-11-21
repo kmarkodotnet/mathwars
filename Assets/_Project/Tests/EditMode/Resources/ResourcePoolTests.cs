@@ -14,7 +14,7 @@ namespace MathHorde.Tests.EditMode.Resources
         [Test]
         public void Construct_CurrentAboveMax_ClampsToMax()
         {
-            var pool = new ResourcePool(ResourceType.Ammo, current: 500, max: 200, min: 0);
+            var pool = new ResourcePool(ResourceType.Health, current: 500, max: 200, min: 0);
 
             Assert.That(pool.Current, Is.EqualTo(200));
         }
@@ -39,7 +39,7 @@ namespace MathHorde.Tests.EditMode.Resources
         public void Construct_MaxNotPositive_Throws()
         {
             Assert.That(
-                () => new ResourcePool(ResourceType.Ammo, current: 0, max: 0, min: 0),
+                () => new ResourcePool(ResourceType.Health, current: 0, max: 0, min: 0),
                 Throws.TypeOf<ArgumentOutOfRangeException>());
         }
 
@@ -47,14 +47,14 @@ namespace MathHorde.Tests.EditMode.Resources
         public void Construct_MinGreaterThanOrEqualToMax_Throws()
         {
             Assert.That(
-                () => new ResourcePool(ResourceType.Ammo, current: 0, max: 10, min: 10),
+                () => new ResourcePool(ResourceType.Health, current: 0, max: 10, min: 10),
                 Throws.TypeOf<ArgumentOutOfRangeException>());
         }
 
         [Test]
         public void IsDepleted_CurrentEqualsMin_IsTrue()
         {
-            var pool = new ResourcePool(ResourceType.Ammo, current: 0, max: 200, min: 0);
+            var pool = new ResourcePool(ResourceType.Health, current: 0, max: 200, min: 0);
 
             Assert.That(pool.IsDepleted, Is.True);
         }
@@ -62,7 +62,7 @@ namespace MathHorde.Tests.EditMode.Resources
         [Test]
         public void IsDepleted_CurrentAboveMin_IsFalse()
         {
-            var pool = new ResourcePool(ResourceType.Ammo, current: 1, max: 200, min: 0);
+            var pool = new ResourcePool(ResourceType.Health, current: 1, max: 200, min: 0);
 
             Assert.That(pool.IsDepleted, Is.False);
         }

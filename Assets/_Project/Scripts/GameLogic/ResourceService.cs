@@ -59,9 +59,17 @@ namespace MathHorde.GameLogic
             }
         }
 
-        public int GetCurrent(ResourceType type) => _pools.TryGetValue(type, out var pool) ? pool.Current : 0;
+        public int GetCurrent(ResourceType type)
+        {
+            ResourceRules.RequireActive(type);
+            return _pools.TryGetValue(type, out var pool) ? pool.Current : 0;
+        }
 
-        public int GetMax(ResourceType type) => _pools.TryGetValue(type, out var pool) ? pool.Max : 0;
+        public int GetMax(ResourceType type)
+        {
+            ResourceRules.RequireActive(type);
+            return _pools.TryGetValue(type, out var pool) ? pool.Max : 0;
+        }
 
         public void Initialize(LevelDefinition level)
         {
@@ -71,7 +79,6 @@ namespace MathHorde.GameLogic
             }
 
             _pools.Clear();
-            _pools.Add(ResourceType.Ammo, new PoolValues(level.StartingAmmo, level.MaxAmmo));
             _pools.Add(ResourceType.Health, new PoolValues(level.StartingHealth, level.MaxHealth));
 
             // Contract game-logic.md 2.2: the Shield pool is created ONLY when
@@ -110,6 +117,7 @@ namespace MathHorde.GameLogic
 
         public bool TryConsume(ResourceType type, int amount, string reasonCode, out ResourceChange change)
         {
+            ResourceRules.RequireActive(type);
             if (amount < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(amount), amount, "amount nem lehet negatív.");
@@ -119,9 +127,7 @@ namespace MathHorde.GameLogic
             if (pool.Current < amount)
             {
                 // Insufficient (including the depleted/zero case) — no partial
-                // consumption, no state change, no event: the caller (e.g. the
-                // weapon) is expected to react with its own WeaponDryFire, not
-                // through a ResourceChanged this service would have to fabricate.
+                // consumption, no state change, no fabricated ResourceChanged event.
                 change = default;
                 return false;
             }
@@ -132,6 +138,7 @@ namespace MathHorde.GameLogic
 
         public ResourceChange SetMax(ResourceType type, int newMax, string reasonCode)
         {
+            ResourceRules.RequireActive(type);
             if (newMax <= 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(newMax), newMax, "newMax > 0 kötelező.");
@@ -157,6 +164,7 @@ namespace MathHorde.GameLogic
 
         private PoolValues GetPoolOrDefault(ResourceType type)
         {
+            ResourceRules.RequireActive(type);
             if (_pools.TryGetValue(type, out var pool))
             {
                 return pool;

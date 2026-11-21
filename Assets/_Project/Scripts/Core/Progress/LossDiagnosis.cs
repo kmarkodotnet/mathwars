@@ -12,6 +12,7 @@ namespace MathHorde.Core.Progress
     public enum LossDiagnosis
     {
         None = 0,
+        // Legacy save tombstone. New sessions must never produce this diagnosis.
         AmmoStarvation = 1,
         EnemyBreakthrough = 2,
         MathAccuracyShortfall = 3,

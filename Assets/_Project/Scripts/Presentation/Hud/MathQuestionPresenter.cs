@@ -70,6 +70,7 @@ namespace MathHorde.Presentation.Hud
             for (int i = 0; !_ended && i < active.Count; i++)
             {
                 var item = active[i];
+                MathContentGuard.RequireActive(item);
                 if (!Visible(item.State)) continue;
                 if (row == _rows.Length) throw new InvalidOperationException("Question HUD preallocated capacity exceeded.");
                 bool changed = _slots[row].Event != item || _slots[row].State != item.State;

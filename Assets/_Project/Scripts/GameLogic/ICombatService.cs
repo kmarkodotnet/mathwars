@@ -6,7 +6,7 @@ namespace MathHorde.GameLogic
 {
     /// <summary>
     /// Contract game-logic.md 3. (spec 4.1, 4.2) — enemy movement, targeting,
-    /// automatic fire, ammo consumption, projectile/hitscan resolution,
+    /// automatic unlimited fire, projectile/hitscan resolution,
     /// contact damage and death. Deliberately has NO reference to
     /// IMathEventDirector anywhere in its surface (constructor, Initialize,
     /// Tick) — the independence contract (game-logic.md 5.) is enforced at
@@ -100,22 +100,19 @@ namespace MathHorde.GameLogic
         public float EnemyHealthMultiplier { get; }
         public float EnemyDamageMultiplier { get; }
         public float SpawnRateMultiplier { get; }
-        public float AmmoConsumptionMultiplier { get; }
 
         public CombatModifiers(
             float enemySpeedMultiplier,
             float enemyHealthMultiplier,
             float enemyDamageMultiplier,
-            float spawnRateMultiplier,
-            float ammoConsumptionMultiplier)
+            float spawnRateMultiplier)
         {
             EnemySpeedMultiplier = enemySpeedMultiplier;
             EnemyHealthMultiplier = enemyHealthMultiplier;
             EnemyDamageMultiplier = enemyDamageMultiplier;
             SpawnRateMultiplier = spawnRateMultiplier;
-            AmmoConsumptionMultiplier = ammoConsumptionMultiplier;
         }
 
-        public static CombatModifiers Neutral { get; } = new CombatModifiers(1f, 1f, 1f, 1f, 1f);
+        public static CombatModifiers Neutral { get; } = new CombatModifiers(1f, 1f, 1f, 1f);
     }
 }

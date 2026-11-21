@@ -9,7 +9,7 @@ namespace MathHorde.GameLogic
 {
     /// <summary>
     /// Contract game-logic.md 3. (spec 4.1, 4.2). Pure simulation: enemy
-    /// movement, targeting, automatic fire, ammo consumption via
+    /// movement, targeting, automatic unlimited fire, health/shield changes via
     /// IResourceService, projectile/hitscan resolution, contact damage
     /// (shield-then-health, rule 5) and death. NEVER reads any math-event
     /// state (spec 1., 23./4.) — there is no IMathEventDirector reference
@@ -283,26 +283,11 @@ namespace MathHorde.GameLogic
                 return;
             }
 
-            int ammoPerShot = Math.Max(1, (int)Math.Round(_weapon.AmmoPerShot * _modifiers.AmmoConsumptionMultiplier, MidpointRounding.AwayFromZero));
-            bool consumed = _resourceService.TryConsume(ResourceType.Ammo, ammoPerShot, "WEAPON_FIRE", out _);
-
-            if (consumed)
-            {
-                _eventSink.Publish(new WeaponFired(target.InstanceId, ammoPerShot, gameTime));
-
-                if (_weapon.ProjectileSpeed <= 0f)
-                {
-                    ResolveHit(target, _weapon.Damage, gameTime);
-                }
-                else
-                {
-                    SpawnProjectile(target.InstanceId, _weapon.Damage, _weapon.ProjectileSpeed, Math.Max(0f, target.Depth));
-                }
-            }
+            _eventSink.Publish(new WeaponFired(target.InstanceId, _weapon.WeaponId, _weapon.Damage, gameTime));
+            if (_weapon.ProjectileSpeed <= 0f)
+                ResolveHit(target, _weapon.Damage, gameTime);
             else
-            {
-                _eventSink.Publish(new WeaponDryFire(gameTime));
-            }
+                SpawnProjectile(target.InstanceId, _weapon.Damage, _weapon.ProjectileSpeed, Math.Max(0f, target.Depth));
 
             float interval = _weapon.FireRate > 0f ? 1f / _weapon.FireRate : MinimumFireIntervalSeconds;
             _fireCooldownRemaining = Math.Max(interval, MinimumFireIntervalSeconds);
@@ -390,7 +375,7 @@ namespace MathHorde.GameLogic
 
             if (slot.CurrentHealth <= 0)
             {
-                _eventSink.Publish(new EnemyKilled(slot.InstanceId, slot.EnemyId, slot.Definition.RewardValue, gameTime));
+                _eventSink.Publish(new EnemyKilled(slot.InstanceId, slot.EnemyId, gameTime));
                 FreeEnemySlot(slot);
             }
         }

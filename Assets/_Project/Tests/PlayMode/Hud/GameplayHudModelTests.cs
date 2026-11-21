@@ -36,7 +36,6 @@ namespace MathHorde.Tests.PlayMode.Hud
         {
             var resourceService = new FakeResourceService();
             resourceService.SetPool(ResourceType.Health, current: 80, max: 100);
-            resourceService.SetPool(ResourceType.Ammo, current: 20, max: 200);
             resourceService.SetPool(ResourceType.Shield, current: 0, max: 50);
 
             var model = new GameplayHudModel(BuildLocalization());
@@ -44,8 +43,8 @@ namespace MathHorde.Tests.PlayMode.Hud
 
             Assert.That(model.Health, Is.EqualTo(80));
             Assert.That(model.MaxHealth, Is.EqualTo(100));
-            Assert.That(model.Ammo, Is.EqualTo(20));
-            Assert.That(model.MaxAmmo, Is.EqualTo(200));
+            Assert.That(typeof(GameplayHudModel).GetProperty("Ammo"), Is.Null);
+            Assert.That(typeof(GameplayHudModel).GetProperty("MaxAmmo"), Is.Null);
             Assert.That(model.Shield, Is.EqualTo(0));
             Assert.That(model.MaxShield, Is.EqualTo(50));
         }
@@ -55,17 +54,17 @@ namespace MathHorde.Tests.PlayMode.Hud
         {
             var resourceService = new FakeResourceService();
             resourceService.SetPool(ResourceType.Health, current: 100, max: 100);
-            resourceService.SetPool(ResourceType.Ammo, current: 60, max: 200);
+            resourceService.SetPool(ResourceType.Shield, current: 60, max: 200);
 
             var model = new GameplayHudModel(BuildLocalization());
             model.Initialize(resourceService);
 
             // Simulate the real service applying a WEAPON_FIRE delta between
             // the event firing and the HUD reacting to it.
-            resourceService.SetPool(ResourceType.Ammo, current: 59, max: 200);
-            model.ApplyResourceChanged(resourceService, ResourceType.Ammo);
+            resourceService.SetPool(ResourceType.Shield, current: 59, max: 200);
+            model.ApplyResourceChanged(resourceService, ResourceType.Shield);
 
-            Assert.That(model.Ammo, Is.EqualTo(59));
+            Assert.That(model.Shield, Is.EqualTo(59));
             Assert.That(model.Health, Is.EqualTo(100), "a Health-en kívüli esemény nem módosíthatja a Health kijelzést.");
         }
 
@@ -103,7 +102,7 @@ namespace MathHorde.Tests.PlayMode.Hud
             model.Initialize(resourceService);
 
             Assert.That(model.HealthLabel, Is.EqualTo("Életerő"));
-            Assert.That(model.AmmoLabel, Is.EqualTo("Lőszer"));
+            Assert.That(typeof(GameplayHudModel).GetProperty("AmmoLabel"), Is.Null);
             Assert.That(model.ShieldLabel, Is.EqualTo("Pajzs"));
             Assert.That(model.PauseLabel, Is.EqualTo("Szünet"));
             Assert.That(model.HealthValueText, Is.EqualTo("7/10"));

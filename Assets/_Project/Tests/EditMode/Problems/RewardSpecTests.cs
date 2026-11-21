@@ -13,9 +13,9 @@ namespace MathHorde.Tests.EditMode.Problems
         [Test]
         public void Constructor_AnswerLaneSelection_FlatAmount_SetsProperties()
         {
-            var reward = new RewardSpec(ResourceType.Ammo, 30, useSnapshotDelta: false);
+            var reward = new RewardSpec(ResourceType.Health, 30, useSnapshotDelta: false);
 
-            Assert.That(reward.Resource, Is.EqualTo(ResourceType.Ammo));
+            Assert.That(reward.Resource, Is.EqualTo(ResourceType.Health));
             Assert.That(reward.FlatAmount, Is.EqualTo(30));
             Assert.That(reward.UseSnapshotDelta, Is.False);
             Assert.That(reward.IncorrectAmount, Is.EqualTo(0));
@@ -34,7 +34,7 @@ namespace MathHorde.Tests.EditMode.Problems
         public void Constructor_UseSnapshotDeltaWithNonZeroFlatAmount_Throws()
         {
             Assert.That(
-                () => new RewardSpec(ResourceType.Ammo, 25, useSnapshotDelta: true),
+                () => new RewardSpec(ResourceType.Health, 25, useSnapshotDelta: true),
                 Throws.TypeOf<ArgumentException>());
         }
 

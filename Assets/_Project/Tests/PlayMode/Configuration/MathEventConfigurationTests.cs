@@ -139,13 +139,13 @@ namespace MathHorde.Tests.PlayMode.Configuration
             ConfigTestReflection.SetField(entry, "_goal", (GateGoal)999);
             Assert.That(level.Validate().Count, Is.EqualTo(3));
             ConfigTestReflection.SetField(entry, "_problemType", ProblemType.AnswerLaneSelection);
-            ConfigTestReflection.SetField(entry, "_rewardResource", ResourceType.Ammo);
+            ConfigTestReflection.SetField(entry, "_rewardResource", ResourceType.Health);
             ConfigTestReflection.SetField(entry, "_goal", GateGoal.ReachTarget);
             Assert.That(ConfigTestReflection.AnyContains(level.Validate(), "ReachTarget"), Is.True);
             ConfigTestReflection.SetField(entry, "_goal", GateGoal.Minimize);
             Assert.That(ConfigTestReflection.AnyContains(level.Validate(), "EnemyArmor"), Is.True);
             ConfigTestReflection.SetField(entry, "_rewardResource", ResourceType.EnemyArmor);
-            Assert.That(level.Validate(), Is.Empty);
+            Assert.That(ConfigTestReflection.AnyContains(level.Validate(), "missing or disabled pool"), Is.True);
         }
 
         [Test]
@@ -269,7 +269,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
 
 #if UNITY_EDITOR
         [Test]
-        public void ShippedAssets_ImportAndTranslate_WhileCl1MaxAmmoCoverageRemainsAnHonestFailure()
+        public void ShippedAssets_ImportAndTranslate_WhileCl1Shield50CoverageRemainsAnHonestFailure()
         {
             var config = AssetDatabase.LoadAssetAtPath<MathEventConfigSO>("Assets/_Project/Configuration/MathEventConfigDefault.asset");
             var level = AssetDatabase.LoadAssetAtPath<LevelDefinitionSO>("Assets/_Project/Configuration/LevelW1L01.asset");
@@ -283,7 +283,21 @@ namespace MathHorde.Tests.PlayMode.Configuration
             var repository = new GameConfigurationRepository(enemies, new[] { level.Weapon }, new[] { level }, mathDifficultyTable: table);
             var dto = repository.GetLevel(new LevelId(level.Id));
             Assert.That(dto.MathEvents.Count, Is.EqualTo(10));
-            var settings = Settings(config, level);
+            // HealthRewardBase = 15 in the accepted reward-table schema. The real
+            // math host/table composition remains F3-12; the adapter consumes its map.
+            var healthRewards = new Dictionary<int, int>();
+            for (int i = 0; i < 10; i++) healthRewards.Add(i, 15);
+            var settings = Settings(config, level, healthRewards);
+            for (int i = 0; i < dto.MathEvents.Count; i++)
+            {
+                bool gate = i % 2 == 0;
+                Assert.That(dto.MathEvents[i].ProblemType, Is.EqualTo(gate ? ProblemType.ResourceOperationComparison : ProblemType.AnswerLaneSelection));
+                Assert.That(dto.MathEvents[i].TriggerGameTime, Is.EqualTo(4 + 14 * i));
+                Assert.That(dto.MathEvents[i].RewardResource, Is.EqualTo(gate ? ResourceType.Shield : ResourceType.Health));
+                Assert.That(dto.MathEvents[i].Goal, Is.EqualTo(GateGoal.Maximize));
+                Assert.That(settings.RewardsByScheduleIndex[i].FlatAmount, Is.EqualTo(gate ? 0 : 15));
+                Assert.That(settings.RewardsByScheduleIndex[i].UseSnapshotDelta, Is.EqualTo(gate));
+            }
             var bus = new GameEventBus(); var resources = new ResourceService(bus, new UnityGameClock());
             resources.Initialize(dto);
             var director = new MathEventDirector(resources, bus, settings);
@@ -291,10 +305,30 @@ namespace MathHorde.Tests.PlayMode.Configuration
             var preparation = director.PrepareUpcomingEvents(0);
             Assert.That(preparation.IsSuccess, Is.False);
             Assert.That(preparation.ErrorCode, Is.EqualTo("GENERATION_EXHAUSTED"));
-            Assert.That(dto.MaxAmmo, Is.EqualTo(200));
+            Assert.That(dto.MaxShield, Is.EqualTo(50));
             Assert.That(repository.GetDifficultyForLevel(1).MaxResultValue, Is.EqualTo(10));
             Assert.That(director.PendingResolutions.Count, Is.EqualTo(0));
         }
 #endif
+        [TestCase(ProblemType.ResourceOperationComparison)]
+        [TestCase(ProblemType.AnswerLaneSelection)]
+        public void ScheduleAndAdapterRejectAmmoAndDisabledOrMissingRewardPools(ProblemType type)
+        {
+            var config = Create<MathEventConfigSO>(); var level = Level();
+            var entry = level.MathEvents[0];
+            ConfigTestReflection.SetField(entry, "_problemType", type);
+            foreach (var resource in new[] { ResourceType.Ammo, ResourceType.Shield, ResourceType.Energy })
+            {
+                ConfigTestReflection.SetField(entry, "_rewardResource", resource);
+                ConfigTestReflection.SetField(level, "_maxShield", 0);
+                string expected = resource == ResourceType.Ammo ? "AMMO_NOT_ALLOWED" : "missing or disabled pool";
+                Assert.That(ConfigTestReflection.AnyContains(level.Validate(), expected), Is.True);
+                var error = Assert.Throws<ConfigurationValidationException>(() => Settings(config, level));
+                Assert.That(error.Message, Does.Contain(expected));
+                Assert.That(entry.RewardResource, Is.EqualTo(resource));
+                Assert.That(level.MaxShield, Is.EqualTo(0));
+            }
+        }
+
     }
 }

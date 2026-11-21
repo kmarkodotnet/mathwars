@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MathHorde.Core.Common;
 using MathHorde.Core.Expressions;
 using MathHorde.Core.Problems;
+using MathHorde.Core.Resources;
 
 namespace MathHorde.MathEngine
 {
@@ -93,6 +94,8 @@ namespace MathHorde.MathEngine
         public Result<ResourceGateBinding> BindResourceGate(PreparedResourceGate prepared, int snapshotValue, int resourceCapacity)
         {
             if (prepared == null) throw new ArgumentNullException(nameof(prepared));
+            string rewardError = ResourceRules.ValidateRewardPair(prepared.Reward.Resource, prepared.Reward.Resource);
+            if (rewardError != null) return Result<ResourceGateBinding>.Fail(rewardError);
             if (resourceCapacity <= 0) return Result<ResourceGateBinding>.Fail("GATE_CAPACITY_INVALID");
             if (resourceCapacity != prepared.PreparedCapacity) return Result<ResourceGateBinding>.Fail("GATE_CONTEXT_CHANGED");
             if (snapshotValue < 0 || snapshotValue > resourceCapacity) return Result<ResourceGateBinding>.Fail("GATE_SNAPSHOT_INVALID");

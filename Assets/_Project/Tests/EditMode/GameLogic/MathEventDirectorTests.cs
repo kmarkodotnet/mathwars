@@ -30,7 +30,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
         }
 
         private static MathEventScheduleEntry Entry(ProblemType type = ProblemType.ResourceOperationComparison, double trigger = 0, float think = 0)
-            => new MathEventScheduleEntry(trigger, type, 1f, think, ResourceType.Ammo, GateGoal.Maximize);
+            => new MathEventScheduleEntry(trigger, type, 1f, think, ResourceType.Shield, GateGoal.Maximize);
 
         private static MathEventDirector Create(out ResourceService resources, out RecordingGameEventSink sink,
             MathEventScheduleEntry[] entries = null, int concurrent = 1, IMathProblemGenerator generator = null,
@@ -40,7 +40,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             sink = new RecordingGameEventSink();
             eventSink = eventSink ?? sink;
             resources = new ResourceService(eventSink, new GameClock());
-            var level = CombatTestFixtures.BuildLevel(startingAmmo: 20, maxAmmo: 30, mathEvents: entries);
+            var level = CombatTestFixtures.BuildLevel(startingShield: 20, maxShield: 30, mathEvents: entries);
             resources.Initialize(level);
             if (rewards == null)
             {
@@ -48,7 +48,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 for (int i = 0; i < entries.Length; i++)
                 {
                     bool gate = entries[i].ProblemType == ProblemType.ResourceOperationComparison;
-                    map[i] = new RewardSpec(ResourceType.Ammo, gate ? 0 : 10, gate);
+                    map[i] = new RewardSpec(ResourceType.Shield, gate ? 0 : 10, gate);
                 }
                 rewards = map;
             }
@@ -82,16 +82,16 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(v.Problem, Is.Null); Assert.That(v.ProblemId, Is.Null); Assert.That(v.ResourceGate, Is.Null);
             Assert.That(v.Carriers.Count, Is.EqualTo(0));
             Assert.That(preview.DisplayExpression, Is.Empty); Assert.That(preview.ProblemId, Is.Null);
-            Assert.That(preview.Resource, Is.EqualTo(ResourceType.Ammo));
-            resources.ApplyDelta(ResourceType.Ammo, -3, "WEAPON_FIRE");
+            Assert.That(preview.Resource, Is.EqualTo(ResourceType.Shield));
+            resources.ApplyDelta(ResourceType.Shield, -3, "WEAPON_FIRE");
             d.Tick(1);
             Assert.That(v.State, Is.EqualTo(MathEventState.Approaching));
             Assert.That(v.SnapshotValue, Is.EqualTo(17));
             Assert.That(v.ResourceGate.Value.ResourceCapacity, Is.EqualTo(30));
             Assert.That(v.ProblemId, Is.EqualTo(v.ResourceGate.Value.ProblemId));
             Assert.That(v.Carriers.Count, Is.EqualTo(2));
-            resources.ApplyDelta(ResourceType.Ammo, -2, "WEAPON_FIRE");
-            resources.SetMax(ResourceType.Ammo, 40, "UPGRADE");
+            resources.ApplyDelta(ResourceType.Shield, -2, "WEAPON_FIRE");
+            resources.SetMax(ResourceType.Shield, 40, "UPGRADE");
             d.PrepareUpcomingEvents(1); d.Tick(1.5);
             Assert.That(v.SnapshotValue, Is.EqualTo(17)); Assert.That(v.ResourceGate.Value.ResourceCapacity, Is.EqualTo(30));
             Assert.That(v.Carriers[0].Position.Y, Is.EqualTo(4f));
@@ -151,11 +151,11 @@ namespace MathHorde.Tests.EditMode.GameLogic
             d.OnPlayerLaneSelected(new LaneIndex(0), 2.1); d.OnPlayerLaneSelected(new LaneIndex(1), 2.1);
             Assert.That(v.State, Is.EqualTo(MathEventState.Resolving)); Assert.That(d.PendingResolutions.Count, Is.EqualTo(1));
             d.ClearPendingResolutions(); Assert.That(d.PendingResolutions.Count, Is.EqualTo(0));
-            var ignored = new RewardApplication(v.EventId, RewardApplicationStatus.AlreadyApplied, 25, 25, ResourceType.Ammo);
+            var ignored = new RewardApplication(v.EventId, RewardApplicationStatus.AlreadyApplied, 25, 25, ResourceType.Shield);
             d.OnRewardProcessed(ignored, 2.2); Assert.That(v.State, Is.EqualTo(MathEventState.Resolving));
-            var application = new RewardApplication(v.EventId, status, 25, status == RewardApplicationStatus.Applied ? 10 : 0, ResourceType.Ammo);
+            var application = new RewardApplication(v.EventId, status, 25, status == RewardApplicationStatus.Applied ? 10 : 0, ResourceType.Shield);
             d.OnRewardProcessed(application, 2.3); d.OnRewardProcessed(application, 2.3);
-            Assert.That(v.State, Is.EqualTo(MathEventState.Completed)); Assert.That(resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(20));
+            Assert.That(v.State, Is.EqualTo(MathEventState.Completed)); Assert.That(resources.GetCurrent(ResourceType.Shield), Is.EqualTo(20));
             Assert.That(sink.OfType<MathEventCompleted>().Count, Is.EqualTo(1));
             Assert.That(sink.OfType<MathEventCompleted>()[0].AppliedDelta, Is.EqualTo(application.AppliedDelta));
             d.Tick(3); Assert.That(d.ActiveEvents.Count, Is.EqualTo(1)); d.Tick(3.3); Assert.That(d.ActiveEvents.Count, Is.EqualTo(0));
@@ -165,15 +165,15 @@ namespace MathHorde.Tests.EditMode.GameLogic
         public void UnrelatedAndSkippedExpiredFeedbackDoNotCompleteResolvingEvent()
         {
             var d = Create(out _, out var sink); var v = OpenDecision(d); d.OnPlayerLaneSelected(new LaneIndex(0), 2);
-            d.OnRewardProcessed(new RewardApplication(MathEventId.Create(3, 99), RewardApplicationStatus.Applied, 1, 1, ResourceType.Ammo), 2);
-            d.OnRewardProcessed(new RewardApplication(v.EventId, RewardApplicationStatus.SkippedExpired, 0, 0, ResourceType.Ammo), 2);
+            d.OnRewardProcessed(new RewardApplication(MathEventId.Create(3, 99), RewardApplicationStatus.Applied, 1, 1, ResourceType.Shield), 2);
+            d.OnRewardProcessed(new RewardApplication(v.EventId, RewardApplicationStatus.SkippedExpired, 0, 0, ResourceType.Shield), 2);
             Assert.That(v.State, Is.EqualTo(MathEventState.Resolving)); Assert.That(sink.OfType<MathEventCompleted>().Count, Is.EqualTo(0));
         }
 
         [Test]
         public void CompletedEventsSurviveSessionEnd_AndConfigurationMapsAreCopied()
         {
-            var rewards = new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Ammo, 0, true) };
+            var rewards = new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Shield, 0, true) };
             var targets = new Dictionary<int, int> { [2] = 25 };
             var settings = new MathEventDirectorSettings(1, 5f, 3f, 2f, 1f, rewards, targets);
             rewards.Clear(); targets.Clear();
@@ -182,7 +182,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(() => ((IDictionary<int, RewardSpec>)settings.RewardsByScheduleIndex).Clear(), Throws.TypeOf<NotSupportedException>());
             var d = Create(out _, out var sink); var v = OpenDecision(d);
             d.OnPlayerLaneSelected(new LaneIndex(0), 2);
-            d.OnRewardProcessed(new RewardApplication(v.EventId, RewardApplicationStatus.Applied, 1, 1, ResourceType.Ammo), 2);
+            d.OnRewardProcessed(new RewardApplication(v.EventId, RewardApplicationStatus.Applied, 1, 1, ResourceType.Shield), 2);
             d.OnSessionEnded(2);
             Assert.That(v.State, Is.EqualTo(MathEventState.Completed)); Assert.That(sink.OfType<MathEventExpired>().Count, Is.EqualTo(0));
         }
@@ -195,7 +195,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var first = OpenDecision(d);
             Assert.That(first.EventId, Is.EqualTo(MathEventId.Create(7, 1)));
             d.OnPlayerLaneSelected(new LaneIndex(0), 2);
-            d.OnRewardProcessed(new RewardApplication(first.EventId, RewardApplicationStatus.SkippedIncorrect, 0, 0, ResourceType.Ammo), 2);
+            d.OnRewardProcessed(new RewardApplication(first.EventId, RewardApplicationStatus.SkippedIncorrect, 0, 0, ResourceType.Shield), 2);
             d.Tick(2.1);
             Assert.That(d.ActiveEvents.Count, Is.EqualTo(2));
             var next = d.ActiveEvents[1]; Assert.That(next.EventId, Is.EqualTo(MathEventId.Create(7, 2)));
@@ -224,11 +224,11 @@ namespace MathHorde.Tests.EditMode.GameLogic
         public void CapacityChangeBeforeBindingReprepares_ChangeInsideTickFailsHonestly()
         {
             var generator = new CountingGenerator(); var d = Create(out var resources, out _, generator: generator);
-            d.PrepareUpcomingEvents(0); d.Tick(0); resources.SetMax(ResourceType.Ammo, 40, "UPGRADE");
+            d.PrepareUpcomingEvents(0); d.Tick(0); resources.SetMax(ResourceType.Shield, 40, "UPGRADE");
             Assert.That(d.PrepareUpcomingEvents(0).IsSuccess, Is.True); d.Tick(1);
             Assert.That(generator.Prepares, Is.EqualTo(2)); Assert.That(d.ActiveEvents[0].ResourceGate.Value.ResourceCapacity, Is.EqualTo(40));
             var d2 = Create(out var r2, out var sink); d2.PrepareUpcomingEvents(0); d2.Tick(0);
-            r2.SetMax(ResourceType.Ammo, 40, "INVALID_ORDER"); d2.Tick(1);
+            r2.SetMax(ResourceType.Shield, 40, "INVALID_ORDER"); d2.Tick(1);
             Assert.That(d2.ActiveEvents[0].State, Is.EqualTo(MathEventState.Expired));
             Assert.That(d2.PendingResolutions.Count, Is.EqualTo(0));
             Assert.That(sink.OfType<MathEventPreparationFailed>()[0].ErrorCode, Is.EqualTo("GATE_CONTEXT_CHANGED"));
@@ -238,7 +238,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
         public void StartupFailureChecksEveryEntry_AndDoesNotEmitChildAttemptOrRunLazyGeneration()
         {
             var generator = new CountingGenerator();
-            var rewards = new Dictionary<int, RewardSpec> { [1] = new RewardSpec(ResourceType.Ammo, 10, false) };
+            var rewards = new Dictionary<int, RewardSpec> { [1] = new RewardSpec(ResourceType.Shield, 10, false) };
             var d = Create(out _, out var sink, entries: new[] { Entry(), Entry(ProblemType.AnswerLaneSelection) }, generator: generator, rewards: rewards);
             Assert.That(d.PrepareUpcomingEvents(0).ErrorCode, Is.EqualTo("MATH_EVENT_CONFIG_INVALID"));
             Assert.That(generator.Generates, Is.EqualTo(1)); Assert.That(d.ActiveEvents.Count, Is.EqualTo(0));
@@ -253,7 +253,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
         public void RunningPreparationFailureExpiresOnlyAffectedUnboundEvent()
         {
             var d = Create(out var resources, out var sink, entries: new[] { Entry(), Entry(ProblemType.AnswerLaneSelection) }, concurrent: 2);
-            d.PrepareUpcomingEvents(0); d.Tick(0); resources.SetMax(ResourceType.Ammo, 200, "UPGRADE");
+            d.PrepareUpcomingEvents(0); d.Tick(0); resources.SetMax(ResourceType.Shield, 200, "UPGRADE");
             Assert.That(d.PrepareUpcomingEvents(0).ErrorCode, Is.EqualTo("GENERATION_EXHAUSTED")); d.Tick(1);
             Assert.That(d.ActiveEvents[0].State, Is.EqualTo(MathEventState.Expired));
             Assert.That(d.ActiveEvents[1].State, Is.EqualTo(MathEventState.Approaching));
@@ -273,7 +273,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             if (phase >= 2) d.Tick(2);
             if (phase >= 3) d.OnPlayerLaneSelected(new LaneIndex(0), 2);
             var v = d.ActiveEvents[0]; d.OnSessionEnded(2); d.OnSessionEnded(2);
-            d.OnRewardProcessed(new RewardApplication(v.EventId, RewardApplicationStatus.Applied, 25, 25, ResourceType.Ammo), 2);
+            d.OnRewardProcessed(new RewardApplication(v.EventId, RewardApplicationStatus.Applied, 25, 25, ResourceType.Shield), 2);
             Assert.That(v.State, Is.EqualTo(MathEventState.Expired)); Assert.That(d.PendingResolutions.Count, Is.EqualTo(0));
             Assert.That(sink.OfType<MathEventExpired>().Count, Is.EqualTo(2)); Assert.That(sink.OfType<MathEventCompleted>().Count, Is.EqualTo(0));
         }
@@ -299,7 +299,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
         {
             d.Tick(0); d.Tick(1); d.Tick(1.5); d.Tick(2); d.OnPlayerLaneSelected(new LaneIndex(0), 2);
             var v = d.ActiveEvents[0];
-            d.OnRewardProcessed(new RewardApplication(v.EventId, RewardApplicationStatus.SkippedIncorrect, 0, 0, ResourceType.Ammo), 2);
+            d.OnRewardProcessed(new RewardApplication(v.EventId, RewardApplicationStatus.SkippedIncorrect, 0, 0, ResourceType.Shield), 2);
             d.Tick(3);
         }
     }

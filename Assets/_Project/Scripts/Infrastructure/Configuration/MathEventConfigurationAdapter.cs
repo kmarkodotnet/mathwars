@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MathHorde.Core.Problems;
+using MathHorde.Core.Resources;
 using MathHorde.GameLogic;
 
 namespace MathHorde.Infrastructure.Configuration
@@ -36,6 +37,12 @@ namespace MathHorde.Infrastructure.Configuration
                 {
                     var entry = level.MathEvents[index];
                     if (entry == null) continue;
+                    if (entry.RewardResource == ResourceType.Ammo)
+                        errors.Add($"MathEvents[{index}].RewardResource: AMMO_NOT_ALLOWED.");
+                    else if ((entry.RewardResource == ResourceType.Health && level.MaxHealth <= 0)
+                        || (entry.RewardResource == ResourceType.Shield && level.MaxShield <= 0)
+                        || (entry.RewardResource != ResourceType.Health && entry.RewardResource != ResourceType.Shield))
+                        errors.Add($"MathEvents[{index}].RewardResource: missing or disabled pool.");
                     bool gate = entry.ProblemType == ProblemType.ResourceOperationComparison;
                     int amount = 0;
                     if (!gate)

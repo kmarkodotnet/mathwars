@@ -98,15 +98,13 @@ namespace MathHorde.Tests.PlayMode.Configuration
         }
 
         [Test]
-        public void Validate_StartingAmmoAboveMaxAmmo_ReportsInvariantViolation()
+        public void ConfigurationHasNoAmmoInventoryFieldsOrProperties()
         {
-            LevelDefinitionSO level = CreateValidLevel();
-            ConfigTestReflection.SetField(level, "_maxAmmo", 50);
-            ConfigTestReflection.SetField(level, "_startingAmmo", 60);
-
-            IReadOnlyList<string> errors = level.Validate();
-
-            Assert.That(ConfigTestReflection.AnyContains(errors, "StartingAmmo"), Is.True);
+            Assert.That(typeof(LevelDefinitionSO).GetProperty("StartingAmmo"), Is.Null);
+            Assert.That(typeof(LevelDefinitionSO).GetProperty("MaxAmmo"), Is.Null);
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            Assert.That(typeof(LevelDefinitionSO).GetField("_startingAmmo", flags), Is.Null);
+            Assert.That(typeof(LevelDefinitionSO).GetField("_maxAmmo", flags), Is.Null);
         }
 
         [Test]

@@ -18,7 +18,7 @@ namespace MathHorde.Infrastructure.Configuration
             [SerializeField] private ProblemType _problemType = ProblemType.AnswerLaneSelection;
             [SerializeField, Range(0.5f, 10f)] private float _previewDurationSeconds = 2f;
             [SerializeField, Range(0f, 60f)] private float _thinkTimeSecondsOverride;
-            [SerializeField] private ResourceType _rewardResource = ResourceType.Ammo;
+            [SerializeField, ActiveResource] private ResourceType _rewardResource = ResourceType.Health;
             [SerializeField] private GateGoal _goal = GateGoal.Maximize;
             [SerializeField, Range(0, 500)] private int _rewardAmountOverride;
             [SerializeField, Range(0, 999)] private int _targetValueOverride;
@@ -41,6 +41,7 @@ namespace MathHorde.Infrastructure.Configuration
                 ConfigValidation.RequireRange(errors, $"{path}.TargetValueOverride", _targetValueOverride, 0, 999);
                 if (!System.Enum.IsDefined(typeof(ProblemType), _problemType)) errors.Add($"{path}.ProblemType érvénytelen.");
                 if (!System.Enum.IsDefined(typeof(ResourceType), _rewardResource)) errors.Add($"{path}.RewardResource érvénytelen.");
+                if (_rewardResource == ResourceType.Ammo) errors.Add($"{path}.RewardResource: AMMO_NOT_ALLOWED.");
                 if (!System.Enum.IsDefined(typeof(GateGoal), _goal)) errors.Add($"{path}.Goal érvénytelen.");
                 if (_goal == GateGoal.ReachTarget && _problemType != ProblemType.TargetValueSelection)
                     errors.Add($"{path}.Goal ReachTarget csak TargetValueSelection esetén engedett.");
@@ -137,11 +138,7 @@ namespace MathHorde.Infrastructure.Configuration
         [SerializeField] private List<MathEventScheduleEntry> _mathEvents = new List<MathEventScheduleEntry>();
         [SerializeField, Range(0f, 1f)] private float _requiredMathAccuracy;
 
-        [Range(0, 999)]
-        [SerializeField] private int _startingAmmo = 60;
 
-        [Range(1, 999)]
-        [SerializeField] private int _maxAmmo = 200;
 
         [Range(1, 999)]
         [SerializeField] private int _startingHealth = 100;
@@ -167,8 +164,6 @@ namespace MathHorde.Infrastructure.Configuration
         public IReadOnlyList<WaveDefinitionEntry> Waves => _waves;
         public IReadOnlyList<MathEventScheduleEntry> MathEvents => _mathEvents;
         public float RequiredMathAccuracy => _requiredMathAccuracy;
-        public int StartingAmmo => _startingAmmo;
-        public int MaxAmmo => _maxAmmo;
         public int StartingHealth => _startingHealth;
         public int MaxHealth => _maxHealth;
         public int StartingShield => _startingShield;
@@ -187,8 +182,6 @@ namespace MathHorde.Infrastructure.Configuration
 
             ConfigValidation.RequireRange(errors, nameof(LaneCount), _laneCount, 2, 4);
             ConfigValidation.RequireRange(errors, nameof(TargetDurationSeconds), _targetDurationSeconds, 60.0f, 600.0f);
-            ConfigValidation.RequireRange(errors, nameof(StartingAmmo), _startingAmmo, 0, 999);
-            ConfigValidation.RequireRange(errors, nameof(MaxAmmo), _maxAmmo, 1, 999);
             ConfigValidation.RequireRange(errors, nameof(StartingHealth), _startingHealth, 1, 999);
             ConfigValidation.RequireRange(errors, nameof(MaxHealth), _maxHealth, 1, 999);
             ConfigValidation.RequireRange(errors, nameof(StartingShield), _startingShield, 0, 999);
@@ -198,10 +191,6 @@ namespace MathHorde.Infrastructure.Configuration
             if (!System.Enum.IsDefined(typeof(LevelTemplate), _templateType)) errors.Add("TemplateType érvénytelen.");
             CollectMathEventErrors(errors, 0f, 2);
 
-            if (_startingAmmo > _maxAmmo)
-            {
-                errors.Add("StartingAmmo nem lehet nagyobb MaxAmmo-nál.");
-            }
 
             if (_startingHealth > _maxHealth)
             {
@@ -233,6 +222,10 @@ namespace MathHorde.Infrastructure.Configuration
                 var entry = _mathEvents[i];
                 if (entry == null) { errors.Add($"MathEvents[{i}] nem lehet null."); continue; }
                 entry.CollectErrors(errors, $"MathEvents[{i}]");
+                if ((entry.RewardResource == ResourceType.Health && _maxHealth <= 0)
+                    || (entry.RewardResource == ResourceType.Shield && _maxShield <= 0)
+                    || entry.RewardResource == ResourceType.EnemyArmor || entry.RewardResource == ResourceType.Energy)
+                    errors.Add($"MathEvents[{i}].RewardResource: missing or disabled pool.");
                 if (entry.TriggerGameTime >= _targetDurationSeconds)
                     errors.Add($"MathEvents[{i}].TriggerGameTime a pálya vége előtt kötelező.");
                 order.Add(i);

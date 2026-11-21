@@ -80,8 +80,10 @@ használja; az adapter nem módosít `DifficultyProfile`-t ezek kedvéért.
 Az ADR-017 előtti, valóban szállított asset tíz váltakozó resource/lane bejegyzése
 Ammo jutalmat tartalmazott. Ez történeti állapot, nem megengedett új tartalom.
 Az F1-20 mind az öt resource bejegyzést `Maximize × Shield`, mind az öt lane
-bejegyzést Health jutalomra migrálja; nincs runtime automatikus átnevezés.
-Lane jutalom a meglévő HealthRewardBase=15, resource mindig nyers snapshot-delta.
+bejegyzést Health jutalomra migrálta; nincs runtime automatikus átnevezés.
+Lane jutalom a kontraktbeli HealthRewardBase=15, resource mindig nyers snapshot-delta.
+Az adapter az explicit jutalomtérképet fogyasztja; a RewardTableSO és a valós
+math-host bekötése még F3-12. A valós assetteszt ugyanezzel a 15-ös bemenettel fut.
 A konkrét CL1 profil, az eredeti schedule-index és a 4,18,…,130 triggerlista
 megmarad; új feladatfajta, skill-feloldás és táblázat nincs. MaxShield>0 kell;
 ha a korábbi pálya letiltotta, az elfogadott SO-default50 látható adatváltozás.

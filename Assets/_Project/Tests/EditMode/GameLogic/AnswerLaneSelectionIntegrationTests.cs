@@ -46,7 +46,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 Assert.That(preview.ProblemId, Is.EqualTo(original.Id));
                 Assert.That(preview.DisplayExpression, Is.EqualTo(original.Expression.ToDisplayString() + " = ?"));
 
-                f.Resources.ApplyDelta(ResourceType.Ammo, -7, "WEAPON_FIRE");
+                f.Resources.ApplyDelta(ResourceType.Health, -7, "WEAPON_FIRE");
                 Assert.That(f.Director.PrepareUpcomingEvents(0).IsSuccess, Is.True);
                 f.Director.Tick(.999);
                 Assert.That(active.State, Is.EqualTo(MathEventState.Preview));
@@ -71,7 +71,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 Assert.That(active.Carriers.Select(c => c.Lane).Distinct().Count(), Is.EqualTo(count));
                 Assert.That(active.Carriers.All(c => c.Lane.Value < count), Is.True);
 
-                f.Resources.ApplyDelta(ResourceType.Ammo, -6, "WEAPON_FIRE");
+                f.Resources.ApplyDelta(ResourceType.Health, -6, "WEAPON_FIRE");
                 f.Director.Tick(2);
                 Assert.That(active.State, Is.EqualTo(MathEventState.AwaitingDecision));
                 if (laneCount > count)
@@ -95,7 +95,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 var application = f.Rewards.ApplyReward(resolution);
                 f.Director.OnRewardProcessed(application, 2);
                 Assert.That(active.State, Is.EqualTo(MathEventState.Completed));
-                Assert.That(f.Resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(choice.IsCorrect ? 37 : 7));
+                Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(choice.IsCorrect ? 37 : 7));
                 Assert.That(f.Generator.Generates, Is.EqualTo(1));
                 Assert.That(f.Generator.ResourceCalls, Is.EqualTo(0));
                 Assert.That(active.Problem, Is.SameAs(original));
@@ -122,7 +122,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(f.Generator.Generates, Is.EqualTo(1));
             Assert.That(f.Generator.ResourceCalls, Is.EqualTo(0));
             Assert.That(f.Director.ActiveEvents.Count, Is.EqualTo(0));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Ammo), Is.EqualTo(correct ? 50 : 20));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(correct ? 50 : 20));
         }
 
         [TestCase(2)]
@@ -176,12 +176,12 @@ namespace MathHorde.Tests.EditMode.GameLogic
             internal Fixture(int count, int laneCount, IGameEventSink sink, int seed)
             {
                 var clock = new GameClock();
-                var level = CombatTestFixtures.BuildLevel(laneCount: laneCount, mathEvents: new[]
+                var level = CombatTestFixtures.BuildLevel(startingHealth: 20, maxHealth: 200, laneCount: laneCount, mathEvents: new[]
                 {
-                    new MathEventScheduleEntry(0, ProblemType.AnswerLaneSelection, 1f, 0f, ResourceType.Ammo, GateGoal.Maximize)
+                    new MathEventScheduleEntry(0, ProblemType.AnswerLaneSelection, 1f, 0f, ResourceType.Health, GateGoal.Maximize)
                 });
                 var settings = new MathEventDirectorSettings(1, 5f, 3f, 2f, 1f,
-                    new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Ammo, 30, false) });
+                    new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Health, 30, false) });
                 Resources = new ResourceService(sink, clock);
                 Resources.Initialize(level);
                 Resolver = new GateResolutionService(sink, 1);

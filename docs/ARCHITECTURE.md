@@ -456,7 +456,9 @@ nincs publikus abszolút setter (ld. [`contracts/game-logic.md`](contracts/game-
 
 ## 11. Fegyverkészlet és lőszermentes matematika — ADR-017
 
-A felhasználói termékdöntés célállapota, F1-20/F1-21 még nyitott:
+A fegyverkészlet célállapota F1-21-ben még nyitott; a végtelen tüzelés és az
+ammo-kivezetés F1-20-ban elkészült. A jelenlegi F1 bootstrap továbbra is egy
+`WeaponDefinition` bemenettel indul; a listás API-k és választógombok még nem szállítottak:
 
 ```mermaid
 flowchart LR

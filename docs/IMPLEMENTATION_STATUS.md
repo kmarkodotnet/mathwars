@@ -1,26 +1,45 @@
 # IMPLEMENTATION_STATUS.md — Math Horde
 
-Utolsó frissítés: **2026-11-19** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
+Utolsó frissítés: **2026-11-21** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
 
-**Aktív termékváltozás: ADR-017 — implementáció még NYITOTT.**
-Minden fegyver mindig végtelen lőszerrel működik; ammo semmilyen matekfeladatban
-nem szerepelhet. Két közvetlenül választható, eltérő erősségű fegyver kerül a
-valódi HUD-ra. **F1-20 → F1-21 → F3-12** a soros sorrend. Ez a dokumentációs
-rendezés nem implementált funkció és nem új teszt-/buildbizonyíték.
+**ADR-017: F1-20 elkészült; F1-21 és F3-12 nyitott.**
+A jelenlegi egyfegyveres F1 scene mindig végtelenül tüzel. Nincs ammo pool,
+fogyasztás, dry-fire, kill-refund vagy finite/dev kapcsoló. A Core/SO/repository
+és a valódi builder/assetek nem tartalmaznak aktív ammo mezőt; a HUD Health/Shield
+értéket mutat. `WeaponFired` fegyverazonosítót és sebzést hordoz, kill nem jutalmaz.
+Két valóban választható típus és HUD-gombjaik továbbra is **F1-21** feladata.
 
-F1-20 érinti a runtime/config/asset/HUD/mentési kompatibilitást és mindkét math
-request/generator/validator/reward/presenter utat; F1-21 a valódi váltást.
-A korábbi F1 combat bootstrap a két jegy után indítható marad. A schedule
-resource jutalma Shield, lane jutalma Health lesz; az engedélyezett pool feltétel.
+A közös `ResourceRules` alapján a pool/state/resource API programozói hibával
+utasítja el az Ammo tombstone-t. A Generate/GenerateBatch és Prepare/Bind,
+Validate/IsValid, schedule/adapter, reward és mindhárom math presenter külön
+negatív regresszióval védett. Mindkét request mindkét jutalommezőjét ellenőrizzük;
+Ammo esetén `AMMO_NOT_ALLOWED`, eltérő nem-ammo párnál `INVALID_REQUEST` az eredmény.
+A reward tiltása a pool- és idempotencia-napló módosítása előtt történik.
+Az ordinalok és a régi `AmmoStarvation` mentések olvasása/visszaírása megmaradt;
+új session továbbra is `LossDiagnosis.None` értéket rögzít.
+
+A W1L01 öt resource bejegyzése `Maximize × Shield`, öt lane bejegyzése Health;
+az eredeti indexek/triggerek/CL1 készségek megmaradtak. MaxShield láthatóan 0→50.
+Az adapter a HealthRewardBase=15 értéket továbbra is explicit jutalomtérképből
+kapja; a RewardTableSO és a valódi math-host kompozíciója F3-12 része marad.
+A reprodukálható scene-builder új assethez ugyanezt a schedule-t állítja elő.
 A **CL1/Shield50 teljes coverage** továbbra is valódi integrációs akadály,
 valamint a geometria/schedule és a teljes scene-matekbekötés **F3-12** feladata.
 Az Ammo→más erőforrás névcsere nem tekinthető ennek megoldásának.
 A korábbi gyári F3-12 resource-context DRAFT superseded, nem implementálandó.
 A teljes minőségi kapu és mindkét kötelező matekmechanika követelménye változatlan.
 
+F1-20 friss kapuja: **.NET 843/843/0, Unity EditMode 842/842/0, PlayMode 352/352/0**
+(total/passed/failed; nincs kihagyás). Mindkét 10 000 seedelt generátor-oracle,
+a snapshot/gap/cap/skill/idempotencia és G4 regresszió zöld. A valódi Gameplay
+scene lövése/sebzése/killje, a Health/Shield HUD és pause/resume is ellenőrzött.
+A teljes parancs és a javított PlayMode újrafuttatása a
+[tesztelési dokumentumban](TESTING.md#f1-20-friss-migrációs-bizonyíték--2026-11-21),
+részletes lezárás az [F1-20 naplóban](backlog/done/F1-20.md).
+
 > A következő F3-02…F3-07 leírások az ADR-017 előtti ténylegesen ellenőrzött
 > munkák történeti bizonyítékai. Az ottani ammo-adatok nem jelenlegi termékszabályok;
-> a migrált működést F1-20/F1-21 saját új futása igazolja majd. A done naplók nem változtak.
+> a migrált működés F1-20-as bizonyítéka fent külön szerepel. A done naplók nem változtak.
 
 Az aktuális feladatonkénti állapotot a [generált backlog](backlog.md) tartalmazza.
 **F3-07 konfigurációja elkészült**: valódi `MathEventConfigDefault.asset`, a

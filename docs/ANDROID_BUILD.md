@@ -177,3 +177,23 @@ Hibakeresés: a szkriptek nem-nulla kilépési kóddal állnak le hiba esetén, 
 a konzolra kiemelik a log `error|Exception|BuildFailedException` mintájú
 sorainak utolsó részét; a teljes log mindig megmarad az `artifacts/`
 mappában.
+
+## F1-20 helyi Android smoke-build — 2026-11-21
+
+Parancs a gyár gyökeréből:
+`powershell -NoProfile -ExecutionPolicy Bypass -File game/scripts/build.ps1 -Apk -LogDir F:/Claude/math-horde/game/artifacts/dev/F1-20-ea3260f9b73c/android`.
+A rögzített Unity 6000.3.28f1 fejlesztői build sikeres. A friss
+`Builds/MathHorde-Dev.apk` **96 126 045 bájt**, módosítási ideje
+2026-11-21 12:57:30 (helyi idő), a build kezdete utáni. Az archívumban kizárólag
+`arm64-v8a` ABI és `libil2cpp.so` található. A buildszkript automatikusan
+4→5-re emelte az `AndroidBundleVersionCode` értékét; nincs kézi verzióemelés.
+SHA-256: `2d7affde25e7de0348351a70ee981e305a1aecad5c84589196514cc56402a4d6`.
+Napló és archívum-ellenőrzés: `artifacts/dev/F1-20-ea3260f9b73c/android/`.
+
+A telepített SDK `adb devices` kimenete üres, ezért fizikai Android-eszközös
+FPS/érintés/szín/olvashatóság ellenőrzés nem történt. A K kapu manuális része
+a teljes math scene-kompozícióval együtt marad: csatlakoztatott ARM64 eszközön
+`adb install -r Builds/MathHorde-Dev.apk`, majd indítás, tartós tüzelés,
+Health/Shield kijelzés, sávinput és pause/resume ellenőrzése portrait módban.
+A fegyverválasztó gombok csak F1-21 után ellenőrizhetők; F3-12 teljes
+math-bekötése és coverage-e még nyitott. Release AAB/publikálás nem történt.

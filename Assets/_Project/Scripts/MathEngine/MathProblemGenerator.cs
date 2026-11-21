@@ -259,6 +259,8 @@ namespace MathHorde.MathEngine
             if (r == null) throw new ArgumentNullException(nameof(r));
             if (r.Difficulty == null) throw new ArgumentNullException(nameof(r.Difficulty));
             if (r.Reward == null) throw new ArgumentNullException(nameof(r.Reward));
+            string rewardError = ResourceRules.ValidateRewardPair(r.RewardResource, r.Reward.Resource);
+            if (rewardError != null) return rewardError;
             bool gate = r.Type == ProblemType.ResourceOperationComparison;
             if (gate ? !r.ResourceCapacity.HasValue || r.ResourceCapacity.Value <= 0 : r.ResourceCapacity.HasValue)
                 return "GATE_CAPACITY_INVALID";
