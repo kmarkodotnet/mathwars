@@ -114,7 +114,8 @@ namespace MathHorde.Presentation.Bootstrap
                 _enemyAssets, _weaponAssets, new[] { _levelAsset }, _combatBalance);
 
             LevelDefinition level = configRepository.GetLevel(new MathHorde.Core.Progress.LevelId(_levelAsset.Id));
-            WeaponDefinition weapon = configRepository.GetWeapon(level.WeaponId);
+            var weapons = new WeaponDefinition[level.AvailableWeaponIds.Count];
+            for (int i = 0; i < weapons.Length; i++) weapons[i] = configRepository.GetWeapon(level.AvailableWeaponIds[i]);
             IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog = configRepository.GetAllEnemies();
 
             Resources = new ResourceService(_eventBus, clock);
@@ -154,7 +155,9 @@ namespace MathHorde.Presentation.Bootstrap
             AppStateMachine.Fire(AppTrigger.PlayPressed);
             AppStateMachine.Fire(AppTrigger.LevelSelected);
 
-            _session.StartSession(level, weapon, enemyCatalog, _seed);
+            _session.StartSession(level, weapons, enemyCatalog, _seed);
+            _hud.InitializeWeaponSelection(_session, _eventBus);
+            _inputAdapter.SetUiInputBlocker(_hud.BlocksGameplayInput);
             // F3-12 supplies the real director/configuration/presenters here.
             // Resource initialization must precede this external startup gate.
             var preparation = _mathEventDirector.PrepareUpcomingEvents(clock.GameTime);
@@ -173,6 +176,8 @@ namespace MathHorde.Presentation.Bootstrap
                 ReportMathPreparation(preparation);
             }
             _autosave?.Tick(deltaTime);
+            _hud?.SetPaused(_clock.IsPaused);
+            _hud?.RenderPending();
         }
 
         private void ReportMathPreparation(Result<bool> preparation)

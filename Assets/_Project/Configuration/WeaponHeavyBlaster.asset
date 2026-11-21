@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b6f711a43d295034c8e7484cc48a7426, type: 3}
+  m_Name: WeaponHeavyBlaster
+  m_EditorClassIdentifier: MathHorde.Infrastructure::MathHorde.Infrastructure.Configuration.WeaponConfigSO
+  _id: heavy_blaster
+  _displayNameKey: weapon.heavy
+  _damage: 10
+  _fireRate: 3
+  _range: 25
+  _projectileSpeed: 0
+  _targetingMode: 1
+  _adjacentLanePenalty: 0
+  _projectilePrefab: {fileID: 0}
+  _muzzleEffectKey: vfx.muzzle.default
+  _hitEffectKey: vfx.hit.default

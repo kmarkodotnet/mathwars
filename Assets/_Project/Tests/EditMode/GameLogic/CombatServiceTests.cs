@@ -34,7 +34,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(projectileSpeed: 0f);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 1000);
             var service = CreateService(out var resourceService, out var sink, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
             service.SpawnEnemy(enemy.EnemyId, new LaneIndex(0), spawnDepth: 5f);
 
             service.Tick(gameTime: 0.0, deltaTime: 0.1f);
@@ -54,7 +54,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(projectileSpeed: 0f);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 100000, movementSpeed: .001f);
             var service = CreateService(out var resourceService, out var sink, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
             service.SpawnEnemy(enemy.EnemyId, new LaneIndex(0), spawnDepth: 5f);
 
             for (int i = 0; i < 1000; i++) service.Tick(i * .1, .1f);
@@ -70,7 +70,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(damage: 7, projectileSpeed: 0f);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 100);
             var service = CreateService(out _, out var sink, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
             int instanceId = service.SpawnEnemy(enemy.EnemyId, new LaneIndex(0), spawnDepth: 5f);
 
             service.Tick(gameTime: 0.0, deltaTime: 0.1f);
@@ -90,7 +90,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(damage: 50, projectileSpeed: 0f);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 10);
             var service = CreateService(out _, out var sink, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
             int instanceId = service.SpawnEnemy(enemy.EnemyId, new LaneIndex(0), spawnDepth: 5f);
 
             service.Tick(gameTime: 0.0, deltaTime: 0.1f);
@@ -112,7 +112,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(projectileSpeed: 0f);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 1000, contactDamage: 12);
             var service = CreateService(out var resourceService, out var sink, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
             service.SpawnEnemy(enemy.EnemyId, new LaneIndex(0), spawnDepth: 0f);
 
             service.Tick(gameTime: 0.0, deltaTime: 0.1f);
@@ -132,7 +132,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(projectileSpeed: 0f);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 1000, contactDamage: 50);
             var service = CreateService(out _, out _, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
             service.SpawnEnemy(enemy.EnemyId, new LaneIndex(0), spawnDepth: 0f);
 
             service.Tick(gameTime: 0.0, deltaTime: 0.1f);
@@ -148,7 +148,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(projectileSpeed: 0f);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 1000, contactDamage: 8);
             var service = CreateService(out var resourceService, out _, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
             service.SpawnEnemy(enemy.EnemyId, new LaneIndex(0), spawnDepth: 0f);
 
             service.Tick(gameTime: 0.0, deltaTime: 0.1f);
@@ -164,7 +164,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(damage: 1, projectileSpeed: 0f, targetingMode: TargetingMode.OwnLaneThenAdjacent);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 100);
             var service = CreateService(out _, out var sink, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
             service.MovePlayerToLane(new LaneIndex(1));
 
             int farInOwnLane = service.SpawnEnemy(enemy.EnemyId, new LaneIndex(1), spawnDepth: 8f);
@@ -185,7 +185,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(damage: 1, projectileSpeed: 0f, targetingMode: TargetingMode.OwnLaneThenAdjacent);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 100);
             var service = CreateService(out _, out var sink, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
             service.MovePlayerToLane(new LaneIndex(1));
             int adjacentEnemy = service.SpawnEnemy(enemy.EnemyId, new LaneIndex(2), spawnDepth: 3f);
 
@@ -203,7 +203,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(damage: 9, projectileSpeed: 10f);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 100, movementSpeed: 0.0001f);
             var service = CreateService(out _, out var sink, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
             service.SpawnEnemy(enemy.EnemyId, new LaneIndex(0), spawnDepth: 1f);
 
             // Fires on this tick but the projectile (distance 1, speed 10) needs 0.1s to arrive.
@@ -220,7 +220,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var level = CombatTestFixtures.BuildLevel();
             var weapon = CombatTestFixtures.BuildWeapon();
             var service = CreateService(out _, out _, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog());
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog());
 
             Assert.That(
                 () => service.SpawnEnemy("no_such_enemy", new LaneIndex(0), 5f),
@@ -234,7 +234,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var weapon = CombatTestFixtures.BuildWeapon(damage: 50, projectileSpeed: 0f);
             var enemy = CombatTestFixtures.BuildEnemy(maxHealth: 1);
             var service = CreateService(out _, out _, level);
-            service.Initialize(level, weapon, CombatTestFixtures.BuildCatalog(enemy));
+            service.Initialize(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(enemy));
 
             int first = service.SpawnEnemy(enemy.EnemyId, new LaneIndex(0), 5f);
             service.Tick(0.0, 0.1f); // kills it, frees its pooled slot

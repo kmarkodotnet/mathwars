@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MathHorde.Core.Common;
 using MathHorde.Core.Levels;
 using MathHorde.Core.Progress;
 
@@ -9,21 +10,8 @@ namespace MathHorde.GameLogic
     /// Tick order (ARCHITECTURE 6.1) is implemented; Presentation's
     /// MonoBehaviour.Update calls this and nothing else.
     ///
-    /// FLAGGED DEVIATION from the contracted signature
-    /// (`StartSession(LevelDefinition level, PlayerProgress progress, int seed)`):
-    /// `PlayerProgress` does not exist in this codebase yet — it depends on
-    /// SkillProfile/DifficultyProfile (core-domain.md 4.), which in turn
-    /// depend on SkillTag/BinaryOperator enums owned by the MathEngine/
-    /// Problems layer (a different, not-yet-landed task). Phase 1 also has
-    /// no consumer for it (IAdaptiveDifficultyService is Phase 4 vapor).
-    /// In its place, StartSession takes the already-resolved
-    /// WeaponDefinition and enemy catalog that ICombatService.Initialize
-    /// needs — the contract does not say how GameSessionService is
-    /// supposed to obtain these (presumably IConfigurationProvider,
-    /// game-logic.md 11., which itself is not implementable yet for the
-    /// same reason). This keeps GameSessionService fully testable without
-    /// fabricating that chain. Recommend the architect revisit once
-    /// PlayerProgress/IConfigurationProvider land.
+    /// ADR-017 freezes the Phase-1 explicit dependency signature: the caller
+    /// resolves the ordered weapon definitions and enemy catalog at startup.
     /// </summary>
     public interface IGameSessionService
     {
@@ -43,9 +31,12 @@ namespace MathHorde.GameLogic
 
         void StartSession(
             LevelDefinition level,
-            WeaponDefinition weapon,
+            IReadOnlyList<WeaponDefinition> weapons,
             IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog,
             int seed);
+        IReadOnlyList<WeaponDefinition> AvailableWeapons { get; }
+        string CurrentWeaponId { get; }
+        Result<bool> SelectWeapon(string weaponId);
 
         /// <summary>
         /// The mandatory Tick order (ARCHITECTURE 6.1):

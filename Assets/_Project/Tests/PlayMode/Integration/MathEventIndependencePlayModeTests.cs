@@ -92,7 +92,7 @@ namespace MathHorde.Tests.PlayMode.Integration
                 startingShield: 500,
                 maxShield: 500,
                 requiredMathAccuracy: 0f,
-                weaponId: "basic_weapon");
+                weaponId: "basic_weapon", availableWeaponIds: new[] { "basic_weapon", "strong" });
         }
 
         [UnityTest]
@@ -120,8 +120,8 @@ namespace MathHorde.Tests.PlayMode.Integration
             var director = new MathEventDirector(resources, bus, settings);
             var session = new GameSessionService(clock, new WaveDirector(), combat, director, resources, bus);
             var enemy = new EnemyDefinition("basic_bot", EnemyType.Basic, 1000, 1f, 5, 1f, "prefab_basic_bot");
-            var weapon = new WeaponDefinition("basic_weapon", 1, 20f, 20f, 0f, TargetingMode.OwnLaneThenAdjacent, "fx_basic");
-            session.StartSession(level, weapon, new Dictionary<string, EnemyDefinition> { ["basic_bot"] = enemy }, 7);
+            var weapon = new WeaponDefinition("basic_weapon", 1, 20f, 20f, 0f, TargetingMode.OwnLaneThenAdjacent, "fx_basic", displayNameKey: "weapon.test");
+            session.StartSession(level, new[] { weapon, new WeaponDefinition("strong", 2, 20f, 20f, 0f, TargetingMode.OwnLaneThenAdjacent, "fx", "weapon.test") }, new Dictionary<string, EnemyDefinition> { ["basic_bot"] = enemy }, 7);
             director.Initialize(level, profile, new MathProblemGenerator(), new DeterministicRandomSource(7));
             var startup = director.PrepareUpcomingEvents(clock.GameTime);
             Assert.That(startup.IsSuccess, Is.True, startup.ErrorCode);
@@ -155,7 +155,7 @@ namespace MathHorde.Tests.PlayMode.Integration
                     }
                     if (active.State == MathEventState.AwaitingDecision)
                     {
-                        if (shotsAtDecision < 0) { shotsAtDecision = shots; openedAt = clock.GameTime; }
+                        if (shotsAtDecision < 0) { shotsAtDecision = shots; openedAt = clock.GameTime; Assert.That(session.SelectWeapon("strong").Value, Is.True); }
                         if (clock.GameTime - openedAt >= 0.25) break;
                     }
                 }
@@ -164,6 +164,8 @@ namespace MathHorde.Tests.PlayMode.Integration
             Assert.That(active, Is.Not.Null);
             Assert.That(sawPreview, Is.True); Assert.That(sawSpawn, Is.True);
             Assert.That(active.State, Is.EqualTo(MathEventState.AwaitingDecision));
+            Assert.That(shotsAtDecision, Is.GreaterThan(0));
+            Assert.That(session.CurrentWeaponId, Is.EqualTo("strong"));
             Assert.That(shots, Is.GreaterThan(shotsAtDecision));
             Assert.That(combat.ActiveEnemies.Count, Is.GreaterThan(0)); Assert.That(session.IsRunning, Is.True);
             Assert.That(clock.IsPaused, Is.False); Assert.That(diagnostics, Is.EqualTo(0));
@@ -209,7 +211,7 @@ namespace MathHorde.Tests.PlayMode.Integration
                 })
             };
             var level = BuildLevel(waves);
-            var weapon = new WeaponDefinition("basic_weapon", damage: 1, fireRate: 20f, range: 20f, projectileSpeed: 0f, TargetingMode.OwnLaneThenAdjacent, "fx_basic");
+            var weapon = new WeaponDefinition("basic_weapon", damage: 1, fireRate: 20f, range: 20f, projectileSpeed: 0f, TargetingMode.OwnLaneThenAdjacent, "fx_basic", displayNameKey: "weapon.test");
             var enemy = new EnemyDefinition("basic_bot", EnemyType.Basic, maxHealth: 1000, movementSpeed: 1f, contactDamage: 5, attackCooldownSeconds: 1f, "prefab_basic_bot");
             var catalog = new Dictionary<string, EnemyDefinition> { ["basic_bot"] = enemy };
 
@@ -221,7 +223,7 @@ namespace MathHorde.Tests.PlayMode.Integration
             var mathEventDirector = new LifecycleDriver();
             var session = new GameSessionService(clock, waveDirector, combatService, mathEventDirector, resourceService, sink);
 
-            session.StartSession(level, weapon, catalog, seed: 7);
+            session.StartSession(level, new[] { weapon, new WeaponDefinition("strong", 2, 20f, 20f, 0f, TargetingMode.OwnLaneThenAdjacent, "fx", "weapon.test") }, catalog, seed: 7);
             int shots = 0; sink.Subscribe<WeaponFired>(_ => shots++);
             int startingShots = shots;
 

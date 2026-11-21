@@ -32,7 +32,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 startingShield: maxShield == 0 ? 0 : startingShield,
                 maxShield: maxShield ?? shieldCapacity,
                 requiredMathAccuracy: 0f,
-                weaponId: "basic_weapon");
+                weaponId: "basic_weapon", availableWeaponIds: new[] { "basic_weapon" });
         }
 
         private static ResourceService CreateService(out RecordingGameEventSink sink, out GameClock clock)

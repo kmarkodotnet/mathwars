@@ -45,6 +45,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
             var wave = new LevelDefinitionSO.WaveDefinitionEntry();
             ConfigTestReflection.SetField(wave, "_spawns", new List<LevelDefinitionSO.WaveSpawnEntry> { spawn });
             ConfigTestReflection.SetField(level, "_weapon", weapon);
+            ConfigTestReflection.SetField(level, "_availableWeapons", new List<WeaponConfigSO> { weapon });
             ConfigTestReflection.SetField(level, "_environmentPrefab", prefab);
             ConfigTestReflection.SetField(level, "_displayNameKey", "level.w1l01.name");
             ConfigTestReflection.SetField(level, "_waves", new List<LevelDefinitionSO.WaveDefinitionEntry> { wave });
@@ -280,7 +281,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
             var enemies = new List<EnemyDefinitionSO>();
             foreach (var guid in AssetDatabase.FindAssets("t:EnemyDefinitionSO", new[] { "Assets/_Project/Configuration/Enemies" }))
                 enemies.Add(AssetDatabase.LoadAssetAtPath<EnemyDefinitionSO>(AssetDatabase.GUIDToAssetPath(guid)));
-            var repository = new GameConfigurationRepository(enemies, new[] { level.Weapon }, new[] { level }, mathDifficultyTable: table);
+            var repository = new GameConfigurationRepository(enemies, level.AvailableWeapons, new[] { level }, mathDifficultyTable: table);
             var dto = repository.GetLevel(new LevelId(level.Id));
             Assert.That(dto.MathEvents.Count, Is.EqualTo(10));
             // HealthRewardBase = 15 in the accepted reward-table schema. The real

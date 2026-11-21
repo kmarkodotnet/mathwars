@@ -35,6 +35,7 @@ namespace MathHorde.Core.Levels
 
         public float RequiredMathAccuracy { get; }
         public string WeaponId { get; }
+        public IReadOnlyList<string> AvailableWeaponIds { get; }
 
         public LevelDefinition(
             LevelId id,
@@ -50,8 +51,24 @@ namespace MathHorde.Core.Levels
             int startingShield,
             int maxShield,
             float requiredMathAccuracy,
-            string weaponId)
+            string weaponId,
+            IReadOnlyList<string> availableWeaponIds)
         {
+            if (availableWeaponIds == null || availableWeaponIds.Count < 1 || availableWeaponIds.Count > 4)
+                throw new ArgumentException("AvailableWeaponIds must contain 1..4 ids.", nameof(availableWeaponIds));
+            var ids = new string[availableWeaponIds.Count];
+            bool containsStarter = false;
+            for (int i = 0; i < ids.Length; i++)
+            {
+                string candidate = availableWeaponIds[i];
+                if (string.IsNullOrWhiteSpace(candidate)) throw new ArgumentException("Empty weapon id.", nameof(availableWeaponIds));
+                for (int j = 0; j < i; j++)
+                    if (ids[j] == candidate) throw new ArgumentException("Duplicate weapon id.", nameof(availableWeaponIds));
+                ids[i] = candidate;
+                containsStarter |= candidate == weaponId;
+            }
+            if (!containsStarter) throw new ArgumentException("Starting weapon must be available.", nameof(weaponId));
+            AvailableWeaponIds = Array.AsReadOnly(ids);
             if (laneCount < 2 || laneCount > 4)
             {
                 throw new ArgumentOutOfRangeException(nameof(laneCount), laneCount, "LaneCount 2..4 kötelező.");

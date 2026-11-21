@@ -9,6 +9,7 @@
         "MathHorde.Presentation",
         "MathHorde.Infrastructure",
         "Unity.TextMeshPro",
+        "Unity.InputSystem",
         "Unity.Nuget.Newtonsoft-Json",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"

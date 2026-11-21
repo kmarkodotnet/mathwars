@@ -38,12 +38,71 @@ namespace MathHorde.Presentation.Hud
         [Header("Szünet")]
         [SerializeField] private Button _pauseButton;
         [SerializeField] private TMP_Text _pauseButtonText;
+        [Header("Weapon selector")]
+        [SerializeField] private GameObject _weaponGroup;
+        [SerializeField] private Button[] _weaponButtons = System.Array.Empty<Button>();
+        [SerializeField] private TMP_Text[] _weaponLabels = System.Array.Empty<TMP_Text>();
+        [SerializeField] private TMP_Text[] _weaponActiveLabels = System.Array.Empty<TMP_Text>();
+        private IGameSessionService _session;
+        private IGameEventSource _weaponEvents;
+        private bool _lastCanSelect;
+        private bool _healthDirty;
+        private bool _shieldDirty;
+        private bool _waveDirty;
 
         private GameplayHudModel _model;
         private IGameEventSource _eventSource;
         private IResourceService _resourceService;
 
         public event System.Action PauseRequested;
+
+        public void InitializeWeaponSelection(IGameSessionService session, IGameEventSource events)
+        {
+            _session = session;
+            _weaponEvents = events;
+            _model.InitializeWeaponSelection(session);
+            events.Subscribe<WeaponChanged>(HandleWeaponChanged);
+            for (int i = 0; i < _weaponButtons.Length; i++)
+            {
+                int index = i;
+                bool visible = i < session.AvailableWeapons.Count;
+                _weaponButtons[i].gameObject.SetActive(visible);
+                if (!visible) continue;
+                _weaponLabels[i].text = _model.WeaponLabel(i);
+                _weaponActiveLabels[i].text = _model.ActiveWeaponLabel;
+                _weaponButtons[i].onClick.AddListener(() => _session.SelectWeapon(_session.AvailableWeapons[index].WeaponId));
+            }
+            if (_weaponGroup != null) _weaponGroup.SetActive(session.AvailableWeapons.Count > 1);
+            RenderPending();
+        }
+
+        private void HandleWeaponChanged(WeaponChanged change) => _model.ApplyWeaponChanged(change);
+        public void SetPaused(bool isPaused) => _model?.SetPaused(isPaused);
+
+        // Called by the bootstrap after simulation Tick, including pause/end frames.
+        public void RenderPending()
+        {
+            if (_healthDirty) { RefreshValueFor(ResourceType.Health); _healthDirty = false; }
+            if (_shieldDirty) { RefreshValueFor(ResourceType.Shield); _shieldDirty = false; }
+            if (_waveDirty) { SetText(_waveText, _model.WaveText); _waveDirty = false; }
+            if (_session == null) return;
+            bool canSelect = _model.CanSelectWeapon;
+            if (!_model.WeaponsDirty && canSelect == _lastCanSelect) return;
+            for (int i = 0; i < _session.AvailableWeapons.Count; i++)
+            {
+                _weaponButtons[i].interactable = canSelect;
+                _weaponActiveLabels[i].gameObject.SetActive(_session.AvailableWeapons[i].WeaponId == _model.CurrentWeaponId);
+            }
+            _lastCanSelect = canSelect;
+            _model.MarkWeaponsRendered();
+        }
+
+        public bool BlocksGameplayInput(Vector2 screenPosition)
+        {
+            if (_pauseButton != null && RectTransformUtility.RectangleContainsScreenPoint((RectTransform)_pauseButton.transform, screenPosition)) return true;
+            return _weaponGroup != null && _weaponGroup.activeInHierarchy
+                && RectTransformUtility.RectangleContainsScreenPoint((RectTransform)_weaponGroup.transform, screenPosition);
+        }
 
         /// <summary>
         /// Wires localization, the live resource service and the event
@@ -73,6 +132,7 @@ namespace MathHorde.Presentation.Hud
 
         private void OnDestroy()
         {
+            _weaponEvents?.Unsubscribe<WeaponChanged>(HandleWeaponChanged);
             if (_pauseButton != null)
             {
                 _pauseButton.onClick.RemoveListener(RaisePauseRequested);
@@ -95,16 +155,14 @@ namespace MathHorde.Presentation.Hud
         private void HandleResourceChanged(ResourceChanged e)
         {
             _model.ApplyResourceChanged(_resourceService, e.Change.Type);
-            RefreshValueFor(e.Change.Type);
+            if (e.Change.Type == ResourceType.Health) _healthDirty = true;
+            if (e.Change.Type == ResourceType.Shield) _shieldDirty = true;
         }
 
         private void HandleWaveStarted(WaveStarted e)
         {
             _model.ApplyWaveStarted(e.WaveIndex);
-            if (_waveText != null)
-            {
-                _waveText.text = _model.WaveText;
-            }
+            _waveDirty = true;
         }
 
         private void RefreshStaticLabels()

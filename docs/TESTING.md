@@ -535,7 +535,7 @@ architekturálisan kritikus, könnyen regresszálható invariáns
 
 ## ADR-017 utáni kötelező regresszió — F1-20/F1-21
 
-A fegyverváltási tesztterv továbbra is F1-21 célállapota. Az F1-20 friss bizonyítéka alább.
+A fegyverváltás F1-21-ben megvalósult; külön friss bizonyítéka az F1-20-as migráció után olvasható.
 A történeti F3-05/06/07 futásszámok és done naplók változatlan történeti adatok.
 
 - F1-20: mindkét requestmező és generátorbelépés, GenerateBatch, Prepare/Bind,
@@ -593,3 +593,62 @@ ellenőriz; az eredeti CL1 teljes coverage továbbra is `GENERATION_EXHAUSTED`.
 A RewardTableSO/host és mindkét matekmechanika valós Gameplay-bekötése F3-12,
 a valódi fegyverválasztás F1-21 marad. A mentési kompatibilitást a névként és
 ordinal-szövegként tárolt legacy `AmmoStarvation` round-trip igazolja verzióemelés nélkül.
+
+## F1-21 valódi HUD-fegyverváltás — 2026-11-21
+
+Végleges forráson, a gyár gyökeréből:
+`powershell -NoProfile -ExecutionPolicy Bypass -File game/scripts/test.ps1 -Full -LogDir F:/Claude/math-horde/game/artifacts/dev/F1-21-a6356a22f613`.
+A `full-final.log` eredménye **.NET total=850 passed=850 failed=0,
+Unity EditMode total=849 passed=849 failed=0, PlayMode total=363 passed=363
+failed=0**, mindenütt skipped=0. A friss Unity-XML-ek result=Passed;
+EditMode 12:23:27–12:24:05 UTC, PlayMode 12:24:19–12:24:32 UTC.
+A .NET egy további infrastruktúra-smoke tesztje megmaradt. Mindkét 10 000
+seedelt math-oracle, a snapshot/gap/cap/skill/idempotencia és a G4 regresszió zöld.
+
+`WeaponSelectionTests`: kezdő/azonos/hibás id, egyszeri struct esemény, másolt
+immutable listák és hibás katalógusok; pause, halál, lezárás és új session;
+`max(oldNextShotAt,t+1/newFireRate)` cooldown és régi lövedéksebzés/-sebesség.
+Tízezer új Tick és valódi váltás, hibás id és pause ág is szigorúan 0 bájt.
+A repository tesztjei null/üres/duplikált/hiányzó/idegen/túl hosszú listát,
+feloldhatatlan referenciát és hiányzó kezdő fegyvert utasítanak el; a névkulcs
+és a lista sorrendje a Core-ig eljut. Nincs implicit katalógus-fallback.
+
+`WeaponHudIntegrationTests` a szerializált Gameplay scene-t tölti be, és
+`InputSystem.QueueStateEvent(MouseState)` útján, a valódi EventSystem és
+InputSystemUIInputModule alatt kattint. Nem hív onClick.Invoke-ot vagy
+helyettesítő fegyverváltó API-t a kattintási bizonyítékhoz. Ellenőrzi az
+Alapfegyver / Erős fegyver magyar feliratot, a Kiválasztva jelölést, a
+legalább 144 design-pixeles (1080px/360dp terven 48dp) célterületet, és
+normál wave-ellenségen mért 5→10 tényleges sebzést. A gombon induló tap/drag
+nem ad lane tap/swipe eseményt; pause és sessionvég alatt a gomb tiltott.
+A teljes busz→HUD kiválasztás és a Health-változásokkal végzett session Tick
+10 000 ismétlése 0 bájt; a render kizárólag RenderPendingben történik.
+A két valódi math-directoros integráció fegyvert vált az AwaitingDecision
+alatt, és közben továbbra is tüzel; a szállított null-directoros F1 scene
+teljes matekbekötését ez nem állítja késznek. F3-12 nyitott marad.
+
+Az első teljes PlayMode kör 363/353/10: nyolc új teszt téves kivételtípust
+várt, egy régi asset-fixture csak a kezdő fegyvert adta át, a relatív
+HUD-magasság pedig a batch képarányán túl kicsi volt. Javítás: a valódi
+ConfigurationValidationException oracle, explicit teljes lista, fix 192-es
+design-magasság; nincs elváráslazítás. A második kör 363/362/1: a batchben
+nincs fókuszált Game View, ezért a queued mouse állapota 0/false maradt,
+miközben a valódi raycast két találatot adott. A teszt idejére az Input System
+IgnoreFocus és AllDeviceInputAlwaysGoesToGameView módja aktív; TearDown mindkettőt
+visszaállítja. A célzott pointerkör 2/2/0, utána a teljes kapu 363/363/0.
+A hibás XML/logok `*-initial.*`, `*-second.*`, a diagnózis `pointer-diagnostic.*`.
+
+A már meglévő RewardService 10 000 jutalom/0B mérése inicializációérzékeny
+volt: teljes .NET körökben 8144/7616 bájt, izolált első esetben 176 bájt;
+az izolált második eset zöld. Az izolált parancs:
+`dotnet test game/tests/MathHorde.Tests.sln --no-build --filter FullyQualifiedName~TenThousandFirstRewardsAndReplays_WithRealResourceMutations_AllocateZeroBytes`.
+Ugyanez ideiglenes DOTNET_TieredCompilation=0 mellett 2/2 zöld volt.
+A végleges teszt külön, eldobott 100 elemű journalon melegíti a runtime/generic
+utat; a mért szolgáltatás friss, mind a 10 000 első jutalom és ismétlés,
+a szigorú 0 bájt és minden számszerű állapot-oracle változatlan. Normál JIT
+mellett a célzott kör 2/2, a végleges teljes .NET 850/850 zöld.
+
+A reprodukálható GameplaySceneBuilder.BuildAll létrehozza a két valódi SO-t,
+az explicit W1L01-listát, az alsó HUD-gombokat és a működő EventSystemet.
+Új mentési verzió, aktívfegyver-mentés, shop/unlock/matek→fegyver jutalom nincs.
+Az Android/eszközös bizonyíték és a kézi ellenőrzés korlátja: [ANDROID_BUILD](ANDROID_BUILD.md).

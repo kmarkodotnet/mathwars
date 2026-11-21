@@ -11,7 +11,7 @@
 > **v1.2 — ADR-017 (2026-11-19):** a felhasználó döntése alapján minden fegyver
 > mindig végtelen lőszerrel működik. A matek nem használ lőszert; a választható típusok
 > egyre erősebbek lehetnek. A végtelen tüzelés és ammo-kivezetés F1-20-ban elkészült;
-> a tényleges fegyverválasztás F1-21-ben még nyitott.
+> a tényleges HUD-fegyverválasztás F1-21-ben elkészült.
 >
 > **Dokumentum-hierarchia:** ütközés esetén a `docs/contracts/*` az irányadó; ez a
 > dokumentum a *miért*-et és az értékeket adja, a kontrakt a *nevet és a típust* (ADR-009).
@@ -390,7 +390,7 @@ Az ADR-017 szerinti starter_blaster Damage5/FireRate3 (15 DPS) és heavy_blaster
 Damage10/FireRate3 (30 DPS) a LevelW1L01 pályán kezdettől választható. A váltás
 sessionparancs, nem jutalom. Gyors oda-vissza váltás nem ad extra lövést; a régi
 lövedék változatlan. A HUD érintése nem választ matematikai sávot; pause alatt tiltott.
-A két SO és a scene tényleges bekötése F1-21, a végtelen tüzelés F1-20.
+A két SO és a scene tényleges bekötése F1-21-ben, a végtelen tüzelés F1-20-ban elkészült.
 
 A migrált matematikai schedule resource célja Shield, lane jutalma Health. A
 CL1/Shield50 teljes coverage továbbra is hibás, a szállított matek scene-integráció

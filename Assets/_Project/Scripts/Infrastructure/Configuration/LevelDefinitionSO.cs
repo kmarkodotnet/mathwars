@@ -154,6 +154,7 @@ namespace MathHorde.Infrastructure.Configuration
         [SerializeField] private int _maxShield = 50;
 
         [SerializeField] private WeaponConfigSO _weapon;
+        [SerializeField] private List<WeaponConfigSO> _availableWeapons = new List<WeaponConfigSO>();
         [SerializeField] private GameObject _environmentPrefab;
 
         public string Id => _id;
@@ -169,6 +170,7 @@ namespace MathHorde.Infrastructure.Configuration
         public int StartingShield => _startingShield;
         public int MaxShield => _maxShield;
         public WeaponConfigSO Weapon => _weapon;
+        public IReadOnlyList<WeaponConfigSO> AvailableWeapons => _availableWeapons;
         public GameObject EnvironmentPrefab => _environmentPrefab;
 
         public IReadOnlyList<string> Validate()
@@ -178,6 +180,22 @@ namespace MathHorde.Infrastructure.Configuration
             ConfigValidation.RequireNonEmpty(errors, nameof(Id), _id);
             ConfigValidation.RequireNonEmpty(errors, nameof(DisplayNameKey), _displayNameKey);
             ConfigValidation.RequireNotNull(errors, nameof(Weapon), _weapon);
+            if (_availableWeapons == null || _availableWeapons.Count < 1 || _availableWeapons.Count > 4)
+                errors.Add("AvailableWeapons must contain 1..4 references.");
+            else
+            {
+                var ids = new HashSet<string>(System.StringComparer.Ordinal);
+                bool containsStarter = false;
+                for (int i = 0; i < _availableWeapons.Count; i++)
+                {
+                    var candidate = _availableWeapons[i];
+                    if (candidate == null || string.IsNullOrWhiteSpace(candidate.Id))
+                        errors.Add("AvailableWeapons contains a missing reference or id.");
+                    else if (!ids.Add(candidate.Id)) errors.Add("AvailableWeapons contains a duplicate id.");
+                    containsStarter |= candidate != null && candidate == _weapon;
+                }
+                if (!containsStarter) errors.Add("AvailableWeapons must contain Weapon.");
+            }
             ConfigValidation.RequireNotNull(errors, nameof(EnvironmentPrefab), _environmentPrefab);
 
             ConfigValidation.RequireRange(errors, nameof(LaneCount), _laneCount, 2, 4);

@@ -21,7 +21,8 @@ namespace MathHorde.Tests.EditMode.TestSupport
             IReadOnlyList<WaveDefinition> waves = null,
             string bossEnemyId = null,
             string weaponId = "basic_weapon",
-            IReadOnlyList<MathEventScheduleEntry> mathEvents = null)
+            IReadOnlyList<MathEventScheduleEntry> mathEvents = null,
+            IReadOnlyList<string> availableWeaponIds = null)
         {
             return new LevelDefinition(
                 id: new LevelId("w1-l01"),
@@ -37,7 +38,7 @@ namespace MathHorde.Tests.EditMode.TestSupport
                 startingShield: startingShield,
                 maxShield: maxShield,
                 requiredMathAccuracy: requiredMathAccuracy,
-                weaponId: weaponId);
+                weaponId: weaponId, availableWeaponIds: availableWeaponIds ?? new[] { weaponId });
         }
 
         public static WeaponDefinition BuildWeapon(
@@ -48,7 +49,7 @@ namespace MathHorde.Tests.EditMode.TestSupport
             float projectileSpeed = 0f,
             TargetingMode targetingMode = TargetingMode.OwnLaneThenAdjacent)
         {
-            return new WeaponDefinition(weaponId, damage, fireRate, range, projectileSpeed, targetingMode, "fx_basic");
+            return new WeaponDefinition(weaponId, damage, fireRate, range, projectileSpeed, targetingMode, "fx_basic", displayNameKey: "weapon.test");
         }
 
         public static EnemyDefinition BuildEnemy(

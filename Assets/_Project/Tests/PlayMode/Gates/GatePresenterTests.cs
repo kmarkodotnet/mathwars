@@ -66,7 +66,7 @@ namespace MathHorde.Tests.PlayMode.Gates
             var entry = new MathEventScheduleEntry(0, type, 1, 6, resource, goal);
             var entries = repeated ? new[] { entry, new MathEventScheduleEntry(10, type, 1, 6, resource, goal) } : new[] { entry };
             _level = new LevelDefinition(new LevelId("gate-test"), new WorldId("w1"), "level.test", 4, 200,
-                null, entries, null, 20, 30, 20, 30, 0, "basic");
+                null, entries, null, 20, 30, 20, 30, 0, "basic", availableWeaponIds: new[] { "basic" });
             _resources = new ResourceService(_bus, new GameClock());
             _resources.Initialize(_level);
             if (resource == ResourceType.EnemyArmor)
@@ -281,7 +281,7 @@ namespace MathHorde.Tests.PlayMode.Gates
             Create(); Spawn(); _director.Tick(2); _presenter.RenderPending();
             var combat = new CombatService(_resources, _bus);
             var enemy = new EnemyDefinition("bot", EnemyType.Basic, 10000, .1f, 1, 1, "bot");
-            combat.Initialize(_level, new WeaponDefinition("basic", 10, 10, 20, 0, TargetingMode.OwnLaneThenAdjacent, "fx"),
+            combat.Initialize(_level, new[] { new WeaponDefinition("basic", 10, 10, 20, 0, TargetingMode.OwnLaneThenAdjacent, "fx", displayNameKey: "weapon.test") },
                 new Dictionary<string, EnemyDefinition> { ["bot"] = enemy });
             combat.SpawnEnemy("bot", new LaneIndex(0), 5);
             int shots = 0; _bus.Subscribe<WeaponFired>(_ => shots++);

@@ -59,7 +59,7 @@ namespace MathHorde.Tests.PlayMode.Hud
                 if (goal == GateGoal.ReachTarget || type == ProblemType.TargetValueSelection) targets[i] = 0;
             }
             _level = new LevelDefinition(new LevelId("question-test"), new WorldId("w1"), "level.test", 4, 200,
-                null, entries, null, 20, 30, 20, 30, 0, "basic");
+                null, entries, null, 20, 30, 20, 30, 0, "basic", availableWeaponIds: new[] { "basic" });
             _resources = new ResourceService(_bus, _clock); _resources.Initialize(_level);
             if (resource == ResourceType.EnemyArmor)
             {
@@ -172,7 +172,7 @@ namespace MathHorde.Tests.PlayMode.Hud
             Create(); Tick(0); Tick(1); Tick(1);
             var combat = new CombatService(_resources, _bus);
             var enemy = new EnemyDefinition("bot", EnemyType.Basic, 10000, .1f, 1, 1, "bot");
-            combat.Initialize(_level, new WeaponDefinition("basic", 10, 10, 20, 0, TargetingMode.OwnLaneThenAdjacent, "fx"),
+            combat.Initialize(_level, new[] { new WeaponDefinition("basic", 10, 10, 20, 0, TargetingMode.OwnLaneThenAdjacent, "fx", displayNameKey: "weapon.test") },
                 new Dictionary<string, EnemyDefinition> { ["bot"] = enemy });
             combat.SpawnEnemy("bot", new LaneIndex(0), 5);
             int shots = 0; _bus.Subscribe<WeaponFired>(_ => shots++);

@@ -262,6 +262,21 @@ namespace MathHorde.Tests.EditMode.GameLogic
         public void TenThousandFirstRewardsAndReplays_WithRealResourceMutations_AllocateZeroBytes(bool restore)
         {
             const int count = 10000;
+            // Measure the hot path after runtime/generic dispatch initialization.
+            // A separate journal preserves ALL 10000 first applications below;
+            // neither their fresh-service state nor the strict zero-byte oracle changes.
+            var warmSink = new EmptySink(); var warmClock = new GameClock();
+            var warmResources = new ResourceService(warmSink, warmClock);
+            warmResources.Initialize(CombatTestFixtures.BuildLevel(startingShield: 20, maxShield: 100000));
+            var warmRewards = new RewardService(warmResources, warmSink, warmClock, 100);
+            for (int i = 0; i < 100; i++)
+            {
+                var warmResolution = Resolution(i, 2, (GateResolutionOutcome)(i % 4));
+                warmRewards.ApplyReward(warmResolution); warmRewards.ApplyReward(warmResolution);
+                warmRewards.ApplyCombatReward(ResourceType.Shield, 1, "COMBAT_REWARD");
+                warmResources.TryConsume(ResourceType.Shield, 1, "WEAPON_FIRE", out _);
+                warmResources.GetMax(ResourceType.Shield); warmResources.CaptureSnapshot(ResourceType.Shield);
+            }
             var sink = new EmptySink(); var clock = new GameClock();
             var resources = new ResourceService(sink, clock);
             resources.Initialize(CombatTestFixtures.BuildLevel(startingShield: 20, maxShield: 100000));

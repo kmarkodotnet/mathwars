@@ -17,6 +17,8 @@ namespace MathHorde.Tests.PlayMode.TestSupport
     public sealed class FakeCombatService : ICombatService
     {
         public LaneIndex PlayerLane { get; set; } = new LaneIndex(0);
+        public string CurrentWeaponId => throw new NotSupportedException();
+        public Result<bool> SelectWeapon(string weaponId, double gameTime) => throw new NotSupportedException();
 
         public int MoveCallCount { get; private set; }
 
@@ -33,7 +35,7 @@ namespace MathHorde.Tests.PlayMode.TestSupport
 
         public IReadOnlyList<EnemySnapshot> ActiveEnemies => throw new NotSupportedException("PlayerController nem olvassa az ActiveEnemies-t.");
 
-        public void Initialize(LevelDefinition level, WeaponDefinition weapon, IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog) =>
+        public void Initialize(LevelDefinition level, IReadOnlyList<WeaponDefinition> weapons, IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog) =>
             throw new NotSupportedException("PlayerController nem hívhatja az Initialize-ot (csak a GameSessionService).");
 
         public void Tick(double gameTime, float deltaTime) =>

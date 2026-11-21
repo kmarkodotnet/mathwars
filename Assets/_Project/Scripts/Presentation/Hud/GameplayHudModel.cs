@@ -19,12 +19,36 @@ using System;
 using MathHorde.Core.Common;
 using MathHorde.Core.Resources;
 using MathHorde.GameLogic;
+using MathHorde.GameLogic.Events;
+using System.Collections.Generic;
+using MathHorde.Core.Levels;
 
 namespace MathHorde.Presentation.Hud
 {
     public sealed class GameplayHudModel
     {
         private readonly ILocalizationService _localization;
+        private IGameSessionService _session;
+        private bool _isPaused;
+        public IReadOnlyList<WeaponDefinition> AvailableWeapons => _session.AvailableWeapons;
+        public string CurrentWeaponId { get; private set; }
+        public bool WeaponsDirty { get; private set; }
+        public bool CanSelectWeapon => _session != null && _session.IsRunning && !_isPaused;
+        public void SetPaused(bool isPaused) => _isPaused = isPaused;
+        public string WeaponLabel(int index) => _localization.Resolve(AvailableWeapons[index].DisplayNameKey);
+        public string ActiveWeaponLabel => _localization.Resolve("hud.weapon.active");
+        public void InitializeWeaponSelection(IGameSessionService session)
+        {
+            _session = session;
+            CurrentWeaponId = session.CurrentWeaponId;
+            WeaponsDirty = true;
+        }
+        public void ApplyWeaponChanged(WeaponChanged change)
+        {
+            CurrentWeaponId = change.WeaponId;
+            WeaponsDirty = true;
+        }
+        public void MarkWeaponsRendered() => WeaponsDirty = false;
 
         public int Health { get; private set; }
         public int MaxHealth { get; private set; }

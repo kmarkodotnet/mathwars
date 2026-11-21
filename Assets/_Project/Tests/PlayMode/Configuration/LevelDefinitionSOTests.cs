@@ -66,6 +66,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
 
             ConfigTestReflection.SetField(level, "_displayNameKey", "level.w1l01");
             ConfigTestReflection.SetField(level, "_weapon", weapon);
+            ConfigTestReflection.SetField(level, "_availableWeapons", new List<WeaponConfigSO> { weapon });
             ConfigTestReflection.SetField(level, "_environmentPrefab", environmentPrefab);
             ConfigTestReflection.SetField(level, "_waves", new List<LevelDefinitionSO.WaveDefinitionEntry> { CreateValidWave(enemy) });
             ConfigTestReflection.SetField(level, "_mathEvents", ConfigTestReflection.MathSchedule());

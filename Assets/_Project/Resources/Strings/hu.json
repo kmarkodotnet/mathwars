@@ -1,4 +1,7 @@
 {
+  "weapon.starter": "Alapfegyver",
+  "weapon.heavy": "Erős fegyver",
+  "hud.weapon.active": "Kiválasztva",
   "hud.health": "Életerő",
   "hud.shield": "Pajzs",
   "hud.wave": "{0}. hullám",

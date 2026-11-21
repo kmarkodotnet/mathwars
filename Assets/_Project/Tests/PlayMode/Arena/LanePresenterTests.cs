@@ -67,10 +67,10 @@ namespace MathHorde.Tests.PlayMode.Arena
                     type == ProblemType.ResourceOperationComparison);
             }
             var level = new LevelDefinition(new LevelId("lane-test"), new WorldId("w1"), "level.test", laneCount, 200,
-                null, entries, null, 20, 30, 20, 30, 0, "basic");
+                null, entries, null, 20, 30, 20, 30, 0, "basic", availableWeaponIds: new[] { "basic" });
             _resources = new ResourceService(_bus, _clock); _resources.Initialize(level);
             _combat = new CombatService(_resources, _bus);
-            _combat.Initialize(level, new WeaponDefinition("basic", 10, 10, 20, 0, TargetingMode.OwnLaneThenAdjacent, "fx"),
+            _combat.Initialize(level, new[] { new WeaponDefinition("basic", 10, 10, 20, 0, TargetingMode.OwnLaneThenAdjacent, "fx", displayNameKey: "weapon.test") },
                 new Dictionary<string, EnemyDefinition> { ["bot"] = new EnemyDefinition("bot", EnemyType.Basic, 10000, .1f, 1, 1, "bot") });
             var profile = new DifficultyProfile(1, 1, 1, 1, new[] { BinaryOperator.Addition, BinaryOperator.Modulo },
                 (SkillTag[])Enum.GetValues(typeof(SkillTag)), 0, 100, 1000, 2, 2, false, 0, false, 0, false, options, 6, 1, false);

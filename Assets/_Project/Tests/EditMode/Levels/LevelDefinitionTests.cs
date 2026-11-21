@@ -76,7 +76,7 @@ namespace MathHorde.Tests.EditMode.Levels
                 range: 15f,
                 projectileSpeed: 0f,
                 targetingMode: TargetingMode.OwnLaneThenAdjacent,
-                visualEffectKey: "fx_basic");
+                visualEffectKey: "fx_basic", displayNameKey: "weapon.test");
 
             Assert.That(typeof(WeaponDefinition).GetProperty("AmmoPerShot"), Is.Null);
             Assert.That(weapon.ProjectileSpeed, Is.EqualTo(0f), "0 => hitscan, explicitly allowed by the contract.");
@@ -86,7 +86,7 @@ namespace MathHorde.Tests.EditMode.Levels
         public void WeaponDefinition_NonPositiveDamage_Throws()
         {
             Assert.That(
-                () => new WeaponDefinition("w", 0, 1f, 10f, projectileSpeed: 0f, TargetingMode.GlobalNearest, "fx"),
+                () => new WeaponDefinition("w", 0, 1f, 10f, projectileSpeed: 0f, TargetingMode.GlobalNearest, "fx", displayNameKey: "weapon.test"),
                 Throws.TypeOf<ArgumentOutOfRangeException>());
         }
 
@@ -205,7 +205,7 @@ namespace MathHorde.Tests.EditMode.Levels
                 startingShield: startingShield,
                 maxShield: maxShield,
                 requiredMathAccuracy: 0f,
-                weaponId: "basic_weapon");
+                weaponId: "basic_weapon", availableWeaponIds: new[] { "basic_weapon" });
         }
     }
 }

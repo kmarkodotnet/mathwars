@@ -29,6 +29,8 @@ namespace MathHorde.Infrastructure.Input
 
         private bool _isTracking;
         private Vector2 _pressPosition;
+        private System.Func<Vector2, bool> _blocksGameplayInput;
+        public void SetUiInputBlocker(System.Func<Vector2, bool> blocksGameplayInput) => _blocksGameplayInput = blocksGameplayInput;
 
         private void Update()
         {
@@ -40,6 +42,11 @@ namespace MathHorde.Infrastructure.Input
 
             if (pointer.press.wasPressedThisFrame)
             {
+                if (_blocksGameplayInput != null && _blocksGameplayInput(pointer.position.ReadValue()))
+                {
+                    _isTracking = false;
+                    return;
+                }
                 _isTracking = true;
                 _pressPosition = pointer.position.ReadValue();
                 return;

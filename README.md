@@ -9,7 +9,8 @@ teljesítményéhez.
 
 > **Állapot: fejlesztés alatt (ARCH fázis kész).**
 > F3 fejlesztés folyamatban. Az ADR-017 szerinti végtelen tüzelés és az ammo
-> kivezetése elkészült (F1-20). A valódi fegyverváltás F1-21, a teljes scene-matekbekötés F3-12.
+> kivezetése (F1-20), valamint a két magyar HUD-gombos fegyverváltás (F1-21) elkészült.
+> A teljes scene-matekbekötés F3-12 feladata.
 > A pontos, naprakész állapot: [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 ## Technológia

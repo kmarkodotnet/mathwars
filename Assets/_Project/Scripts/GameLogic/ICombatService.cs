@@ -16,7 +16,7 @@ namespace MathHorde.GameLogic
     {
         void Initialize(
             LevelDefinition level,
-            WeaponDefinition weapon,
+            IReadOnlyList<WeaponDefinition> weapons,
             IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog);
 
         /// <summary>
@@ -40,6 +40,8 @@ namespace MathHorde.GameLogic
         void MovePlayerToLane(LaneIndex lane);
 
         LaneIndex PlayerLane { get; }
+        string CurrentWeaponId { get; }
+        Result<bool> SelectWeapon(string weaponId, double gameTime);
 
         bool IsPlayerAlive { get; }
 

@@ -9,6 +9,7 @@ namespace MathHorde.Core.Levels
     public sealed class WeaponDefinition
     {
         public string WeaponId { get; }
+        public string DisplayNameKey { get; }
         public int Damage { get; }
         public float FireRate { get; }
         public float Range { get; }
@@ -23,12 +24,15 @@ namespace MathHorde.Core.Levels
             float range,
             float projectileSpeed,
             TargetingMode targetingMode,
-            string visualEffectKey)
+            string visualEffectKey,
+            string displayNameKey)
         {
             if (string.IsNullOrEmpty(weaponId))
             {
                 throw new ArgumentException("WeaponId nem lehet üres.", nameof(weaponId));
             }
+            if (string.IsNullOrWhiteSpace(displayNameKey))
+                throw new ArgumentException("DisplayNameKey must not be empty.", nameof(displayNameKey));
 
             if (damage <= 0)
             {
@@ -52,6 +56,7 @@ namespace MathHorde.Core.Levels
             }
 
             WeaponId = weaponId;
+            DisplayNameKey = displayNameKey;
             Damage = damage;
             FireRate = fireRate;
             Range = range;

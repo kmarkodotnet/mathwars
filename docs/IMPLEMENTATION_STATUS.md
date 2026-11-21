@@ -2,12 +2,27 @@
 
 Utolsó frissítés: **2026-11-21** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
 
-**ADR-017: F1-20 elkészült; F1-21 és F3-12 nyitott.**
-A jelenlegi egyfegyveres F1 scene mindig végtelenül tüzel. Nincs ammo pool,
+**ADR-017: F1-20 és F1-21 elkészült; F3-12 nyitott.**
+A jelenlegi F1 scene két valódi fegyvertípussal, mindig végtelenül tüzel. Nincs ammo pool,
 fogyasztás, dry-fire, kill-refund vagy finite/dev kapcsoló. A Core/SO/repository
 és a valódi builder/assetek nem tartalmaznak aktív ammo mezőt; a HUD Health/Shield
 értéket mutat. `WeaponFired` fegyverazonosítót és sebzést hordoz, kill nem jutalmaz.
-Két valóban választható típus és HUD-gombjaik továbbra is **F1-21** feladata.
+Az Alapfegyver (Damage5/FireRate3) és az Erős fegyver (Damage10/FireRate3)
+kezdettől választható a W1L01 alsó, magyar HUD-gombjain. A két SO explicit
+pályalistából, másolt immutable Core-katalógussá fordul. A sessionparancs
+cooldownt őriz, a régi lövedéket nem módosítja, és nem ment aktív fegyvert.
+A valódi Input System pointeres PlayMode-teszt 5→10 sebzést mér élő ellenségen,
+ellenőrzi az aktív jelölést, a sáv-/matekbemenet kizárását és a pause/vég tiltását.
+A WeaponChanged, ResourceChanged és WaveStarted HUD-kezelők csak adatot/dirty
+jelzőt tárolnak; a bootstrap Tick után hívja a RenderPendinget. A pause vizuális
+leképezése a meglévő IGameClock.IsPaused értékéből jön, új rétegkontrakt nélkül.
+Részletes új bizonyíték: [F1-21 napló](backlog/done/F1-21.md) és
+[tesztelés](TESTING.md#f1-21-valódi-hud-fegyverváltás--2026-11-21).
+
+F1-21 végleges teljes kapuja: **.NET 850/850/0, Unity EditMode 849/849/0,
+PlayMode 363/363/0**, mindenütt skipped=0; a Unity-XML-ek result=Passed.
+Mindkét 10 000 seedelt math-oracle változatlanul zöld. A 10 000 új Tick/váltás,
+a teljes busz→HUD út, a cooldown és a már repülő lövedék regressziója igazolt.
 
 A közös `ResourceRules` alapján a pool/state/resource API programozói hibával
 utasítja el az Ammo tombstone-t. A Generate/GenerateBatch és Prepare/Bind,

@@ -125,4 +125,7 @@ MonoBehaviour:
   _startingShield: 0
   _maxShield: 50
   _weapon: {fileID: 11400000, guid: 0b89f75d1a684d84393446b8e73b6fca, type: 2}
+  _availableWeapons:
+  - {fileID: 11400000, guid: 0b89f75d1a684d84393446b8e73b6fca, type: 2}
+  - {fileID: 11400000, guid: 6e8f8dc52ef0eca4d95ef14742153d9c, type: 2}
   _environmentPrefab: {fileID: 7025003356192807735, guid: f2d41b9ad558e364c998705c2eed7919, type: 3}

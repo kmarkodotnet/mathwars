@@ -65,11 +65,13 @@ namespace MathHorde.Tests.EditMode.GameLogic
             }
 
             public LaneIndex PlayerLane => _inner.PlayerLane;
+            public string CurrentWeaponId => _inner.CurrentWeaponId;
+            public Result<bool> SelectWeapon(string weaponId, double gameTime) => _inner.SelectWeapon(weaponId, gameTime);
             public bool IsPlayerAlive => _inner.IsPlayerAlive;
             public IReadOnlyList<EnemySnapshot> ActiveEnemies => _inner.ActiveEnemies;
 
-            public void Initialize(LevelDefinition level, WeaponDefinition weapon, IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog)
-                => _inner.Initialize(level, weapon, enemyCatalog);
+            public void Initialize(LevelDefinition level, IReadOnlyList<WeaponDefinition> weapons, IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog)
+                => _inner.Initialize(level, weapons, enemyCatalog);
 
             public void Tick(double gameTime, float deltaTime)
             {
@@ -134,7 +136,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var level = CombatTestFixtures.BuildLevel(waves: LongRunningWave());
             var service = CreateService(level, out var log, out _, out _, out _);
             var weapon = CombatTestFixtures.BuildWeapon();
-            service.StartSession(level, weapon, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
+            service.StartSession(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
 
             service.Tick(0.1f);
             service.Tick(0.1f);
@@ -148,7 +150,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var level = CombatTestFixtures.BuildLevel(waves: LongRunningWave());
             var service = CreateService(level, out var log, out _, out _, out _);
             var weapon = CombatTestFixtures.BuildWeapon();
-            service.StartSession(level, weapon, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
+            service.StartSession(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
 
             service.Pause();
             service.Tick(0.1f);
@@ -166,7 +168,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var level = CombatTestFixtures.BuildLevel(waves: LongRunningWave());
             var service = CreateService(level, out var log, out _, out var combatService, out _);
             var weapon = CombatTestFixtures.BuildWeapon();
-            service.StartSession(level, weapon, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
+            service.StartSession(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
 
             for (int i = 0; i < 50; i++)
             {
@@ -192,7 +194,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var service = CreateService(level, out _, out var sink, out _, out _);
             var weapon = CombatTestFixtures.BuildWeapon(projectileSpeed: 0f);
             var brute = CombatTestFixtures.BuildEnemy(enemyId: "brute", maxHealth: 1000, contactDamage: 50, movementSpeed: 100f);
-            service.StartSession(level, weapon, CombatTestFixtures.BuildCatalog(brute), seed: 1);
+            service.StartSession(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(brute), seed: 1);
 
             // Spawn happens at t=0.1; the enemy (depth 12, speed 100) needs
             // a couple more ticks to close to depth<=0 and apply contact damage.
@@ -218,7 +220,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var level = CombatTestFixtures.BuildLevel(waves: waves, startingHealth: 100, maxHealth: 100);
             var service = CreateService(level, out _, out _, out _, out var resourceService);
             var weapon = CombatTestFixtures.BuildWeapon();
-            service.StartSession(level, weapon, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
+            service.StartSession(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
 
             for (int i = 0; i < 20; i++)
             {
@@ -240,7 +242,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var level = CombatTestFixtures.BuildLevel(waves: waves, requiredMathAccuracy: 0f);
             var service = CreateService(level, out _, out var sink, out _, out _);
             var weapon = CombatTestFixtures.BuildWeapon();
-            service.StartSession(level, weapon, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
+            service.StartSession(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
 
             service.Tick(0.5f);
             Assert.That(service.IsRunning, Is.True);
@@ -257,7 +259,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var level = CombatTestFixtures.BuildLevel();
             var service = CreateService(level, out _, out _, out _, out _);
             var weapon = CombatTestFixtures.BuildWeapon();
-            service.StartSession(level, weapon, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
+            service.StartSession(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 1);
 
             var first = service.Finalize(SessionResult.Victory, FailureReason.None);
             var second = service.Finalize(SessionResult.Defeat, FailureReason.HealthDepleted);
@@ -273,7 +275,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             var service = CreateService(level, out _, out var sink, out _, out _);
             var weapon = CombatTestFixtures.BuildWeapon();
 
-            service.StartSession(level, weapon, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 42);
+            service.StartSession(level, new[] { weapon }, CombatTestFixtures.BuildCatalog(CombatTestFixtures.BuildEnemy()), seed: 42);
 
             var started = sink.OfType<SessionStarted>();
             Assert.That(started.Count, Is.EqualTo(1));

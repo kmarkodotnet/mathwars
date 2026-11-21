@@ -29,6 +29,8 @@ namespace MathHorde.GameLogic
         private readonly IGameEventSink _eventSink;
 
         private WeaponDefinition _weapon;
+        private Dictionary<string, WeaponDefinition> _weapons;
+        private const string WeaponNotAvailable = "WEAPON_NOT_AVAILABLE";
         private IReadOnlyDictionary<string, EnemyDefinition> _enemyCatalog;
         private CombatModifiers _modifiers = CombatModifiers.Neutral;
         private int _laneCount = 1;
@@ -36,7 +38,7 @@ namespace MathHorde.GameLogic
         private LaneIndex _playerLane = new LaneIndex(0);
         private double _lastGameTime;
 
-        private float _fireCooldownRemaining;
+        private double _nextShotAt;
         private int _nextInstanceId = 1;
 
         private sealed class EnemySlot
@@ -78,6 +80,7 @@ namespace MathHorde.GameLogic
         }
 
         public LaneIndex PlayerLane => _playerLane;
+        public string CurrentWeaponId => _weapon?.WeaponId;
 
         public bool IsPlayerAlive { get; private set; } = true;
 
@@ -85,7 +88,7 @@ namespace MathHorde.GameLogic
 
         public void Initialize(
             LevelDefinition level,
-            WeaponDefinition weapon,
+            IReadOnlyList<WeaponDefinition> weapons,
             IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog)
         {
             if (level == null)
@@ -93,7 +96,10 @@ namespace MathHorde.GameLogic
                 throw new ArgumentNullException(nameof(level));
             }
 
-            _weapon = weapon ?? throw new ArgumentNullException(nameof(weapon));
+            var catalog = WeaponCatalog.Copy(level, weapons);
+            _weapons = new Dictionary<string, WeaponDefinition>(catalog.Count, StringComparer.Ordinal);
+            for (int i = 0; i < catalog.Count; i++) _weapons.Add(catalog[i].WeaponId, catalog[i]);
+            _weapon = _weapons[level.WeaponId];
             _enemyCatalog = enemyCatalog ?? throw new ArgumentNullException(nameof(enemyCatalog));
             _laneCount = level.LaneCount;
             _modifiers = CombatModifiers.Neutral;
@@ -101,7 +107,7 @@ namespace MathHorde.GameLogic
             _playerLane = new LaneIndex(0);
             IsPlayerAlive = true;
             _lastGameTime = 0;
-            _fireCooldownRemaining = 0f;
+            _nextShotAt = double.NegativeInfinity;
             _nextInstanceId = 1;
 
             foreach (var slot in _slots)
@@ -132,6 +138,18 @@ namespace MathHorde.GameLogic
         public void ApplyCombatModifiers(CombatModifiers modifiers)
         {
             _modifiers = modifiers;
+        }
+
+        public Result<bool> SelectWeapon(string weaponId, double gameTime)
+        {
+            if (string.IsNullOrEmpty(weaponId) || _weapons == null || !_weapons.TryGetValue(weaponId, out var weapon))
+                return Result<bool>.Fail(WeaponNotAvailable);
+            if (_weapon.WeaponId == weaponId) return Result<bool>.Ok(false);
+            string previous = _weapon.WeaponId;
+            _weapon = weapon;
+            _nextShotAt = Math.Max(_nextShotAt, gameTime + 1.0 / weapon.FireRate);
+            _eventSink.Publish(new WeaponChanged(previous, weaponId, gameTime));
+            return Result<bool>.Ok(true);
         }
 
         public int SpawnEnemy(string enemyId, LaneIndex lane, float spawnDepth)
@@ -192,7 +210,7 @@ namespace MathHorde.GameLogic
             }
 
             MoveAndResolveContacts(gameTime, deltaTime);
-            TickWeapon(gameTime, deltaTime);
+            TickWeapon(gameTime);
             TickProjectiles(gameTime, deltaTime);
             RefreshSnapshotBuffer();
         }
@@ -266,10 +284,9 @@ namespace MathHorde.GameLogic
             }
         }
 
-        private void TickWeapon(double gameTime, float deltaTime)
+        private void TickWeapon(double gameTime)
         {
-            _fireCooldownRemaining -= deltaTime;
-            if (_fireCooldownRemaining > 0f)
+            if (gameTime + 1e-8 < _nextShotAt)
             {
                 return;
             }
@@ -279,7 +296,6 @@ namespace MathHorde.GameLogic
             {
                 // No target: stay "ready" so firing resumes the instant one
                 // appears, instead of waiting out an arbitrary interval.
-                _fireCooldownRemaining = 0f;
                 return;
             }
 
@@ -290,7 +306,7 @@ namespace MathHorde.GameLogic
                 SpawnProjectile(target.InstanceId, _weapon.Damage, _weapon.ProjectileSpeed, Math.Max(0f, target.Depth));
 
             float interval = _weapon.FireRate > 0f ? 1f / _weapon.FireRate : MinimumFireIntervalSeconds;
-            _fireCooldownRemaining = Math.Max(interval, MinimumFireIntervalSeconds);
+            _nextShotAt = gameTime + Math.Max(interval, MinimumFireIntervalSeconds);
         }
 
         private EnemySlot FindTarget()
@@ -342,7 +358,7 @@ namespace MathHorde.GameLogic
                     continue;
                 }
 
-                if (slot.Lane.Value < minLane || slot.Lane.Value > maxLane)
+                if (slot.Lane.Value < minLane || slot.Lane.Value > maxLane || slot.Depth > _weapon.Range)
                 {
                     continue;
                 }

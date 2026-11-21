@@ -54,6 +54,7 @@ public static class GameplaySceneBuilder
     private const string ConfigFolder = "Assets/_Project/Configuration";
     private const string EnemyConfigFolder = ConfigFolder + "/Enemies";
     private const string WeaponAssetPath = ConfigFolder + "/WeaponStarterBlaster.asset";
+    private const string HeavyWeaponAssetPath = ConfigFolder + "/WeaponHeavyBlaster.asset";
     private const string CombatBalanceAssetPath = ConfigFolder + "/CombatBalanceDefault.asset";
     private const string LevelAssetPath = ConfigFolder + "/LevelW1L01.asset";
 
@@ -66,6 +67,7 @@ public static class GameplaySceneBuilder
     public static void BuildAll()
     {
         EnsureDependencyPrefabsExist();
+        GameplayHudBuilder.BuildHud();
         BuildDefaultGameplayConfig(out LevelDefinitionSO level);
         BuildGameplayScene(level);
         AddSceneToBuildSettings();
@@ -184,11 +186,14 @@ public static class GameplaySceneBuilder
         var swarmlet = GetOrCreateEnemy("swarmlet_bot", "Enemy_Swarmlet", MathHorde.Core.Levels.EnemyType.Swarmlet,
             maxHealth: 1, movementSpeed: 3.0f, contactDamage: 5, spawnGroupSize: 4);
 
-        WeaponConfigSO weapon = GetOrCreateWeapon();
+        WeaponConfigSO weapon = GetOrCreateWeapon(WeaponAssetPath, "starter_blaster", "weapon.starter", 5);
+        WeaponConfigSO heavy = GetOrCreateWeapon(HeavyWeaponAssetPath, "heavy_blaster", "weapon.heavy", 10);
         CombatBalanceSO combatBalance = GetOrCreateCombatBalance();
         GameObject arenaPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(ArenaPrefabPath);
 
         level = GetOrCreateLevel(weapon, arenaPrefab, basic, fast, armored);
+        SetPrivateField(level, "_availableWeapons", new List<WeaponConfigSO> { weapon, heavy });
+        EditorUtility.SetDirty(level);
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -222,23 +227,23 @@ public static class GameplaySceneBuilder
         return enemy;
     }
 
-    private static WeaponConfigSO GetOrCreateWeapon()
+    private static WeaponConfigSO GetOrCreateWeapon(string path, string id, string displayNameKey, int damage)
     {
-        var existing = AssetDatabase.LoadAssetAtPath<WeaponConfigSO>(WeaponAssetPath);
-        if (existing != null)
-        {
-            return existing;
-        }
-
-        var weapon = ScriptableObject.CreateInstance<WeaponConfigSO>();
-        SetPrivateField(weapon, "_id", "starter_blaster");
-        SetPrivateField(weapon, "_displayNameKey", "weapon.starter");
+        var weapon = AssetDatabase.LoadAssetAtPath<WeaponConfigSO>(path);
+        bool create = weapon == null;
+        if (create) weapon = ScriptableObject.CreateInstance<WeaponConfigSO>();
+        SetPrivateField(weapon, "_id", id);
+        SetPrivateField(weapon, "_displayNameKey", displayNameKey);
+        SetPrivateField(weapon, "_damage", damage);
+        SetPrivateField(weapon, "_fireRate", 3f);
+        SetPrivateField(weapon, "_range", 25f);
+        SetPrivateField(weapon, "_targetingMode", MathHorde.Core.Levels.TargetingMode.OwnLaneThenAdjacent);
         // Hitscan (ProjectileSpeed == 0, game-logic.md 3.3): no projectile
         // prefab needed, and damage resolves the instant the shot fires —
         // simplest, fastest-to-observe wiring for the Phase-1 vertical slice.
         SetPrivateField(weapon, "_projectileSpeed", 0f);
 
-        AssetDatabase.CreateAsset(weapon, WeaponAssetPath);
+        if (create) AssetDatabase.CreateAsset(weapon, path);
         EditorUtility.SetDirty(weapon);
         return weapon;
     }
@@ -279,6 +284,7 @@ public static class GameplaySceneBuilder
         SetPrivateField(level, "_startingShield", 0);
         SetPrivateField(level, "_maxShield", 50);
         SetPrivateField(level, "_weapon", weapon);
+        SetPrivateField(level, "_availableWeapons", new List<WeaponConfigSO> { weapon });
         SetPrivateField(level, "_environmentPrefab", environmentPrefab);
 
         var wave0Spawn = NewWaveSpawnEntry(basic, count: 10, interval: 1.2f);
@@ -357,6 +363,8 @@ public static class GameplaySceneBuilder
         // SunLight (already part of the Arena prefab) are this scene's only
         // camera/light, so there is no duplicate "MainCamera"-tagged object.
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+        var eventSystem = new GameObject("EventSystem", typeof(UnityEngine.EventSystems.EventSystem));
+        eventSystem.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
         RemoveDefaultSceneObject(scene, "Main Camera");
         RemoveDefaultSceneObject(scene, "Directional Light");
 
@@ -419,7 +427,8 @@ public static class GameplaySceneBuilder
 
         var bootstrapSo = new SerializedObject(bootstrap);
         AssignArray(bootstrapSo, "_enemyAssets", enemyAssets);
-        AssignArray(bootstrapSo, "_weaponAssets", new WeaponConfigSO[] { weapon });
+        WeaponConfigSO heavy = AssetDatabase.LoadAssetAtPath<WeaponConfigSO>(HeavyWeaponAssetPath);
+        AssignArray(bootstrapSo, "_weaponAssets", new WeaponConfigSO[] { weapon, heavy });
         bootstrapSo.FindProperty("_levelAsset").objectReferenceValue = level;
         bootstrapSo.FindProperty("_combatBalance").objectReferenceValue = combatBalance;
         bootstrapSo.FindProperty("_arenaRoot").objectReferenceValue = arenaInstance.transform;

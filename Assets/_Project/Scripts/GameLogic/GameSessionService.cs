@@ -10,7 +10,7 @@ namespace MathHorde.GameLogic
     /// <summary>
     /// Contract game-logic.md 8. — composition root. Owns the single
     /// authoritative Tick order (ARCHITECTURE 6.1); see IGameSessionService
-    /// for the flagged signature deviation (PlayerProgress omitted).
+    /// for the ADR-017 explicit startup dependencies.
     ///
     /// Victory/defeat (spec 1.2, 1.3):
     ///   Victory = AllWavesCompleted &amp;&amp; !IsBossActive &amp;&amp; IsPlayerAlive &amp;&amp;
@@ -27,6 +27,8 @@ namespace MathHorde.GameLogic
     /// </summary>
     public sealed class GameSessionService : IGameSessionService
     {
+        private const string SessionNotRunning = "SESSION_NOT_RUNNING";
+        private const string SessionPaused = "SESSION_PAUSED";
         private readonly IGameClock _clock;
         private readonly IWaveDirector _waveDirector;
         private readonly ICombatService _combatService;
@@ -61,16 +63,28 @@ namespace MathHorde.GameLogic
         public SessionResult Result { get; private set; } = SessionResult.InProgress;
 
         public bool IsRunning { get; private set; }
+        public IReadOnlyList<WeaponDefinition> AvailableWeapons { get; private set; } = Array.Empty<WeaponDefinition>();
+        public string CurrentWeaponId => _combatService.CurrentWeaponId;
+
+        public Result<bool> SelectWeapon(string weaponId)
+        {
+            if (!IsRunning || _finalized || !_combatService.IsPlayerAlive) return Core.Common.Result<bool>.Fail(SessionNotRunning);
+            if (_clock.IsPaused) return Core.Common.Result<bool>.Fail(SessionPaused);
+            return _combatService.SelectWeapon(weaponId, _clock.GameTime);
+        }
 
         public FailureReason FailureReason { get; private set; } = FailureReason.None;
 
         public void StartSession(
             LevelDefinition level,
-            WeaponDefinition weapon,
+            IReadOnlyList<WeaponDefinition> weapons,
             IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog,
             int seed)
         {
-            _level = level ?? throw new ArgumentNullException(nameof(level));
+            if (level == null) throw new ArgumentNullException(nameof(level));
+            var catalog = WeaponCatalog.Copy(level, weapons);
+            _level = level;
+            AvailableWeapons = catalog;
             _seed = seed;
             SessionId = GameSessionId.New();
             _startedAt = DateTimeOffset.UtcNow;
@@ -84,7 +98,7 @@ namespace MathHorde.GameLogic
 
             var random = new DeterministicRandomSource(seed);
             _waveDirector.Initialize(level, random);
-            _combatService.Initialize(level, weapon, enemyCatalog);
+            _combatService.Initialize(level, catalog, enemyCatalog);
 
             _eventSink.Publish(new SessionStarted(SessionId, level.Id, seed, _clock.GameTime));
         }
@@ -141,6 +155,7 @@ namespace MathHorde.GameLogic
             }
 
             _finalized = true;
+            IsRunning = false;
             _finalizedRecord = new GameSessionRecord(
                 SessionId,
                 _level.Id,

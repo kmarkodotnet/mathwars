@@ -21,11 +21,14 @@ namespace MathHorde.Tests.EditMode.GameLogic
             public GameSessionId SessionId { get; } = GameSessionId.New();
             public SessionResult Result { get; set; } = SessionResult.Victory;
             public bool IsRunning { get; private set; } = true;
+            public IReadOnlyList<MathHorde.Core.Levels.WeaponDefinition> AvailableWeapons => throw new System.NotSupportedException();
+            public string CurrentWeaponId => throw new System.NotSupportedException();
+            public MathHorde.Core.Common.Result<bool> SelectWeapon(string id) => throw new System.NotSupportedException();
             public FailureReason FailureReason { get; set; } = FailureReason.None;
 
             public void StartSession(
                 MathHorde.Core.Levels.LevelDefinition level,
-                MathHorde.Core.Levels.WeaponDefinition weapon,
+                IReadOnlyList<MathHorde.Core.Levels.WeaponDefinition> weapons,
                 IReadOnlyDictionary<string, MathHorde.Core.Levels.EnemyDefinition> enemyCatalog,
                 int seed)
             {

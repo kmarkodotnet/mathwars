@@ -84,7 +84,30 @@ public static class GameplayHudBuilder
         mathEventArea.SetActive(false);
 
         var hud = root.AddComponent<GameplayHUD>();
+        // Bottom safe-area strip: 4 x 250-by-192 reference pixels, >=48dp
+        // at the 1080px/360dp portrait design size. Combat remains visible above it.
+        GameObject weapons = CreateAnchoredChild(safeAreaRoot.transform, "WeaponSelector", 0.02f, 0f, 0.98f, 0f);
+        var weaponRect = (RectTransform)weapons.transform;
+        weaponRect.sizeDelta = new Vector2(0f, 192f);
+        weaponRect.anchoredPosition = new Vector2(0f, 116f);
+        var weaponButtons = new Button[4];
+        var weaponLabels = new TMP_Text[4];
+        var activeLabels = new TMP_Text[4];
+        for (int i = 0; i < weaponButtons.Length; i++)
+        {
+            GameObject go = CreateAnchoredChild(weapons.transform, "WeaponButton" + i, i * .25f + .005f, 0f, (i + 1) * .25f - .005f, 1f);
+            var image = go.AddComponent<Image>();
+            image.color = ButtonColor;
+            weaponButtons[i] = go.AddComponent<Button>();
+            weaponButtons[i].targetGraphic = image;
+            weaponLabels[i] = BuildText(go.transform, "Label", .03f, .35f, .97f, .95f, TextAlignmentOptions.Center, 28f);
+            activeLabels[i] = BuildText(go.transform, "Active", .03f, .02f, .97f, .35f, TextAlignmentOptions.Center, 23f);
+        }
         var so = new SerializedObject(hud);
+        so.FindProperty("_weaponGroup").objectReferenceValue = weapons;
+        SetReferences(so, "_weaponButtons", weaponButtons);
+        SetReferences(so, "_weaponLabels", weaponLabels);
+        SetReferences(so, "_weaponActiveLabels", activeLabels);
         so.FindProperty("_healthLabelText").objectReferenceValue = healthLabel;
         so.FindProperty("_healthValueText").objectReferenceValue = healthValue;
         so.FindProperty("_shieldGroup").objectReferenceValue = shieldRow;
@@ -124,6 +147,13 @@ public static class GameplayHudBuilder
         label = BuildText(go.transform, "Label", 0.05f, 0.04f, 0.95f, 0.36f, TextAlignmentOptions.Center, 26f);
 
         return go;
+    }
+
+    private static void SetReferences(SerializedObject target, string property, Object[] values)
+    {
+        var array = target.FindProperty(property);
+        array.arraySize = values.Length;
+        for (int i = 0; i < values.Length; i++) array.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
     }
 
     private static void BuildPauseBar(Transform parent, float centerX)

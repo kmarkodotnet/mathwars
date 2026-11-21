@@ -84,7 +84,7 @@ namespace MathHorde.Infrastructure.Configuration
 
             Dictionary<string, EnemyDefinition> enemies = BuildEnemyCatalog(enemyAssets, errors);
             Dictionary<string, WeaponDefinition> weapons = BuildWeaponCatalog(weaponAssets, errors);
-            Dictionary<string, LevelDefinition> levels = BuildLevelCatalog(levelAssets, enemies, weapons, errors);
+            Dictionary<string, LevelDefinition> levels = BuildLevelCatalog(levelAssets, enemies, weapons, weaponAssets, errors);
 
             if (combatBalance != null)
             {
@@ -346,7 +346,8 @@ namespace MathHorde.Infrastructure.Configuration
                     range: asset.Range,
                     projectileSpeed: asset.ProjectileSpeed,
                     targetingMode: asset.TargetingMode,
-                    visualEffectKey: asset.MuzzleEffectKey);
+                    visualEffectKey: asset.MuzzleEffectKey,
+                    displayNameKey: asset.DisplayNameKey);
             }
 
             return catalog;
@@ -356,6 +357,7 @@ namespace MathHorde.Infrastructure.Configuration
             IReadOnlyList<LevelDefinitionSO> assets,
             Dictionary<string, EnemyDefinition> enemies,
             Dictionary<string, WeaponDefinition> weapons,
+            IReadOnlyList<WeaponConfigSO> weaponAssetsForReferenceCheck,
             List<string> errors)
         {
             var catalog = new Dictionary<string, LevelDefinition>(StringComparer.Ordinal);
@@ -380,6 +382,20 @@ namespace MathHorde.Infrastructure.Configuration
                 }
 
                 string weaponId = asset.Weapon.Id;
+                var availableWeaponIds = new string[asset.AvailableWeapons.Count];
+                bool weaponReferenceFailed = false;
+                for (int i = 0; i < availableWeaponIds.Length; i++)
+                {
+                    availableWeaponIds[i] = asset.AvailableWeapons[i].Id;
+                    if (!weapons.ContainsKey(availableWeaponIds[i])
+                        || !System.Linq.Enumerable.Contains(weaponAssetsForReferenceCheck, asset.AvailableWeapons[i]))
+                        weaponReferenceFailed = true;
+                }
+                if (weaponReferenceFailed)
+                {
+                    errors.Add($"Level '{asset.Id}' AvailableWeapons references a missing or invalid weapon asset.");
+                    continue;
+                }
                 if (!weapons.ContainsKey(weaponId))
                 {
                     errors.Add(
@@ -446,7 +462,8 @@ namespace MathHorde.Infrastructure.Configuration
                     startingShield: asset.StartingShield,
                     maxShield: asset.MaxShield,
                     requiredMathAccuracy: asset.RequiredMathAccuracy,
-                    weaponId: weaponId);
+                    weaponId: weaponId,
+                    availableWeaponIds: availableWeaponIds);
             }
 
             return catalog;

@@ -78,6 +78,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
             ConfigTestReflection.SetField(level, "_id", id);
             ConfigTestReflection.SetField(level, "_displayNameKey", "level." + id);
             ConfigTestReflection.SetField(level, "_weapon", weapon);
+            ConfigTestReflection.SetField(level, "_availableWeapons", new List<WeaponConfigSO> { weapon });
             ConfigTestReflection.SetField(level, "_environmentPrefab", environmentPrefab);
             ConfigTestReflection.SetField(level, "_waves", new List<LevelDefinitionSO.WaveDefinitionEntry> { wave });
             ConfigTestReflection.SetField(level, "_mathEvents", ConfigTestReflection.MathSchedule());
@@ -90,6 +91,49 @@ namespace MathHorde.Tests.PlayMode.Configuration
             var combatBalance = ScriptableObject.CreateInstance<CombatBalanceSO>();
             _created.Add(combatBalance);
             return combatBalance;
+        }
+
+        [Test]
+        public void AvailableWeaponsTranslateInOrder_WithNamesAndImmutableCopiedIds()
+        {
+            var enemy = CreateValidEnemy(); var starter = CreateValidWeapon(); var heavy = CreateValidWeapon("heavy");
+            ConfigTestReflection.SetField(starter, "_displayNameKey", "weapon.starter");
+            ConfigTestReflection.SetField(heavy, "_displayNameKey", "weapon.heavy");
+            var level = CreateValidLevel("weapon-level", starter, enemy);
+            var references = new List<WeaponConfigSO> { starter, heavy };
+            ConfigTestReflection.SetField(level, "_availableWeapons", references);
+            var repository = new GameConfigurationRepository(new[] { enemy }, new[] { starter, heavy }, new[] { level });
+            references.Clear();
+            var domain = repository.GetLevel(new LevelId("weapon-level"));
+            Assert.That(domain.AvailableWeaponIds.Count, Is.EqualTo(2));
+            Assert.That(domain.AvailableWeaponIds[1], Is.EqualTo("heavy"));
+            Assert.That(repository.GetWeapon("heavy").DisplayNameKey, Is.EqualTo("weapon.heavy"));
+            Assert.That(() => ((IList<string>)domain.AvailableWeaponIds)[0] = "other", Throws.TypeOf<System.NotSupportedException>());
+        }
+
+        [TestCase("null")]
+        [TestCase("empty")]
+        [TestCase("duplicate")]
+        [TestCase("missing-reference")]
+        [TestCase("unlisted-starter")]
+        [TestCase("foreign-reference")]
+        [TestCase("unresolved")]
+        [TestCase("too-many")]
+        public void InvalidAvailableWeaponAssetsAreConfigurationErrors(string variant)
+        {
+            var enemy = CreateValidEnemy(); var starter = CreateValidWeapon(); var heavy = CreateValidWeapon("heavy");
+            var level = CreateValidLevel("weapon-level", starter, enemy);
+            var references = new List<WeaponConfigSO> { starter, heavy };
+            if (variant == "null") references = null;
+            if (variant == "empty") references.Clear();
+            if (variant == "duplicate") references.Add(starter);
+            if (variant == "missing-reference") references[1] = null;
+            if (variant == "unlisted-starter") references.RemoveAt(0);
+            if (variant == "foreign-reference") references[1] = CreateValidWeapon("heavy");
+            if (variant == "too-many") references.AddRange(new[] { CreateValidWeapon("3"), CreateValidWeapon("4"), CreateValidWeapon("5") });
+            ConfigTestReflection.SetField(level, "_availableWeapons", references);
+            var catalog = variant == "unresolved" ? new[] { starter } : new[] { starter, heavy };
+            Assert.That(() => new GameConfigurationRepository(new[] { enemy }, catalog, new[] { level }), Throws.TypeOf<ConfigurationValidationException>());
         }
 
         private DeveloperSettingsSO CreateValidDeveloperSettings()

@@ -197,3 +197,39 @@ a teljes math scene-kompozícióval együtt marad: csatlakoztatott ARM64 eszköz
 Health/Shield kijelzés, sávinput és pause/resume ellenőrzése portrait módban.
 A fegyverválasztó gombok csak F1-21 után ellenőrizhetők; F3-12 teljes
 math-bekötése és coverage-e még nyitott. Release AAB/publikálás nem történt.
+
+## F1-21 kétfegyveres HUD Android smoke-build — 2026-11-21
+
+Parancs a gyár gyökeréből:
+`powershell -NoProfile -ExecutionPolicy Bypass -File game/scripts/build.ps1 -Apk -LogDir F:/Claude/math-horde/game/artifacts/dev/F1-21-a6356a22f613/android`.
+A Unity 6000.3.28f1 build sikeres, friss `Builds/MathHorde-Dev.apk`:
+**96 149 189 bájt**, 2026-11-21 13:27:24 helyi idő, a build kezdete utáni.
+SHA-256: `a4aa5008e8cc5eb5f12104d69388007a632a5bb07bb88b997766f8e91f9f3c7a`.
+Az archívum kizárólag `arm64-v8a` ABI-t tartalmaz, `libil2cpp.so` jelen van.
+Az AndroidBundleVersionCode a buildszkripttől 5→6-ra változott.
+Napló és archívum-ellenőrzés: `artifacts/dev/F1-21-a6356a22f613/android/`.
+
+A normál scene két WeaponConfigSO-val, explicit pályalistával, magyar
+Alapfegyver / Erős fegyver gombbal és InputSystemUIInputModule-lal épült.
+A teljes PlayMode 363/363/0, benne valódi queued pointeres kattintás,
+aktív jelölés, élő ellenségen mért 5→10 sebzés és lane-input kizárás.
+Ez a fizikai eszköz tapasztalatát nem helyettesíti: az SDK `adb devices -l`
+listája üres. A színek, FPS, fizikai dp-méret és olvashatóság nem lettek
+Android-eszközön ellenőrizve; a batch-render korlátja változatlan.
+
+Pontos kézi ellenőrzés csatlakoztatott ARM64 Android-eszközzel:
+
+1. `adb devices -l`, majd `adb install -r Builds/MathHorde-Dev.apk`.
+2. Indítsd a Számharcosok alkalmazást, és ellenőrizd portrait 9:16, illetve
+   9:19.5 képarányon/notch mellett az alsó safe-area fegyvergombok legalább
+   48dp célterületét, olvasható magyar feliratát és Kiválasztva jelölését.
+3. Alapfegyverrel induljon a pálya. Válts többször Erős fegyverre és vissza:
+   mindkettő végtelenül tüzeljen, az erős típus gyorsabban győzze le ugyanazt
+   az ellenségtípust. A gomb tap/drag ne váltson sávot; a harctéri tap/swipe
+   továbbra is vezérelje a sávot. A váltás ne adjon azonnali extra lövést.
+4. Pause/eredmény alatt a választó legyen tiltott; új pálya/session induláskor
+   az Alapfegyver legyen aktív. Ellenőrizd a Health/Shield kijelzést,
+   harctér láthatóságát, színeket és a 30–60 FPS célt több perces futásban.
+
+F3-12 teljes math scene-kompozíciója és coverage-e nyitott; a jelenlegi F1
+scene null-directoros. Release AAB/push/publikálás nem történt.
