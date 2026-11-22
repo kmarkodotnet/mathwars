@@ -9,9 +9,15 @@
 > paraméterét lefedi. Ami itt nincs, az a kódban sem lehet beégetett „mágikus szám”.
 >
 > **Revízió r3 — ADR-017 (2026-11-19):** a véges ammo, kill-refund,
-> lőszerbudget/overflow és azonos-DPS követelmény kivezetve. F1-20 az adatmigráció,
-> F1-21 a fegyverkészlet/HUD megvalósítása; e célkontrakt nem kész funkció.
-> A korábbi revíziók bizonyítékai a történeti done jegyekben maradnak.
+> lőszerbudget/overflow és azonos-DPS követelmény kivezetve.
+>
+> **Revízió r4 — ADR-018 + ADR-019 (2026-11-22, architect) — ÉRVÉNYES:**
+> minden matematikai feladat jutalma **fix, pozitív `Health`-összeg**; a
+> `RewardResource` egyetlen érvényes értéke `Health`. A kapu-feladat operandusai
+> önállóan generálódnak, ezért a `MathEventConfigSO` kapu-korlátai **tényleges,
+> kikényszerített generátor-bemenetek**. A `RewardTableSO` új globális mezőt kap
+> (`GateRewardHealthMultiplier`), és a fix jutalom feloldása egyértelműen
+> definiált (6.1.).
 
 ## 0. Konvenciók
 
@@ -138,10 +144,17 @@ ellenség-katalógusból oldódik fel (`IConfigurationProvider.GetEnemy`).
 | `AvailableWeapons` | `List<WeaponConfigSO>` | 1 – 4 egyedi, nem null, tartalmazza Weapon-t | első pálya: starter + heavy | F1-21 |
 | `EnvironmentPrefab` | `GameObject` | nem null | — | F1 |
 
-**Validáció (a `LevelDefinition` L1–L7 invariánsainak SO-oldali tükre):**
+**Validáció (a `LevelDefinition` L1–L8 invariánsainak SO-oldali tükre):**
 `StartingHealth <= MaxHealth`, **`StartingShield <= MaxShield`**.
 `MaxShield == 0` megengedett ⇒ a pályán nincs pajzs-mechanika, és a `ResourceService`
 nem hoz létre `Shield` poolt (game-logic.md 2.2).
+
+> **Pajzs-forrás (ADR-018):** matematikai feladat **nem** töltheti a pajzsot.
+> A pajzs MVP-forrása a `StartingShield`, F5-től a boss-jutalom
+> (`ApplyCombatReward`). Ha egy pálya `MaxShield > 0`, de `StartingShield == 0`
+> és nincs boss, a pajzs az adott pályán holt mechanika — ez **balance-döntés**
+> (GAME_DESIGN 6.1 nyitott tétel), nem konfigurációs hiba, és a `Validate()`
+> legfeljebb `Warning`-ot adhat rá, nem `Error`-t.
 
 F1-21: a repository AvailableWeapons sorrendjéből másolt immutable
 `LevelDefinition.AvailableWeaponIds` készül. Minden szállított asset és builder explicit listára migrál. Üres, hiányos vagy
@@ -175,19 +188,30 @@ A bootstrap csak a pálya listájában lévő definíciókat adja a sessionnek.
 | `ProblemType` | `ProblemType` | enum | `AnswerLaneSelection` |
 | `PreviewDurationSeconds` | `float` | 0.5 – 10.0 | 2.0 |
 | `ThinkTimeSecondsOverride` | `float` | 0 – 60 (0 = profilból) | 0 |
-| `RewardResource` | `ResourceType` | aktív nem-ammo enum | `Health` |
+| `RewardResource` | `ResourceType` | **kizárólag `Health` (= 1)** | `Health` |
 | `Goal` | `GateGoal` | enum (`Maximize`/`Minimize`/`ReachTarget`) | `Maximize` |
-| `RewardAmountOverride` | `int` | 0 – 500 (0 = `RewardTableSO`-ból) | 0 |
+| `RewardAmountOverride` | `int` | 0 – 500 (0 = `RewardTableSO`-ból, 6.1.) | 0 |
 | `TargetValueOverride` | `int` | 0 – 999 (0 = generált) | 0 |
 
 **Validáció:**
-- Ammo soha nem választható; a tombstone és hiányzó/letiltott reward-pool Error. Shield jutalomhoz MaxShield > 0 kell. Ez minden schedule-típusra és adapterbelépésre kötelező.
+- **`RewardResource == ResourceType.Health` kötelező (ADR-018).** `Ammo` tombstone,
+  `Shield`, `EnemyArmor`, `Energy` ⇒ **Error**, minden schedule-típusra és minden
+  adapterbelépésre. Nincs csendes erőforráscsere; a hiányzó vagy letiltott
+  `Health` pool szintén Error. A korábbi „Shield jutalomhoz MaxShield > 0 kell”
+  szabály ezzel tárgytalan.
 - `MathEvents` időpontjai között legalább `TimePressureTableSO.MinGapBetweenProblemsSeconds`
   (a pálya CL-jéhez tartozó sor) legyen — a korábbi, globális
   `MathEventConfigSO.MathEventCooldownSeconds` csak **alsó korlát** (hard floor).
 - `LaneCount == 2` ⇒ `ProblemType` bármelyik lehet (2 sáv 2 opcióval is érvényes).
-- `Goal == ReachTarget` ⇒ `ProblemType == TargetValueSelection`.
-- `Goal == Minimize` ⇒ `RewardResource == EnemyArmor` (az egyetlen értelmes csökkentendő).
+- `Goal == ReachTarget` ⇒ `ProblemType ∈ { TargetValueSelection,
+  ResourceOperationComparison }`, **és** `TargetValueOverride > 0`, ha a típus
+  `ResourceOperationComparison` (a kapu célértéke nem generált —
+  `GATE_TARGET_MISSING`).
+- `Goal == Minimize` **megengedett `Health` jutalommal** (ADR-019 2.8.): a cél csak
+  az optimalizálás iránya, a jutalom fix. A korábbi
+  `Goal == Minimize ⇒ RewardResource == EnemyArmor` szabály **törölve**.
+  Tartalmi korlát marad: a pálya világának `EnabledGateGoals` listája tartalmazza
+  a célt (W1: csak `Maximize`).
 - Legfeljebb **2 egymást követő** azonos `ProblemType` (GAME_DESIGN 2.2).
 
 ---
@@ -269,6 +293,10 @@ A korábbi, egyetlen `UnlockRequirementLevel` referencia **nem** volt elegendő:
 - `LaneCount >= AnswerOptionCount` (több sáv lehet, mint opció; kevesebb nem).
 - `BaseThinkTimeSeconds` szigorúan monoton **csökkenő** a `Level` szerint.
 - A `Levels` szigorúan monoton `Level` szerint, pontosan 10 elem.
+- **Kapu-játszhatóság (ADR-019):** minden szintre léteznie kell legalább egy
+  érvényes kapu-hármasnak (bázis + két művelet) a `MathEventConfigSO` kapu-korlátaival
+  képzett metszetben. Ezt nem a `Validate()` számolja ki, hanem a MathEngine
+  `GenerateBatch` kapu-tesztje igazolja szintenként (math-engine.md 9.).
 
 A konkrét értékek forrása és indoklása: `docs/balance/difficulty-model.md` 2. szakasz
 (balance-designer agent felelőssége) — **ez a tábla az egyetlen kódbeli igazság**.
@@ -324,15 +352,36 @@ dimenzió, spec 7.3).
 | `MaxConsecutiveSameGateSide` | `int` | 1 – 3 | 2 |
 | `NonObviousGatePairRatioMin` | `float` | 0.0 – 1.0 | **0.30** |
 | `IncorrectRewardAmount` | `int` | 0 – 100 | 0 |
-| `ResourceGateOperandMin` | `int` | 1 – 100 | 2 |
-| `ResourceGateOperandMax` | `int` | 2 – 200 | 50 |
-| `ResourceGateMultiplierMin` | `int` | 2 – 5 | 2 |
-| `ResourceGateMultiplierMax` | `int` | 2 – 10 | 4 |
+| `GateOperandMin` | `int` | 1 – 100 | **2** |
+| `GateOperandMax` | `int` | 2 – 200 | **50** |
+| `GateMultiplierMin` | `int` | 2 – 5 | 2 |
+| `GateMultiplierMax` | `int` | 2 – 10 | 4 |
 
 `GoalIconLeadSeconds`: a kapucél-ikon ennyivel a döntési pont előtt megjelenik
 (GAME_DESIGN 3.4: legalább 2 s). `NonObviousGatePairRatioMin`: pályánként legalább ennyi
-arányban olyan kapupár, ahol a **nagyobb operandus nem a jó választás**
+arányban olyan kapupár, ahol a **nagyobb műveleti operandus nem a jó választás**
 (GAME_DESIGN 3.5/4.) — a generátor ezt pályaszinten könyveli, a `SIM-plan.md` méri.
+
+**Átnevezés (ADR-019):** a korábbi `ResourceGateOperandMin/Max` és
+`ResourceGateMultiplierMin/Max` mezők neve `GateOperandMin/Max` és
+`GateMultiplierMin/Max`, mert a korlát a **generált kapu-operandusokra** vonatkozik,
+nem erőforrásállásra. A szerializált mezőnév-változást a Unity
+`[FormerlySerializedAs("_resourceGateOperandMin")]` jellegű attribútummal kell
+áthidalni, hogy a szállított asset értéke ne veszítsen.
+
+**Ezek a mezők tényleges, kikényszerített generátor-bemenetek** (nem dokumentációs
+díszlet): a konfigurációs adapter `GateGenerationLimits`-ként a
+`MathEventDirectorSettings.GateLimits`-be, onnan a
+`ProblemGenerationRequest.GateLimits`-be jut (game-logic.md 5.2., math-engine.md 7.).
+
+**Validáció:**
+- `GateOperandMin <= GateOperandMax`, `GateMultiplierMin <= GateMultiplierMax`.
+- `GateMultiplierMin >= 2` (az `×1` / `÷1` művelet nem tanít semmit).
+- `GateSpawnDepth > DecisionZoneDepth`.
+- **Metszet-ellenőrzés (Error):** minden szállított CL-profilra a
+  `[max(MinOperandValue, GateOperandMin), min(MaxOperandValue, GateOperandMax)]`
+  metszet nem üres. Üres metszet startup konfigurációs hiba
+  (`GATE_LIMITS_INVALID`), nem futásidejű fallback.
 
 ---
 
@@ -347,8 +396,8 @@ arányban olyan kapupár, ahol a **nagyobb operandus nem a jó választás**
 | `LaneRewardBase` | `int` | 1 – 500 | 20, 22, 26, 32, 38, 44, 52, 60, 70, 82 |
 | `MathDecisionCount` | `int` | 8 – 24 | 10, 11, 12, 13, 14, 14, 15, 15, 16, 16 |
 | `HealthRewardBase` | `int` | 0 – 200 | 15 (minden szinten) |
-| `ShieldRewardBase` | `int` | 0 – 200 | 10 (minden szinten) |
-| `EnemyArmorRewardBase` | `int` | 0 – 200 | 10 (minden szinten) |
+| `ShieldRewardBase` | `int` | 0 – 200 | 10 (minden szinten) — **matematikai jutalomhoz inaktív** |
+| `EnemyArmorRewardBase` | `int` | 0 – 200 | 10 (minden szinten) — **matematikai jutalomhoz inaktív** |
 
 Globális mezők ugyanezen az asseten:
 
@@ -356,26 +405,55 @@ Globális mezők ugyanezen az asseten:
 |---|---|---|---|
 | `RewardScalePerChallengeLevel` | `float` | 0.0 – 0.3 | 0.0 (a tábla már CL-enkénti) |
 | `RescueWaveRewardMultiplier` | `float` | 1.0 – 3.0 | 2.0 |
+| `GateRewardHealthMultiplier` | `float` | 1.0 – 3.0 | **2.0** (ADR-019) |
 
-**Ammo-szabály:** a tábla sem tartalmaz lőszeres oszlopot vagy ResourceType.Ammo sort.
-Health lane jutalom: HealthRewardBase; Shield lane: ShieldRewardBase; EnemyArmor:
-EnemyArmorRewardBase az engedélyezett iránnyal; más aktív resource csak explicit
-hostkonfigurációval. Resource gate továbbra is nyers snapshot-delta, GateRewardBase
-nem írja felül. A korábbi generikus Gate/Lane értékek megőrzött, nem-ammo referenciák,
-nem igazolt új balance.
+### A fix jutalom feloldása — KÖTELEZŐ, egyértelmű szabály (ADR-018/019)
+
+Minden matematikai esemény jutalma `Health`, fix összeg. A konfigurációs adapter
+(`GameConfigurationRepository` → `MathEventDirectorSettings.RewardsByScheduleIndex`)
+**pontosan** így számolja, `Initialize` előtt:
+
+```
+if (entry.RewardAmountOverride > 0)
+    flat = entry.RewardAmountOverride;
+else if (entry.ProblemType == ResourceOperationComparison)
+    flat = max(1, round_away_from_zero(HealthRewardBase[CL] * GateRewardHealthMultiplier));
+else
+    flat = max(1, HealthRewardBase[CL]);
+
+RewardSpec = { Resource = Health, FlatAmount = flat,
+               IncorrectAmount = MathEventConfigSO.IncorrectRewardAmount }
+```
+
+- A `round_away_from_zero` `MidpointRounding.AwayFromZero` — determinisztikus,
+  platformfüggetlen egész eredmény.
+- Szállított CL1 értékek: kapu `15 × 2.0 = 30` HP, sáv `15` HP.
+- `IncorrectAmount <= FlatAmount` kötelező; MVP-ben `IncorrectRewardAmount = 0`.
+- A `GateRewardBase` / `LaneRewardBase` oszlopok **megőrzött történeti
+  referenciák**, amelyeket ez az út **nem** használ. Új balance-mérés dönthet
+  arról, hogy a jutalomtábla egyszerűsödik-e (SIM-plan.md) — addig nem törlendők,
+  de nem is olvassa őket a futásidejű út.
+- `ShieldRewardBase` és `EnemyArmorRewardBase` matematikai jutalomhoz **nem
+  használható** (ADR-018); `ShieldRewardBase` a boss-jutalomhoz (F5,
+  `ApplyCombatReward`) megmarad.
 
 **Validáció:** `MathDecisionCount >= 10` az L1 kivételével (`Tutorial` sablon 8-at is
 engedhet, de a **pálya**, nem a tábla szintjén — ld. 3.);
-`GateRewardBase > LaneRewardBase` minden szinten (a kapu nagyobb tét).
+`HealthRewardBase >= 1` minden szinten (a fix jutalom pozitív — `REWARD_AMOUNT_INVALID`);
+`GateRewardHealthMultiplier >= 1.0` (a kapu nagyobb tét, mint a sáv —
+a korábbi `GateRewardBase > LaneRewardBase` szabály ezzel a mezővel valósul meg).
 
 ---
 
-## 6.2. Kivezetett lőszerbudget — ADR-017
+## 6.2. Kivezetett konfigurációk — ADR-017 és ADR-018/019
 
-Nincs aktív AmmoBudgetSO, kill-refund, combat-ammo share vagy overflow score.
-A régi elnevezések nem implementálandó konfigurációk. A Health/Shield és más
-aktív resource jutalom a meglévő RewardTableSO-ból, a tényleges profil és
-kapacitás ellenőrzésével származik; szimulációs újramérés szükséges.
+Nincs aktív `AmmoBudgetSO`, kill-refund, combat-ammo share vagy overflow score
+(ADR-017). Az ADR-018/019 óta **nincs** snapshot-, kapacitás- vagy
+delta-alapú jutalomkonfiguráció sem: `UseSnapshotDelta`-szerű kapcsoló,
+„snapshot-delta jutalom” mező és erőforrás-kapacitás alapú kapu-paraméter nem
+vezethető be. A régi elnevezések nem implementálandó konfigurációk.
+Minden matematikai jutalom a 6.1. szerinti fix `Health`-összeg; a tényleges
+balance-értékek újramérése a `SIM-plan.md` feladata.
 
 ---
 
@@ -429,6 +507,11 @@ monoton nem csökkenő a `Level` szerint. A `SwarmletRatio > 0` szint **megköve
 a pálya világa `IntroducedEnemyTypes`-ban tartalmazza a `Swarmlet`-et — ha nem, a hiányzó
 arány `Basic`-ra esik vissza (worlds.md: a `Swarmlet` a W3-ban jelenik meg; W1–W2-ben a
 tábla CL2+ „rajzó arány” sorai `Basic`/`Fast` arányként realizálódnak).
+
+> **Páncél-megjegyzés (ADR-018):** az `ArmoredRatio` és az `EnemyDefinition`
+> páncélmezői megmaradnak, de a páncél **matematikai gyengítése** (korábbi
+> `Minimize × EnemyArmor` kapu) inaktív. Az F5-ös páncélmechanika tervezésekor új
+> termékdöntés kell, ha a páncélt matematikai úton kellene csökkenteni.
 
 ---
 
@@ -497,10 +580,10 @@ AccuracyDeadbandHigh` (a célsávban semmi nem történik — difficulty-model.m
 feladatokra/hullámokra hat; minden multiplikátor-mező `<= 1.0`, kivéve a
 `ThinkTimeMultiplier`-t (`>= 1.0`). Nehezítő érték ⇒ `Validate()` Error.
 
----
-
 A korábbi T3/AmmoBelowRatio ág inaktív; nincs helyettesítő trigger vagy ingyenes
 jutalom. Sorszámát nem használjuk újra. A mentőfeladatok további mélyítése F4-00.
+
+---
 
 ## 9. `SkillPrerequisiteSO` — **F4** (spec 7.2, 7.4)
 
@@ -609,7 +692,7 @@ csillagfeltétel (spec 12.) — ilyen mező felvétele kontraktsértés.
 |---|---|---|
 | Matematikai szintek | `MathDifficultyTableSO` | `Levels[]` |
 | Engedélyezett operátorok | `MathDifficultyTableSO`, `ParentSettingsDefaultsSO` | `AllowedOperators` |
-| Operandustartományok | `MathDifficultyTableSO` | `Min/MaxOperandValue`, `MaxResultValue` |
+| Operandustartományok | `MathDifficultyTableSO`, `MathEventConfigSO` | `Min/MaxOperandValue`, `MaxResultValue`, `GateOperandMin/Max`, `GateMultiplierMin/Max` |
 | Feladatösszetettség | `MathDifficultyTableSO` | `Min/MaxOperandCount`, `AllowParentheses`, `MaxParenthesisDepth`, `AllowUnknownOperand`, `UnknownOperandCount` |
 | Válaszsávok száma | `MathDifficultyTableSO`, `LevelDefinitionSO` | `AnswerOptionCount`, `LaneCount` |
 | Gondolkodási idő | `TimePressureTableSO`, `MathEventScheduleEntry` | `ThinkTimeSeconds`, `ThinkTimeSecondsOverride` |
@@ -617,7 +700,7 @@ csillagfeltétel (spec 12.) — ilyen mező felvétele kontraktsértés.
 | Ellenségek életereje | `EnemyDefinitionSO`, `CombatBalanceSO`, `CombatDifficultyTableSO` | `MaxHealth`, `EnemyHealthMultiplier` |
 | Ellenséghullámok mérete | `LevelDefinitionSO`, `CombatBalanceSO`, `CombatDifficultyTableSO` | `Spawns[].Count`, `WaveSizeMultiplier`, `EnemiesPerLevel` |
 | Fegyvererősség és típusválasztás | `WeaponConfigSO`, `LevelDefinitionSO` | `Damage`, `FireRate`, `AvailableWeapons`, `Weapon` |
-| Jutalmak | `RewardTableSO` | aktív, nem-ammo `*RewardBase` |
+| Jutalmak (fix `Health`) | `RewardTableSO`, `MathEventScheduleEntry`, `MathEventConfigSO` | `HealthRewardBase`, `GateRewardHealthMultiplier`, `RewardAmountOverride`, `IncorrectRewardAmount` |
 | Adaptációs küszöbök | `AdaptiveDifficultyConfigSO`, `InLevelAssistSO` | teljes |
 | Matematikai feladatok gyakorisága | `MathEventConfigSO`, `TimePressureTableSO` | `MathEventInterval*`, `MinGapBetweenProblemsSeconds` |
 | Pályahossz | `LevelDefinitionSO` | `TargetDurationSeconds`, `Waves[]` |

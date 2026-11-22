@@ -1,6 +1,13 @@
-# Kontrakt — Matematikai Presentation és külső frame-host (ADR-015)
+# Kontrakt — Matematikai Presentation és külső frame-host
 
-Namespace/assembly: `MathHorde.Presentation`. A matekszámítás, binding és
+> **Revízió — ADR-018 + ADR-019 (2026-11-22, architect):** a kapu-feladatnak nincs
+> erőforrás-snapshotja és nincs runtime bindingja. A `Preview` a célt és a **fix
+> életerő-jutalmat** jelzi előre; az `Approaching` a kapu **generált bázisértékét**
+> (`ActiveMathEvent.GateBaseValue`) és a műveleti címkéket fedi fel; az opciók
+> **eredménye** csak a feloldás után jeleníthető meg. A `ResourceGateBinding`,
+> `GetValue` és „kapacitással vágott érték” fogalmak kivezetve.
+
+Namespace/assembly: `MathHorde.Presentation`. A matekszámítás és az
 erőforrásmódosítás továbbra sem Presentation-felelősség. A Core/MathEngine/GameLogic
 Unity-mentes marad. Az alábbi szerződés F3-08/F3-09/F3-12 kötelező bemenete.
 
@@ -13,7 +20,8 @@ Tick előtt**, a betöltési/előkészítési szakaszban a host meghívja a dire
 `PrepareUpcomingEvents(clock.GameTime)` metódusát. Siker nélkül gameplay-frame
 nem indul; az eredmény konfigurációs hibaként jelenik meg, nem gyermekvereségként.
 Nem szükséges pontosan a Preview előtti utolsó frame-ben újragenerálni: a kész
-immutable sablon/kifejezés korábban is cache-elhető.
+immutable `MathProblem` korábban is cache-elhető — sőt, az ADR-019 óta **minden**
+feladattípus teljes feladata itt készül el.
 
 Minden futó, nem szüneteltetett frame hívási rendje:
 
@@ -30,8 +38,10 @@ mathQuestionPresenter.RenderPending();
 
 Változatlan kontextusra a Prepare cache-találat, nem generál frame-enként.
 Futó sessionben az előkészítési hiba miatt a host nem ugorhatja át a harci Tick-et.
-A Prepare nem hívhat Pause-t, nem módosíthat erőforrást, és nem kérhet jövőbeli
-snapshotot. Szünetben a játékidő/határidő fagy; nem fut szimulációs frame.
+A Prepare nem hívhat Pause-t, **nem olvas és nem módosít erőforrást**, és nem kér
+semmilyen játékállapot-pillanatképet (ADR-018). Szünetben a játékidő/határidő fagy;
+nem fut szimulációs frame. Az erőforrás-`Max` menet közbeni változása **nem**
+igényel újraelőkészítést, mert a feladat tartalma nem erőforrásból jön.
 Headless driver ugyanezt a Prepare → Tick → külső drain rendet használja.
 A F3-02 szolgáltatásteszt maga a host; a scene tényleges bekötése F3-12.
 
@@ -51,19 +61,24 @@ Az előfizetések Initialize alatt, a leiratkozás Dispose/OnDestroy alatt tört
 
 | Állapot/típus | Látható adat |
 |---|---|
-| Resource Preview | kizárólag Resource/Goal/TargetValue; nincs snapshot, művelet vagy eredmény |
-| Más típus Preview | a teljes kifejezés korán látszik; az opciók a spawnkor jönnek |
-| Resource Approaching/AwaitingDecision | a rögzített snapshot, cél és műveleti címkék; az eredmény rejtett |
-| Resolving/Completed | a műveleti eredmények, optimális választás és alkalmazott delta visszajelezhető |
-| PREPARATION_FAILED | cél-előjelzés eltűnik, tartalomdiagnosztika; nincs gyermek hibás/helyes visszajelzés |
+| Kapu (`ResourceOperationComparison`) `Preview` | kizárólag `Goal`, `TargetValue` és a fix `RewardAmount` (szív-ikon + szám); **nincs** bázisérték, művelet vagy eredmény |
+| Más típus `Preview` | a teljes kifejezés korán látszik; az opciók a spawnkor jönnek |
+| Kapu `Approaching`/`AwaitingDecision` | a `GateBaseValue`, a cél, a fix jutalom és a műveleti címkék (`Carriers[].DisplayLabel`); az **eredmény rejtett** |
+| `Resolving`/`Completed` | a műveleti eredmények, az optimális választás és a tényleges `AppliedDelta` visszajelezhető |
+| `PREPARATION_FAILED` | cél-előjelzés eltűnik, tartalomdiagnosztika; nincs gyermek hibás/helyes visszajelzés |
 
-A null Problem resource eseménynél szándékos, nem hiányzó adat: a presenter
-Type/ResourceGate alapján választ útvonalat. `IsCorrect`, GetValue,
-CorrectOptionIndex vagy kapacitással vágott érték nem szivároghat ki döntés előtt.
-A lokalizált cél és eredmény formázása RenderPending alatt történik; a resource
-gate Preview üres DisplayExpression-je nem jelenít meg üres feladványablakot.
-Reward/Max/snapshot nem Presentationből változik. A sávinput a már szerződött
-OnPlayerLaneSelected bemenetre jut; a host nem hív Resolve/ApplyReward-ot UI-ból.
+A null `Problem` kapu-eseménynél (`Preview` alatt) szándékos, nem hiányzó adat: a
+presenter `Type` és `State` alapján választ útvonalat. A műveleti címke egyetlen
+megengedett forrása a `Carriers[].DisplayLabel`; az `ActiveMathEvent.Problem.Options`
+értékei, az `IsCorrect` és a helyes opció indexe **nem szivároghat ki** döntés előtt.
+A lokalizált cél és eredmény formázása RenderPending alatt történik; a kapu `Preview`
+üres `DisplayExpression`-je nem jelenít meg üres feladványablakot.
+Jutalom, `Max` vagy feladattartalom nem Presentationből változik. A sávinput a már
+szerződött `OnPlayerLaneSelected` bemenetre jut; a host nem hív `Resolve`/`ApplyReward`-ot UI-ból.
+
+A jutalom-kijelzés a fix életerő-összeg (`+30 ♥`); **jutalom-típus választó ikon
+nincs** (ADR-018 6. pont — F5-13 hatóköre). A kapu-visszajelzés tele életerőnél is
+`Applied`: a HUD a `ResourceChange.AppliedDelta`-t animálja, nem a kért összeget.
 
 ## 3. Végtelen tüzelés és fegyverválasztó — ADR-017
 
@@ -72,7 +87,12 @@ csíkját, lekérdezését és ammo ResourceChanged ágát. Nincs készletből k
 vagy véges mód. A normál HUD Health/Shield/hullám/szünet funkciója megmarad.
 A MathQuestion/Gate/Feedback presenter nem fogad Ammo resource-t; Initialize/
 RenderPending tartalomhibát jelez, nem lokalizálja vagy rajzolja ki ammo feladatként.
-A lokalizációs táblából az aktív ammo-matek cél/jutalom kulcsok és opciók kikerülnek.
+**ADR-018 kiegészítés:** ugyanez érvényes `Shield`, `EnemyArmor` és `Energy`
+jutalomra is — ezek matematikai feladatként tartalomhibák
+(`REWARD_RESOURCE_NOT_ALLOWED`), nem rajzolhatók ki. A lokalizációs táblából az
+aktív ammo-, pajzs- és páncél-matek cél/jutalom kulcsok kikerülnek; a kapucél
+kulcsai `ui.gate.goal_max` / `ui.gate.goal_min` / `ui.gate.goal_target`
+(GAME_DESIGN 3.4).
 
 F1-21 a meglévő HUD-ra épülő felülete:
 

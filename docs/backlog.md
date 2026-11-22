@@ -1,6 +1,6 @@
 # Math Horde — Feladatlista (backlog index)
 
-> **Állapot (2026-11-21): 50 kész / 94 feladat (44 nyitott).**
+> **Állapot (2026-11-22): 50 kész / 95 feladat (45 nyitott).**
 >
 > Ez a fájl **generált index**. Minden feladat önálló fájlban él, és a fájl
 > HELYE jelzi az állapotát:
@@ -26,7 +26,7 @@
 | [F0-04](backlog/done/F0-04.md) | .gitignore, scripts/build.ps1, scripts/test.ps1, gyökér README.md a… | `mobile-build-engineer` | F0-01 | PAR | S | — | ✅ **KÉSZ** |
 | [F0-05](backlog/done/F0-05.md) | Resources/Strings/hu.json váz + ILocalizationService kulcsfeloldó | `ui-dev` | F0-02 | PAR | S | — | ✅ **KÉSZ** |
 
-## Fázis 1 — Harci alap  ·  21/21 kész
+## Fázis 1 — Harci alap  ·  21/22 kész
 
 | ID | Feladat | Agent | Függ | Mód | Becs. | Krit. | Állapot |
 |---|---|---|---|---|---|---|---|
@@ -51,6 +51,7 @@
 | [F1-19](backlog/done/F1-19.md) | TextMeshPro betűtípus és magyar glyph-lefedettség | `ui-dev` | F1-16 | PAR | S | K | ✅ **KÉSZ** |
 | [F1-20](backlog/done/F1-20.md) | Mindig végtelen tüzelés és az ammo teljes kivezetése a matekból | `gameplay-dev` | F1-19, F3-11 | SZEKV | XL | A, B, C, F, G, K | ✅ **KÉSZ** |
 | [F1-21](backlog/done/F1-21.md) | Valódi HUD-fegyverváltás és erősebb konfigurált típus | `gameplay-dev` | F1-20 | SZEKV | L | A, F, K | ✅ **KÉSZ** |
+| [F1-22](backlog/F1-22.md) | A pajzs harci forrása | `gameplay-dev` | F1-20, F1-21 (kész) | SZEKV | S | — (ADR-020 megfelelés, nem új spec-kritérium) | ⬜ nyitott |
 
 ## Fázis 2 — Matematikai alapmotor  ·  13/13 kész
 
@@ -86,7 +87,7 @@
 | [F3-10](backlog/done/F3-10.md) | LanePresenter | `ui-dev` | F1-12 | PAR | S | K | ✅ **KÉSZ** |
 | [F3-11](backlog/done/F3-11.md) | Visszajelzés helyes/hibás döntésnél (mindkét eredmény rövid… | `ui-dev` | F3-03, F3-09 | PAR | M | B, C | ✅ **KÉSZ** |
 | [F3-12](backlog/F3-12.md) | Integráció | `gameplay-dev` | F1-21, F3-04, F3-08, F3-09 | SZEKV | M | B, C, F | ⬜ nyitott |
-| [F3-13](backlog/F3-13.md) | Erőforrás-kapu teszt (17.3) | `qa-unity` | F3-12 | SZEKV | M | B, F | ⬜ nyitott |
+| [F3-13](backlog/F3-13.md) | Összehasonlító kapu teszt (spec 17.3, ADR-018 szerinti modell) | `qa-unity` | F3-12 | SZEKV | M | B, F | ⬜ nyitott |
 | [F3-14](backlog/F3-14.md) | PlayMode teszt | `qa-unity` | F3-12 | SZEKV | S | F | ⬜ nyitott |
 
 ## Fázis 4 — Adaptív nehézség  ·  0/10 kész

@@ -1,6 +1,6 @@
 # Math Horde (Számharcosok) — Game Design Document
 
-> Státusz: ARCH fázis, v1.1 · Felelős: game-designer agent
+> Státusz: ARCH fázis, v1.3 · Felelős: game-designer agent
 > Kapcsolódó dokumentumok: `docs/ARCHITECTURE.md` (architect agent),
 > `docs/contracts/scriptable-object-schema.md` (architect agent),
 > `docs/TESTING.md` (qa-unity agent),
@@ -13,6 +13,13 @@
 > egyre erősebbek lehetnek. A végtelen tüzelés és ammo-kivezetés F1-20-ban elkészült;
 > a tényleges HUD-fegyverválasztás F1-21-ben elkészült.
 >
+> **v1.3 — ADR-018 + ADR-019 (2026-11-22):** a felhasználó döntése alapján
+> **egyetlen matematikai feladat sem használ élő játékos-értéket operandusként**.
+> Az összehasonlító kapu saját, generált bázisértékkel dolgozik, és **mindkét
+> kötelező mechanika jutalma fix, előre konfigurált életerő**. A Pajzs és a Lőszer
+> semmilyen matematikai feladatban nem szerepelhet. Az erőforrás-snapshot
+> mechanika (v1.1, ADR-015/016) ezzel **kivezetve**.
+>
 > **Dokumentum-hierarchia:** ütközés esetén a `docs/contracts/*` az irányadó; ez a
 > dokumentum a *miért*-et és az értékeket adja, a kontrakt a *nevet és a típust* (ADR-009).
 
@@ -22,8 +29,9 @@
 
 **Egy mondatban:** a játékos egy automatikusan tüzelő harcost irányít a képernyő alján,
 balra-jobbra húzva sávot vált, és a felülről érkező hordát csak akkor tudja feltartóztatni,
-ha a közeledő matematikai kapukon és válaszsávokon helyesen dönt — az életerő, a pajzs
-és a matematikai gyengepontok segítik a túlélést. A fegyverek korlátlanul tüzelnek.
+ha a közeledő matematikai kapukon és válaszsávokon helyesen dönt — a helyes döntés
+**életerőt** ad, a pajzs és a matematikai gyengepontok pedig tovább segítik a túlélést.
+A fegyverek korlátlanul tüzelnek.
 
 | Jellemző | Érték |
 |---|---|
@@ -40,6 +48,12 @@ túlélőjáték (1.), a matek az erőforrást szabályozza (2.), mindkét felad
 áll meg** (4.). A kvízablak, a `Time.timeScale = 0` és a „válaszolj, aztán folytasd" minta
 tiltott minta a projektben.
 
+> A 2. alapelv („a matematikai számítások a túléléshez szükséges erőforrások
+> megszerzését szabályozzák”) az ADR-018 után is teljesül: a matek az **életerőt**
+> szabályozza, ami a túlélés elsődleges erőforrása (a `Health <= 0` az egyetlen
+> vereség-ok). A változás annyi, hogy a jutalom **összege** fix és előre látható,
+> nem a feladat számaiból levezetett.
+
 ---
 
 ## 2. Alapvető játékhurok (core loop)
@@ -49,7 +63,7 @@ tiltott minta a projektben.
 ```
 ellenség közeledik → auto-tüzelés sebzi az ellenséget → matek-elem jelenik meg a pálya felső
 harmadában → a gyerek fejben számol, miközben továbbra is lő és kerülget → sávot vált →
-áthalad a kapun/sávon → azonnali erőforrás-visszajelzés → következő hullám
+áthalad a kapun/sávon → azonnali életerő-visszajelzés → következő hullám
 ```
 
 ### 2.2. Makro-loop egy ~4 perces pályán (240 s, referencia CL5 nehézségen)
@@ -61,18 +75,20 @@ megegyezik a `difficulty-model.md` 5.3. táblázatának CL5-ös `MathDecisionCou
 | Szakasz | Idő (s) | Tartalom | Matek-döntés | Kumulált |
 |---|---|---|---|---|
 | S0 Bevezetés | 0–12 | Első, lassú alap-ellenségek, nincs matek — a gyerek megtanulja a sávváltást | 0 | 0 |
-| S1 Első kapu | 12–35 | Erőforrás-módosító kapu (2 kapu), közben 1. hullám | 1 gate | 1 |
+| S1 Első kapu | 12–35 | Összehasonlító kapu (2 kapu, `Maximize`), közben 1. hullám | 1 gate | 1 |
 | S2 Harc | 35–60 | 2. hullám, gyors ellenségek bevezetése | 1 lane | 2 |
 | S3 Sáv-blokk | 60–95 | 2 db eredményválasztó sáv-feladat, 3. hullám | 2 lane | 4 |
-| S4 Vegyes | 95–135 | 1 kapu (`Minimize` × `EnemyArmor`) + 2 sáv, páncélos ellenség | 1 gate + 2 lane | 7 |
+| S4 Vegyes | 95–135 | 1 kapu (`Minimize` — „válaszd a kisebbet!") + 2 sáv, páncélos ellenség | 1 gate + 2 lane | 7 |
 | S5 Nyomás | 135–175 | Sűrű 5. hullám, 2 sáv rövidebb döntési ablakkal | 2 lane | 9 |
-| S6 Felkészülés | 175–195 | Pajzserősítő kapu (`Maximize` × `Shield`) + 1 sáv a boss előtt | 1 gate + 1 lane | 11 |
+| S6 Felkészülés | 175–195 | 1 kapu (`Maximize`, nagyobb fix életerő-jutalom) + 1 sáv a boss előtt | 1 gate + 1 lane | 11 |
 | S7 Boss | 195–235 | Főellenség, 3 gyengepont-feladat (lásd 5.4) | 3 lane | 14 |
 | S8 Eredmény | 235–250 | Eredményképernyő, csillagok, hibajavító áttekintés | – | 14 |
 
-> **Világ-korlát:** az S4 páncél-kapuja csak olyan pályán szerepelhet, amelynek világa
+> **Világ-korlát:** az S4 `Minimize` kapuja csak olyan pályán szerepelhet, amelynek világa
 > `EnabledGateGoals`-ban tartalmazza a `Minimize`-t (W3-tól — `worlds.md` 3.). A W1–W2
-> pályáin ez a szakasz `Maximize × Health` vagy `Maximize × Shield` kapura cserélődik.
+> pályáin ez a szakasz `Maximize` kapura cserélődik. A `Minimize` az ADR-018 után
+> **nem igényel csökkentendő erőforrást**: a jutalom akkor is fix életerő, a cél csak
+> annyit jelent, hogy a *kisebb* eredményű sávot kell választani.
 > Ez a táblázat **sablon**, nem konkrét pálya.
 
 **Tervezési szabályok a loopra:**
@@ -89,84 +105,104 @@ megegyezik a `difficulty-model.md` 5.3. táblázatának CL5-ös `MathDecisionCou
 
 ---
 
-## 3. Mechanika A — Erőforrás-módosító kapuk (spec 5.1)
+## 3. Mechanika A — Összehasonlító kapuk (spec 5.1, ADR-018)
 
 ### 3.1. Működés
 
-A pálya felső részén 2 (ritkábban 3) kapu ereszkedik lefelé, mindegyiken egy **művelet** van
-kiírva (pl. `×2`, `+25`). A kapu felett a HUD mutatja a **snapshot-értéket** és a **célikont**.
-A kapuk eredménye a döntés előtt **nem látható** (spec 5.1), csak az áthaladás utáni
+A pálya felső részén 2 (ritkábban 3–4) kapu ereszkedik lefelé. A kapuk felett a HUD
+mutatja a feladat **bázisértékét** (pl. `6`), a **célikont** („válaszd a nagyobbat!"),
+és a **fix életerő-jutalmat** (pl. `+30 ♥`). Minden kapun egy **művelet** van kiírva
+(pl. `×2`, `+25`), tehát a gyerek a `6 × 2` és a `6 + 25` eredményét hasonlítja össze.
+A kapuk **eredménye** a döntés előtt **nem látható** (spec 5.1), csak az áthaladás utáni
 visszajelzésben.
 
-A resource gate Preview-ben csak cél- és erőforrás-előjelzés látható; a konkrét
-snapshot és a műveletek a kapuk megjelenésétől látszanak. Az immutable sablon előre
-készül, a snapshot/Max a spawnkor rögzül, allokációmentes bindinggal (ADR-015).
-A válaszsávos feladatok teljes, korai Preview-je változatlan.
+A feladat teljes tartalma (bázisérték, műveletek, melyik a helyes) **a feladat
+létrehozásakor, egyszer, önállóan generálódik** — nem a játékos erőforrásállásából.
+Ezért a helyes válasz a kiírástól a döntésig nem változhat. A Preview szakaszban csak a
+cél és a fix jutalom látszik; a bázisérték és a műveletek a kapuk megjelenésekor
+(`Approaching`) válnak láthatóvá. A válaszsávos feladatok teljes, korai Preview-je
+változatlan (4.1.).
 
-### 3.2. Erőforrás-snapshot — a mechanika lelke
+### 3.2. Fix életerő-jutalom — a mechanika lelke (ADR-018)
 
 ```
-Feladat létrehozásakor:      SnapshotValue = CurrentShield          (pl. 20)
-Áthaladáskor:                RewardDelta   = OperationResult − SnapshotValue
-Új erőforrás:                CurrentShield   = CurrentShield + RewardDelta
+Feladat létrehozásakor:   GateBaseValue és a műveletek generálódnak   (pl. 6 ; ×2 ; +25)
+Áthaladáskor (helyes):    RewardDelta = RewardSpec.FlatAmount          (pl. +30 életerő)
+Áthaladáskor (hibás):     RewardDelta = 0
+Új erőforrás:             Health = min(Health + RewardDelta, MaxHealth)
 ```
 
 **Kidolgozott példa (a spec 21/B elfogadási kritériuma):**
 
 | Lépés | Érték |
 |---|---|
-| Pajzs a kapu megjelenésekor (snapshot; Max50, explicit profil) | 20 |
-| Bal kapu `×2` → eredmény | 40 → delta **+20** |
-| Jobb kapu `+25` → eredmény | 45 → delta **+25** ✅ optimális |
-| Az ellenségek közben 12 pajzssebzést okoznak, tényleges pajzs | 8 |
-| Jobb kapun áthalad | 8 + 25 = **33** |
-| Ha a bal kaput választja | 8 + 0 = **8** (hibás választás → nincs matematikai jutalom) |
+| A kapu bázisértéke (generált, nem erőforrásállás) | 6 |
+| Bal kapu `×2` → eredmény | 12 |
+| Jobb kapu `+25` → eredmény | 31 ✅ optimális (`Maximize`) |
+| Életerő a döntés pillanatában (a harc 12 sebzést okozott) | 88 |
+| A jobb kapun áthalad, fix jutalom `+30` | 88 + 30 = **100** (`Max` 100 ⇒ `WasClamped`) |
+| Ha a bal kaput választja | 88 + 0 = **88** (hibás választás → nincs matematikai jutalom) |
 
-A snapshot a változatlan feladatot védi a közben zajló harc erőforrásváltozásától.
-A kapu soha nem állít be abszolút értéket, mindig nyers deltát ad. A példa nem a
-szállított CL1 teljes resource-lefedettségének bizonyítéka (ADR-017).
+A kapu soha nem állít be abszolút értéket, mindig **deltát** ad, és a delta soha nem
+függ a feladat számaitól. Két haszna van:
+1. **A helyes válasz nem csúszhat el**: nincs olyan élő érték, amely a kiírás és a
+   döntés között megváltozhatna (ADR-018 2. probléma).
+2. **Minden nehézségi szint játszható**: a feladat aritmetikája és a jutalom mérete
+   független, ezért a CL1-es `eredmény ≤ 10` korlát nem korlátozza a jutalmat
+   (ADR-018 1. probléma).
 
 ### 3.3. Hibás választás következménye
 
 `RewardDelta = 0`, azaz **az elmaradt jutalom a büntetés**, nem közvetlen HP- vagy pajzslevonás
 (spec 9. szakasz és 12. szakasz: „a rossz válasz ne legyen megalázó"). Ez alól egyetlen kivétel
 nincs az MVP-ben. Konfiguráció: `MathEventConfigSO.IncorrectRewardAmount = 0`.
-Negatív delta csak akkor fordulhat elő, ha maga a feladat célja a csökkentés
-(`Minimize × EnemyArmor` kapu), és ott a *jutalom* a nagyobb csökkenés.
+Negatív jutalom az MVP-ben **nem létezik**: a `Minimize` cél sem von le semmit, csak
+a *kisebb eredmény* a helyes válasz.
 
 ### 3.4. Kapu-célok és ikonjaik (spec 5.1 „a cél ne mindig a nagyobb legyen")
 
-> **Kontrakt-megfeleltetés (ADR-009):** a kapucél a kódban **két ortogonális adat**:
-> `GateGoal` (az optimalizálás iránya) × `ResourceType` (melyik erőforrásról van szó).
-> Az alábbi `MoreHealth` / `LessEnemyArmor` / `MoreShield` nevek **prezentációs címkék**
-> (ikon + string-tábla kulcs), **nem enum-értékek**.
+> **Kontrakt-megfeleltetés (ADR-009, ADR-019):** a kapucél a kódban **egyetlen
+> adat**: `GateGoal` (az optimalizálás iránya). A jutalom erőforrása és összege
+> ettől ortogonális, és mindig fix `Health` (`RewardSpec.Resource/FlatAmount`).
+> Az alábbi címkék **prezentációs** elemek (ikon + string-tábla kulcs), nem enum-értékek.
 
-| Prezentációs címke | Kontrakt-pár (`Goal` × `Resource`) | String-kulcs | Ikon + felirat | Optimális | Példa | Mikor |
+| Prezentációs címke | Kontrakt (`Goal`) | String-kulcs | Ikon + felirat | Optimális | Példa | Mikor |
 |---|---|---|---|---|---|---|
-| „Több életerőt!" | `Maximize` × `Health` | `ui.gate.more_health` | szív + plusz | nagyobb eredmény | `20: ×2 vs +25`, megfelelő profil/kapacitás | engedélyezett pool esetén |
-| „Kevesebb páncél!" | `Minimize` × `EnemyArmor` | `ui.gate.less_armor` | 🔵 lefelé nyíl + pajzs | **kisebb** eredmény | `48: ÷4 vs −30` → 12 vs 18 → `÷4` nyer | W3-tól |
-| „Érd el a 60-at!" | `ReachTarget` × (aktív nem-ammo erőforrás) | `ui.gate.reach_target` | 🎯 céltábla + szám | célhoz legközelebbi | `cél 60, 15: ×4 vs +40` → 60 vs 55 | W2 boss, majd W5-től általánosan |
-| „Több pajzsot!" | `Maximize` × `Shield` | `ui.gate.more_shield` | 🟢 pajzs + plusz | nagyobb eredmény | `10: +12 vs ×2` | engedélyezett pool esetén |
+| „Válaszd a nagyobbat!" | `Maximize` | `ui.gate.goal_max` | 🟢 felfelé nyíl + szív a jutalomnál | nagyobb eredmény | `6: ×2 vs +25` → 12 vs 31 → `+25` nyer | W1-től |
+| „Válaszd a kisebbet!" | `Minimize` | `ui.gate.goal_min` | 🔵 lefelé nyíl + szív a jutalomnál | **kisebb** eredmény | `48: ÷4 vs −30` → 12 vs 18 → `÷4` nyer | W3-tól |
+| „Érd el a 60-at!" | `ReachTarget` | `ui.gate.goal_target` | 🎯 céltábla + célszám | célhoz legközelebbi | `cél 60, 15: ×4 vs +40` → 60 vs 55 → `×4` nyer | W2 boss, majd W5-től általánosan |
 
 A célikon **mindig** megjelenik a kapupár felett, legalább 2 másodperccel a döntési pont előtt
 (`MathEventConfigSO.GoalIconLeadSeconds = 2.0`), és soha nem csak színnel kódolt
-(spec 12: ikon + szám + felirat együtt).
+(spec 12: ikon + szám + felirat együtt). A jutalom-kijelzés a fix összeg és a szív-ikon
+(`+30 ♥`); **jutalom-TÍPUS választó ikon nincs** — az ADR-018 6. pontja ezt az F5-13
+hatókörébe tolta (a jutalom jelenleg mindig életerő).
+
+A korábbi „Több pajzsot!" (`Maximize × Shield`) és „Kevesebb páncél!"
+(`Minimize × EnemyArmor`) **jutalom-párosok megszűntek** (ADR-018 3–4. pont): a pajzs
+és a páncél matematikai feladatban nem szerepelhet. A `Minimize` cél megmaradt,
+csak fix életerő-jutalommal.
 
 ### 3.5. Generátor-invariánsok (a `math-engine-dev` számára kötelező validáció)
 
 1. `|eredményA − eredményB| >= MinGateGap` — `MathDifficultyTableSO.MinGateGap`, default **4**,
    CL1–3-on **8** — ne legyen „majdnem döntetlen", amit a gyerek nem tud biztonsággal eldönteni.
-   Validátor-kód: `GATE_GAP_TOO_SMALL`.
-2. Döntetlen (`A == B`) tiltott (`GATE_TIE`).
-3. A nyers és kapacitással vágott optimum ugyanaz az egyetlen opció; az effektív rés is
-   legalább MinGateGap (ADR-013). A kapacitás a tényleges aktív resource Maxa. Nincs
-   cél-, profil- vagy snapshotcsere a generálási kudarc elfedésére (ADR-015/016).
+   Validátor-kód: `GATE_GAP_TOO_SMALL`. Ez minden opciópárra érvényes (3–4 kapu esetén is).
+2. Döntetlen (`A == B`) tiltott (`GATE_TIE`); a `Goal` szerinti optimum pontosan egy opció.
+3. **Minden kapu-szám generált operandus**: a bázisérték és a műveleti operandusok a
+   `[MinOperandValue, MaxOperandValue]` ∩ `[GateOperandMin, GateOperandMax]` metszetből
+   jönnek, és minden opció eredménye `<= MaxResultValue`, `>= 0`. Nincs cél-, profil- vagy
+   bázisértékcsere a generálási kudarc elfedésére; kimerülés esetén őszinte
+   `GENERATION_EXHAUSTED` (ADR-019).
 4. A „nagyobb szám mindig nyer" heurisztika ne legyen eredményes: pályánként legalább **30%**
-   olyan kapupár, ahol a nagyobb *operandus* nem a jobb választás (pl. `×2` vs `+25` 20-nál) —
-   `MathEventConfigSO.NonObviousGatePairRatioMin = 0.30` —, és legalább 1 nem-`Maximize` célú
-   kapu a 3. világtól.
+   olyan kapupár, ahol a nagyobb *műveleti operandus* nem a jobb választás (pl. `×2` vs `+25`
+   6-nál) — `MathEventConfigSO.NonObviousGatePairRatioMin = 0.30` —, és legalább 1 nem-`Maximize`
+   célú kapu a 3. világtól.
 5. A kapupozíció (bal/jobb) egyenletesen random, max 2 azonos oldal egymás után
    (`MathEventConfigSO.MaxConsecutiveSameGateSide = 2`).
+6. Két kapu `(művelet, operandus)` párja nem lehet azonos (`GATE_DUPLICATE_OPERATION`);
+   ugyanaz az **operátor** eltérő operandussal megengedett (pl. `−1` vs `−9`), mert CL1-en
+   ez gyakran az egyetlen érvényes megoldás.
 
 ---
 
@@ -198,12 +234,17 @@ statisztikaként megy a DDA-ba (időnyomás-probléma, nem tudásprobléma — s
 ```
 Feladat:  7 × 8 = ?
 1. sáv: 54   2. sáv: 63   3. sáv: 56 ✅   4. sáv: 64
-Helyes sáv jutalma: +15 életerő (RewardTableSO.HealthRewardBase, explicit profil)
+Helyes sáv jutalma: +15 életerő (RewardTableSO.HealthRewardBase, fix összeg)
 Hibás sáv: 0 életerőjutalom + a helyes érték 1,5 s-ig zölden felvillan a 3. sáv felett
 ```
 
 A hibás válaszok a spec 6.4. hibamodelljeit követik: `54` = szorzótábla-szomszéd (`6×9`),
 `63` = `7×9`, `64` = `8×8` — mind „hihető" tévedés, nem véletlen szám.
+
+**A két mechanika jutalma ugyanazzal a mechanizmussal működik** (fix életerő-összeg);
+csak a konfigurált érték tér el: a kapu nagyobb tét
+(`HealthRewardBase × GateRewardHealthMultiplier`, CL1-en 30), a sáv a `HealthRewardBase`
+(CL1-en 15) — scriptable-object-schema.md 6.1.
 
 ### 4.3. Sávszám és nehézség
 
@@ -232,7 +273,7 @@ feltétele (lásd a táblázat alatti indoklást).
 |---|---|---|---|---|---|---|---|
 | `Basic` (Számfaló) | zömök kocka, 1.0× | egyenes, állandó tempó | 3 | 1.0× | 8 | 3 | F1 |
 | `Fast` (Villanó) | keskeny, nyúlánk, 0.8× | 2× sebesség, cikcakkban sávot vált | 2 | 2.0× | 5 | 2 | F1 |
-| `Armored` (Páncélos) | széles, bordázott pajzs, 1.4× | lassú; `FrontalDamageReduction = 0.6`, `ArmorPoints = 6`; a páncél a `Minimize × EnemyArmor` kapukkal gyengíthető | 8 | 0.6× | 15 | 8–14 | F1 (HP/sebesség), **F5** (páncél-mezők) |
+| `Armored` (Páncélos) | széles, bordázott pajzs, 1.4× | lassú; `FrontalDamageReduction = 0.6`, `ArmorPoints = 6`; a páncél **nem** matematikai úton gyengíthető (ADR-018) | 8 | 0.6× | 15 | 8–14 | F1 (HP/sebesség), **F5** (páncél-mezők) |
 | `Swarmlet` (Rajzó) | apró, 0.5×, `SpawnGroupSize = 4` | kötelékben mozog, 1 HP, de sok | 1 | 1.3× | 3 | 1 | F1 |
 | `Boss` (világonként egyedi) | 3.0×, egyedi modell | 3–5 fázis, lásd 5.4 | 120 (W1) … 250 (W7) | 0.3× | azonnali pályavesztés-kockázat | ~120 | F5 |
 
@@ -244,6 +285,10 @@ hanem sorbanállás. Az 1 HP-s, kötelékben érkező `Swarmlet` adja a másodpe
 „rajzó aránnyal", tehát a típus nélkül a harci balance-tábla sem lenne megvalósítható.
 A páncél-mezők (`ArmorPoints`, `FrontalDamageReduction`) F5-ben kerülnek be: F1–F4-ben az
 `Armored` a megnövelt HP-val (8) és a lassú sebességgel (0.6×) differenciált.
+**Nyitott F5-ös tétel:** mivel a páncél matematikai gyengítése (korábbi
+`Minimize × EnemyArmor` kapu) az ADR-018 óta nem létezik, a páncél ellensúlyozása
+F5-ben vagy erősebb fegyvertípussal (ADR-017), vagy új, jóváhagyott mechanikával
+történik — ez új termékdöntést igényel.
 
 **Az `EnemyType` enum bővítésének szabálya:** a `worlds.md` további archetípusokat vezet be
 (`Splitter` W4, `Shifter` W5, `Mirror` W6, `Prime` W7, `Cipher` W8). Ezek **F5-ös** bővítések,
@@ -271,6 +316,9 @@ Hibás gyengepont-válasz esetén a feladat **újragenerálódik** (más számok
 tehát a gyerek nem reked meg — csak időt és védelmi tartalékot veszít. Ez a „fokozatos segítség" pedagógiai
 elv gyakorlati alkalmazása (spec 9.1).
 
+> A boss-sebzés **nem** erőforrás-jutalom: a `DamageOnCorrect` közvetlen harci hatás,
+> nem `RewardSpec`. Ezért nem sérti az ADR-018 „jutalom = fix életerő" szabályát.
+
 ---
 
 ## 6. Erőforrások
@@ -279,23 +327,36 @@ elv gyakorlati alkalmazása (spec 9.1).
 
 | Erőforrás (`ResourceType`) | Kezdő (`Starting*`) | Max (`Max*`) | Fogyás | Forrás | Kifogyás következménye |
 |---|---|---|---|---|---|
-| `Health` (életerő) | 100 | 100 | átjutott ellenségenként 3–15 | matematikai jutalom, pálya végén teljes feltöltés, boss-fázisok közt +15 | pályavesztés (`HealthDepleted`) |
-| `Shield` (pajzs) | 0 | 50 | a HP **előtt** fogy, 1:1 (`CombatBalanceSO.ShieldAbsorbsBeforeHealth`) | `Maximize × Shield` kapuk, boss legyőzése | – (csak puffer) |
+| `Health` (életerő) | 100 | 100 | átjutott ellenségenként 3–15 | **minden matematikai jutalom** (fix összeg), pálya végén teljes feltöltés, boss-fázisok közt +15 | pályavesztés (`HealthDepleted`) |
+| `Shield` (pajzs) | 0 | 50 | a HP **előtt** fogy, 1:1 (`CombatBalanceSO.ShieldAbsorbsBeforeHealth`) | `LevelDefinition.StartingShield`, boss legyőzése (F5) — **matematikai feladat nem töltheti** (ADR-018) | – (csak puffer) |
 
 Mindkét MVP-erőforrásnak saját Starting/Max mezője van: StartingHealth/MaxHealth és
-StartingShield/MaxShield. MaxShield==0 esetén nincs pajzs és nem hivatkozható Shield
-jutalom. A ResourcePool Max kemény korlát; a levágott többlet elveszik. Nincs ammo
-pool, kill-refund, lőszerbudget vagy overflow-pontozás (ADR-017).
+StartingShield/MaxShield. MaxShield==0 esetén nincs pajzs-pool. A ResourcePool Max kemény
+korlát; a levágott többlet elveszik (a fix jutalom tele életerőnél `WasClamped`, ami normál
+működés). Nincs ammo pool, kill-refund, lőszerbudget vagy overflow-pontozás (ADR-017).
+
+> **Nyitott balance-tétel (ADR-019 4.1.):** az ADR-018 után a pajzsnak az MVP-ben
+> nincs matematikai forrása. A `LevelW1L01` jelenlegi `StartingShield = 0` /
+> `MaxShield = 50` párosa ezért holt mechanika: a pajzs sosem lesz 0-nál nagyobb.
+> Két lehetséges rendezés — **balance-döntés, nem kontraktkérdés**, és az F3-12
+> nem igényli: (a) `StartingShield = 15..20` kezdő puffer a W1 pályákon, vagy
+> (b) `MaxShield = 0` a W1-en, és a pajzs csak a boss-pályától (F5) jelenik meg.
+> Döntésig a pajzs-HUD-réteg a `MaxShield > 0` feltétel miatt látszik, de mindig 0 —
+> ezt a `LevelDefinitionSO.Validate()` legfeljebb `Warning`-ként jelzi.
 
 ### 6.2. Javasolt további erőforrások (a spec kéri a bővítést)
 
-A `ResourceType` enum már most tartalmazza az `Energy` értéket a Fázis 2-es bővítésekhez;
+A `ResourceType` enum már most tartalmazza az `Energy` értéket a későbbi bővítésekhez;
 új érték csak a lista végére kerülhet (core-domain.md 0.).
+
+> **ADR-018 4. pont:** matematikai jutalom céljára **nem** vezetünk be új
+> erőforrás-dimenziót. Az alábbi javaslatok ezért vagy harci/progressziós
+> mechanikaként valósulhatnak meg, vagy új, jóváhagyott termékdöntést igényelnek.
 
 | Javaslat | Mit csinál | Miért jó pedagógiailag | Fázis |
 |---|---|---|---|
-| `FocusCharge` (Fókusz-töltet) | 3 egymást követő **helyes** válasz tölti fel; aktiválva 5 s-ig lassított ellenségek | A *pontossági sorozatot* jutalmazza, nem a gyorsaságot (spec 12: „a gyorsaság csak a pontosság mellett kapjon jelentőséget"). Erős pozitív megerősítés, ami nem szerencsén múlik. | 2 (`ResourceType.Energy` hordozza) |
-| `RepairKit` (Javítócsomag) | Legfeljebb 2 db hordozható, +30 HP, a gyerek dönti el, mikor használja | Bevezeti az **erőforrás-tervezést** a számolás mellé; a mobilos horde-műfaj szokásos „mikor költsem el" döntése. Nem random drop, hanem `ReachTarget` kapuk pontos eltalálásáért jár — tehát matematikai pontosság jutalma. | 2 (új `ResourceType`-érték, 5) |
+| `FocusCharge` (Fókusz-töltet) | 3 egymást követő **helyes** válasz tölti fel; aktiválva 5 s-ig lassított ellenségek | A *pontossági sorozatot* jutalmazza, nem a gyorsaságot (spec 12.). Nem matematikai feladat jutalma, hanem sorozat-mechanika — ezért nem sérti az ADR-018-at. | F5+ (`ResourceType.Energy`), új termékdöntéssel |
+| `RepairKit` (Javítócsomag) | Legfeljebb 2 db hordozható, +30 HP, a gyerek dönti el, mikor használja | Erőforrás-tervezést vezet be a számolás mellé. **Az ADR-018 miatt átdolgozandó:** nem lehet matematikai feladat jutalma; pl. pályateljesítésért vagy csillagért adható. | F5+, új termékdöntéssel |
 | `StarShards` (Csillagszilánk) | Meta-valuta pályateljesítésért és új készségek első elsajátításáért; fegyverekre és kinézetekre költhető | Teljesen determinisztikus bolt, nincs véletlen. A *rendszeres gyakorlást* jutalmazza, nem a hibátlanságot (spec 10.2). | 1 (`StarRatingSO.ShardsPerStar`), 2 (bolt) |
 
 A `StarShards` **nem** `ResourceType`: nem session-erőforrás, hanem a `PlayerProgress`
@@ -350,12 +411,13 @@ reklám. (Spec 10.2 és 12.)
 |---|---|
 | A rossz válasz ne legyen megalázó | Nincs piros X, nincs „HIBÁS!" felirat, nincs csalódott hangeffekt. A helyes érték zölden felvillan, a jutalom egyszerűen nem száll be. Szövegezés: *„56 volt. Jön a következő!"* (`ui.feedback.correct_was`) |
 | Értelmes visszajelzés | Minden döntés után 1,5 s-os, a harcot nem megállító overlay: mindkét kapueredmény / a helyes érték + a jutalom. Részletes magyarázat a pálya végi eredményképernyőn, kérésre (spec 6.5). |
+| Kiszámítható tét | A fix életerő-jutalom **a feladat előtt** látszik (`+30 ♥`), így a gyerek tudja, mi a tét, és a jutalom nem a számok véletlenjén múlik (ADR-018). |
 | Rendszeres sikerélmény | DDA célja ~75–85% pontosság mellett a pályateljesítés (`GameBalanceSO.TargetAccuracyMin/Max`); lásd `docs/balance/difficulty-model.md` |
 | Ne lehessen tippeléssel nyerni | 4 sáv (25%) + a tippelő profil szimulált pályateljesítési aránya cél szerint < 15% (`GameBalanceSO.GuessingSuccessRateCap`, lásd `SIM-plan.md`) |
 | A válaszok ne árulják el magukat | A helyes válasz sávpozíciója egyenletes eloszlású; a distraktorok a 6.4. hibamodellekből jönnek, így nagyságrendben nem lógnak ki (`GUESSABLE_PATTERN` validátor) |
 | Ne legyen rendszeresen túl bonyolult | Készség-előfeltétel-kapu: a generátor csak olyan készséget használ, amelyre `SkillProfile.GetMasteryLevel(tag) >= Introduced` (spec 7.2 utolsó bekezdése, ADR-010) |
 | Lehetőség a javításra | A rontott feladattípus a következő 2 pályán emelt (de nem kizárólagos) gyakorisággal tér vissza, egy szinttel könnyebb számokkal |
-| A gyorsaság csak a pontosság mellett számít | Nincs idő-alapú pontszorzó; a gyorsaság csak a `FocusCharge` feltöltődésén keresztül hat, ami helyes válaszokat igényel |
+| A gyorsaság csak a pontosság mellett számít | Nincs idő-alapú pontszorzó |
 | Szünetjavaslat | 25 perc folyamatos játék után barátságos, elutasítható ajánlat (`ParentSettingsDefaultsSO.BreakSuggestionMinutes = 25`); 45 perc után a szülői limit érvényesül (`HardStopMinutes = 45`) |
 | Nem csak szín | Minden HUD-elem: ikon + szám + rövid szöveg. A nehézségi sáv 1–10 számmal, a kapucél ikonnal és felirattal. |
 
@@ -366,25 +428,30 @@ reklám. (Spec 10.2 és 12.)
 | Elem | Pozíció | Tartalom |
 |---|---|---|
 | Kihívásszint-sáv | felül középen | 10 fokozat, zöld→piros, **számmal** (spec 7.1); a szám a három dimenzió súlyozott átlaga (`AdaptiveDifficultyConfigSO.DisplayWeight*`) |
-| Feladatsáv | felül, a szint alatt | a kifejezés nagy betűvel, vagy a kapucél ikon + snapshot |
+| Feladatsáv | felül, a szint alatt | a kifejezés nagy betűvel (sáv-feladat), vagy a kapucél ikon + a kapu **bázisértéke** (`GateBaseValue`) + a fix jutalom (`+30 ♥`) |
 | Fegyverválasztó | bal alul | típusonként magyar gomb és aktív jelölés, legalább 48 dp; nincs ammo szám/csík |
 | Élet / pajzs | jobb alul | szív-ikon + szám; a pajzs külön kék réteg (csak ha `MaxShield > 0`) |
 | Hullámjelző | jobb felül | „3/8 hullám" (`WaveDirector.CurrentWaveIndex` / `TotalWaves`) |
-| Visszajelzés-buborék | a döntési vonal felett | 1,5 s, nem blokkoló |
+| Visszajelzés-buborék | a döntési vonal felett | 1,5 s, nem blokkoló; mindkét kapueredmény és a jóváírt életerő |
 
 ---
 
 ## 10. Nyitott kérdések a további agenteknek
 
 1. `math-engine-dev`: a 3.5. pont generátor-invariánsait unit tesztként is kérjük (property-based
-   teszt: 10 000 generált kapupár, egyik sem sérti az 1–5. szabályt).
-2. `gameplay-dev`: a `RewardDelta` számítás és a kapacitás-vágás kölcsönhatását integrációs teszt
-   fedje (spec 21/B).
-3. ~~`architect`: a `FocusCharge` és `RepairKit` Fázis 2-es, de a `ResourceType` enumot már most
-   érdemes bővíthetőre tervezni.~~ **Lezárva:** a `ResourceType` explicit numerikus értékekkel
-   bővíthető, az `Energy` érték a `FocusCharge` számára már lefoglalva (core-domain.md 5.).
+   teszt: 10 000 generált kapupár, egyik sem sérti az 1–6. szabályt), **és** szintenként
+   igazolt `GENERATION_EXHAUSTED`-mentesség a szállított kapu-korlátokkal (ADR-019).
+2. `gameplay-dev`: a fix jutalom és a `MaxHealth`-vágás kölcsönhatását integrációs teszt
+   fedje (spec 21/B): tele életerőnél a helyes válasz `WasClamped = true`-val is
+   `Applied` státuszú.
+3. ~~`architect`: a `FocusCharge` és `RepairKit` Fázis 2-es…~~ **Lezárva:** a
+   `ResourceType` explicit numerikus értékekkel bővíthető; az `Energy` érték az
+   `FocusCharge` számára lefoglalva, de az ADR-018 óta **nem** lehet matematikai jutalom.
+4. `balance-designer` (**új, ADR-019 4.2.**): a fix életerő-jutalom (CL1: kapu 30, sáv 15)
+   újramérése a `SIM-plan.md` szerint, mert az életerő lett minden matematikai jutalom
+   egyetlen célja. A 6.1. pajzs-nyitott tételre is itt kell javaslat.
 
-## 11. Első tényleges fegyverkészlet és nyitott integráció
+## 11. Első tényleges fegyverkészlet és a matek-integráció állapota
 
 Az ADR-017 szerinti starter_blaster Damage5/FireRate3 (15 DPS) és heavy_blaster
 Damage10/FireRate3 (30 DPS) a LevelW1L01 pályán kezdettől választható. A váltás
@@ -392,7 +459,9 @@ sessionparancs, nem jutalom. Gyors oda-vissza váltás nem ad extra lövést; a 
 lövedék változatlan. A HUD érintése nem választ matematikai sávot; pause alatt tiltott.
 A két SO és a scene tényleges bekötése F1-21-ben, a végtelen tüzelés F1-20-ban elkészült.
 
-A migrált matematikai schedule resource célja Shield, lane jutalma Health. A
-CL1/Shield50 teljes coverage továbbra is hibás, a szállított matek scene-integráció
-F3-12 feladata. A Health/Shield csere nem oldja meg az általános kontextusproblémát;
-a korábbi gyári resource-fallback DRAFT superseded, nem implementálandó.
+**Matek-tartalom az ADR-018 után:** a `LevelW1L01` tíz eseménye öt összehasonlító kaput
+és öt eredményválasztó sávot tartalmaz, **mindkettő `Health` jutalommal** (kapu 30, sáv 15 HP
+CL1-en). A kapu-feladat operandusai önállóan generálódnak, ezért a korábbi
+CL1/Shield50 lefedettségi akadály **szerkezetileg megszűnt** (ADR-018 1. probléma).
+A tényleges scene-integráció, a tíz valódi feloldás és a teljes minőségi kapu
+továbbra is **F3-12** feladata; ez a dokumentum nem állít kész funkciót.

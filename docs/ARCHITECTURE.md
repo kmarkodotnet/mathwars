@@ -3,6 +3,11 @@
 > Státusz: ÉRVÉNYES (Fázis 1–3 mélységben kötelező érvényű, Fázis 4–7 vázlat)
 > Forrásspecifikáció: `math-horde.md` (gyárgyökér, a termékrepón kívül) — 2., 3., 4., 5., 6., 13., 14., 15., 16., 19., 23. szakasz
 > Kapcsolódó: [`docs/contracts/`](contracts/), [`docs/decisions/`](decisions/), `docs/GAME_DESIGN.md` (balance-designer), `docs/TESTING.md` (qa-unity)
+>
+> **Revízió — ADR-018 + ADR-019 (2026-11-22, architect):** a matematikai esemény
+> nem olvas élő erőforrásállást. A kapu-feladat a Ticken kívül teljesen legenerált,
+> immutable `MathProblem`; a snapshot/Bind lépés és a 6.4. „erőforrás-snapshot”
+> szabály **kivezetve**, helyén a „fix életerő-jutalom” szabály (6.4.).
 
 ---
 
@@ -243,12 +248,14 @@ Szabályok:
 
 **Egy állapotgép-példány = egy matematikai esemény** (`MathEventId`). Egyszerre több példány
 is futhat (átfedő események), és ez az állapotgép **soha nem befolyásolja** sem a
-`WaveDirector`-t, sem a `CombatService`-t.
+`WaveDirector`-t, sem a `CombatService`-t — és az ADR-018 óta **a fordított irány sem
+hat a feladat tartalmára**: a feladat számai a harc előtt, az előkészítésben
+dőlnek el.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Inactive
-    Inactive --> Preview: Schedule(t0) — resource céljelzés / más típus teljes feladata
+    Inactive --> Preview: Schedule(t0) — kapu: cél + fix jutalom; más típus: teljes feladat
     Preview --> Approaching: PreviewDuration letelt (kapuk/sávok spawnolnak)
     Approaching --> AwaitingDecision: kapuk belépnek a döntési zónába
     Approaching --> Expired: DeadlineReached (a játékos nem ért a zónába)
@@ -267,8 +274,8 @@ stateDiagram-v2
 | Állapot | Belépéskor | Kimenő adat |
 |---|---|---|
 | `Inactive` | példány létrejött, nincs vizuális elem | — |
-| `Preview` | resource: csak cél+erőforrás; más típus: a kész MathProblem kifejezése korán látható | `MathEventPreviewStarted` |
-| `Approaching` | resource: friss snapshot+Max, allokációmentes Bind és immutable binding; kapuk/sávhordozók spawnolnak | `MathEventGatesSpawned` |
+| `Preview` | kapu: csak cél + fix életerő-jutalom; más típus: a kész MathProblem kifejezése korán látható | `MathEventPreviewStarted` |
+| `Approaching` | kapu: az **előre legenerált, immutable** MathProblem publikálása (referencia-hozzárendelés, nincs generálás/erőforrás-olvasás/allokáció); a bázisérték és a műveletek láthatóvá válnak; kapuk/sávhordozók spawnolnak | `MathEventGatesSpawned` |
 | `AwaitingDecision` | a játékos sávválasztása számít, `Deadline` fut | `MathEventDecisionWindowOpened` |
 | `Resolving` | `IGateResolutionService.Resolve(...)` → `GateResolution` | `MathEventResolved` |
 | `Completed` | jutalom feldolgozva, teljes attempt-adat sorba állítva; referenciatípusú naplómaterializáció Tick után | `MathEventCompleted` |
@@ -283,6 +290,9 @@ stateDiagram-v2
 4. A játékos halála (`PlayerHealthZero`) a futó eseményeket `Expired`-be viszi, de a
    már `Completed` eseményt nem vonja vissza.
 5. Az állapotváltás **soha nem** hív `IGameClock.Pause()`-t és nem állítja a `WaveDirector`-t.
+6. **A feladat tartalma az állapotgép futása alatt nem változik** (ADR-018): a
+   `Preview`-ba lépés után sem a bázisérték, sem a műveletek, sem a helyes opció
+   nem módosulhat; az `Approaching` csak felfedi azt, ami már eldőlt.
 
 ---
 
@@ -308,10 +318,11 @@ A `GameSessionService.Tick(float deltaTime)` **fix sorrendben**, egyetlen frame-
 6. _analyticsSink.Flush()                 // passzív struct-adat fogadása/aggregálása, G4 szerint
 ```
 
-Miért ez a sorrend: a harc **előbb** fut, mint a matek — így a feloldáskor már a frame
-aktuális, harc által módosított erőforrás-értékére íródik rá a `RewardDelta` (5.1).
-A 4. lépés soha nem módosít harci állapotot közvetlenül; csak a `_resolutionQueue`-ba tesz
-parancsot, amit az 5. lépés dolgoz fel — ez zárja ki a frame közbeni reentranciát.
+Miért ez a sorrend: a harc **előbb** fut, mint a matek — így a jutalom jóváírásakor
+már a frame aktuális, harc által módosított erőforrás-értékéhez adódik a fix delta
+(6.4.). A 4. lépés soha nem módosít harci állapotot közvetlenül, és **nem is olvas
+erőforrást**; csak a `_resolutionQueue`-ba tesz parancsot, amit az 5. lépés dolgoz
+fel — ez zárja ki a frame közbeni reentranciát.
 
 A külső GameplaySessionBootstrap a Tick **előtt**, külön előkészítési szakaszban
 hívja a `PrepareUpcomingEvents`-et; a Tick után üríti a Presentation/analitikai
@@ -334,13 +345,13 @@ sequenceDiagram
     S->>C: Advance(dt)
     S->>W: Tick(t)  %% spawnol ellenséget, FÜGGETLENÜL a mateseménytől
     S->>K: Tick(t)  %% korlátlanul tüzel, ellenség sebződik/sebez
-    S->>M: Tick(t)  %% Preview→Approaching→AwaitingDecision→Expired
+    S->>M: Tick(t)  %% Preview→Approaching→AwaitingDecision→Expired (erőforrás-olvasás NÉLKÜL)
     M-->>S: Enqueue(ResolveCommand{eventId, laneIndex})
     S->>G: Resolve(cmd)
-    G-->>S: GateResolution
+    G-->>S: GateResolution (RewardDelta = fix FlatAmount)
     S->>Q: ApplyReward(resolution)
-    Q->>R: ApplyDelta(ResourceType, delta) — csak első, helyes jutalomnál
-    R-->>Q: ResourceChange
+    Q->>R: ApplyDelta(Health, +FlatAmount) — csak első, helyes jutalomnál
+    R-->>Q: ResourceChange (Max-vágással)
     Q-->>S: RewardApplication (alkalmazott vagy kihagyott)
     S->>A: Record(MathAnswerSnapshot) — előre foglalt sor
     S->>M: OnRewardProcessed(application, t)
@@ -371,33 +382,42 @@ RewardService.ApplyReward(MathEventId id, RewardSpec spec):
 
 | Helyzet | Viselkedés |
 |---|---|
-| Mikor indul a feladat | `MathEventDirector` ütemez a `LevelDefinition.MathEventSchedule` + `MathEventFrequency` alapján, a harctól függetlenül |
-| Mikor jelennek meg a kapuk | `Preview` → `Approaching` átmenetkor, `PreviewDurationSeconds` után |
+| Mikor indul a feladat | `MathEventDirector` ütemez a `LevelDefinition.MathEvents` + `MathEventFrequency` alapján, a harctól függetlenül |
+| Mikor jelennek meg a kapuk | `Preview` → `Approaching` átmenetkor, `PreviewDurationSeconds` után; ekkor publikálódik az előre legenerált feladat |
 | Meddig választhat | `AwaitingDecision` belépésétől `DeadlineGameTime`-ig (= `ThinkTimeSeconds`, adaptívan skálázva) |
 | Határidő lejár | `Expired(DEADLINE)`, nincs jutalom, `QuestionAttempt{Timeout=true}` naplózva, kapuvizuálok lebomlanak |
-| Előkészítési/binding-hiba | `Expired(PREPARATION_FAILED)` + diagnosztika; nincs gyermek-attempt/jutalom, a harc folytatódik (ADR-015) |
-| Jutalom jóváírása | `Resolving` → `RewardService.ApplyReward(eventId, …)` → attempt naplózása → `OnRewardProcessed` → `Completed`; hibás válasznál 0 jutalommal is befejeződik (ADR-015) |
+| Előkészítési hiba (tartalom-/konfighiba) | `Expired(PREPARATION_FAILED)` + diagnosztika; nincs gyermek-attempt/jutalom, a harc folytatódik |
+| Jutalom jóváírása | `Resolving` → `RewardService.ApplyReward(eventId, …)` → attempt naplózása → `OnRewardProcessed` → `Completed`; hibás válasznál 0 jutalommal is befejeződik |
+| Tele életerő a jutalomnál | `ApplyDelta` a `Max`-ra vág (`WasClamped = true`), a státusz **`Applied`** marad — ez nem hiba és nem kihagyott jutalom (ADR-018/019) |
+| Erőforrás-`Max` vagy -`Current` változás feladat közben | **Nincs hatása a feladatra** (ADR-018): a tartalom nem erőforrásból jön, ezért nincs újraelőkészítés vagy érvénytelenítés |
 | Játékos közben meghal | `GameSessionService` `SessionEnded` jelzést küld, minden nem terminális esemény `Expired`; a már `Completed` nem vonódik vissza |
 | Fegyverváltás | A harc és a matek állapotgépe tovább fut; a session parancsa csak az aktív fegyvert módosítja, készlet és ammo-feladat nincs (ADR-017) |
 | Feladat kész, de a harc megy | `Completed` terminális; a vizuális kapuk lebomlanak, a `WaveDirector` érintetlen |
 | Kétszeri jóváírás megelőzése | `MathEventId` + `_appliedRewards` halmaz (6.2) |
 | Szünet | `IGameClock.IsPaused = true` → `GameTime` nem nő → sem harc, sem `Deadline` nem halad |
 
-### 6.4. Erőforrás-snapshot (spec 5.1) — a legkényesebb szabály
+### 6.4. Fix életerő-jutalom (spec 5.1 + ADR-018) — a legkényesebb szabály
 
 ```
-Approaching belépéskor:  snapshot = ResourceService.Get(ResourceType.Shield).Current   // pl. 20
-                        capacity = ResourceService.GetMax(ResourceType.Shield)
-                        binding = BindResourceGate(prepared, snapshot, capacity)  // nulla allokáció
-Kapuk:                   Left = snapshot * 2 = 40 ;  Right = snapshot + 25 = 45
-Resolving (játékos a jobb kapuban, aktuális pajzs közben kontaktsebzéstől 8-ra csökkent):
-    rewardDelta = OperationResult - SnapshotValue = 45 - 20 = +25
-    ResourceService.ApplyDelta(Shield, +25)  →  8 + 25 = 33
+Előkészítés (Ticken kívül):  problem = Generate(request)   // bázisérték + műveletek + fix jutalom
+Approaching belépéskor:      a kész problem publikálása (referencia), kapuk spawnolnak
+                             Bal = 6 × 2 = 12 ; Jobb = 6 + 25 = 31      (rejtett eredmények)
+Resolving (játékos a jobb kapuban, életerő a harc miatt közben 88):
+    rewardDelta = problem.Reward.FlatAmount = +30
+    ResourceService.ApplyDelta(Health, +30, "MATH_GATE")  →  min(88 + 30, 100) = 100
 ```
 
-**TILOS**: `ResourceService.SetCurrent(45)`. A kapu soha nem állít be abszolút értéket, csak
-delta-t alkalmaz. Ezt a `ResourceService` API-ja gépileg kényszeríti: a GameLogic-on kívülről
-nincs publikus abszolút setter (ld. [`contracts/game-logic.md`](contracts/game-logic.md)).
+**TILOS:**
+- `ResourceService.SetCurrent(...)` — a jutalom mindig delta; a GameLogic-on kívülről
+  nincs publikus abszolút setter (ld. [`contracts/game-logic.md`](contracts/game-logic.md)).
+- `rewardDelta` számítása a feladat számaiból (`OperationResult − bázis` vagy bármilyen
+  más levezetés) — a jutalom kizárólag a konfigurált `FlatAmount` (ADR-018 2. pont).
+- Erőforrás-olvasás a `MathEventDirector.Tick`-ben vagy a feladat előkészítésében
+  (`CaptureSnapshot` megszűnt, `GetMax` nem bemenet).
+- `Shield`/`EnemyArmor`/`Energy`/`Ammo` matematikai jutalomként.
+
+A `GateResolution.OperationResult` továbbra is megvan, de **kizárólag** a döntés utáni
+visszajelzés megjelenítésére (spec 5.1: „lássa mindkét művelet eredményét”).
 
 ---
 
@@ -413,6 +433,9 @@ nincs publikus abszolút setter (ld. [`contracts/game-logic.md`](contracts/game-
 - Külön `IRandomSource` példány a feladatgenerátornak, a disztraktoroknak és a
   hullámgenerálásnak (`SplitMix`-szerű derivált seed), hogy az egyik rendszer
   hívásszám-változása ne mozdítsa el a másikat.
+- **Az ADR-018 óta a feladat teljes tartalma a seedből reprodukálható**, mert nincs
+  futásidejű bemenete: ugyanaz a session-seed ugyanazokat a matekfeladatokat adja,
+  függetlenül attól, hogyan alakult a harc.
 
 ---
 
@@ -435,10 +458,10 @@ nincs publikus abszolút setter (ld. [`contracts/game-logic.md`](contracts/game-
   ciklusban nincs `Instantiate`/`Destroy`.
 - A GameLogic szimuláció struct-alapú entitásokat és előre allokált `List<T>` buffereket
   használ; `Tick`-ben nincs LINQ és nincs új allokáció.
-- A teljes nem-resource feladat, illetve a resource gate immutable sablonja
-  Preview előtt, a külső host előkészítési szakaszában készül és cache-elhető.
-  Resource esetén a végleges readonly binding csak Approaching-belépéskor,
-  a harc utáni friss snapshot/Max párból jön létre, allokáció nélkül (ADR-015).
+- **Minden** feladattípus (kapu és sáv egyaránt) teljes `MathProblem`-je `Preview` előtt,
+  a külső host előkészítési szakaszában készül el és cache-elhető. A `Tick` mindössze
+  egy kész referenciát publikál — nincs futásidejű generálás, `Bind`, snapshot-olvasás
+  vagy allokáció (ADR-019).
 - Presentation: `TextMeshPro`, canvas-szétválasztás (statikus HUD / dinamikus számok),
   `Canvas.willRenderCanvases` minimalizálás.
 
@@ -453,12 +476,14 @@ nincs publikus abszolút setter (ld. [`contracts/game-logic.md`](contracts/game-
 | Szabad válaszadásos (numpad) kihívás | 5 | nincs kontraktálva |
 | Parent Dashboard grafikon-adatmodell | 6 | `IProgressReportService` vázlat |
 | Számrendszerek / sorozatok / geometria (6.0.1–6.0.4) | poszt-MVP | az AST bővítési pontja rögzítve |
+| Pajzs matematikai forrás nélkül (balance) | 3–5 | GAME_DESIGN 6.1 nyitott tétel, ADR-019 4.1. |
+| `EnemyArmor` páncélgyengítés új mechanikája | 5 | ADR-018 után új termékdöntést igényel |
+| Jutalom-típus előjelző ikon (életerő / fegyver / pajzs) | 5 | ADR-018 6. pont: F5-13 hatóköre |
 
 ## 11. Fegyverkészlet és lőszermentes matematika — ADR-017
 
-A fegyverkészlet célállapota F1-21-ben még nyitott; a végtelen tüzelés és az
-ammo-kivezetés F1-20-ban elkészült. A jelenlegi F1 bootstrap továbbra is egy
-`WeaponDefinition` bemenettel indul; a listás API-k és választógombok még nem szállítottak:
+A végtelen tüzelés és az ammo-kivezetés F1-20-ban, a tényleges HUD-fegyverválasztás
+F1-21-ben elkészült. A szállított út:
 
 ```mermaid
 flowchart LR
@@ -480,7 +505,11 @@ scene két konfigurált típusa 15 és 30 DPS; a további progresszió F5-13 fel
 
 Ammo pool, fogyasztás, kill-refund, WeaponDryFire, lőszerbudget/overflow és
 ammo-DDA nincs. Az összes math request/validator/adapter/reward/presenter út
-kizárja Ammo-t. A más erőforrásokra vonatkozó friss snapshot, nyers delta,
-Prepare/Bind és teljes coverage megmarad. F1-20 után a szállított Shield50/CL1
-konfiguráció továbbra is őszinte előkészítési hibát adhat; a jelenlegi F1 combat
-bootstrap indítható marad, és a valódi math-host bekötést csak F3-12 zárhatja le.
+kizárja Ammo-t.
+
+**ADR-018/019 kiegészítés:** a „friss snapshot, nyers delta, Prepare/Bind és teljes
+coverage” szabályrend **nem él tovább** egyetlen erőforrásra sem, mert nincs
+snapshot-vezérelt matematikai feladat. A szállított CL1 konfiguráció a generált
+bázisértékkel játszható (nincs szerkezeti `GENERATION_EXHAUSTED`); a valódi
+math-host bekötést, a tíz feloldást és a teljes minőségi kaput továbbra is
+kizárólag **F3-12** zárhatja le.

@@ -60,25 +60,27 @@ public interface IGameEvent { double GameTime { get; } }
 | `EnemyReachedPlayer` | CombatService | `int EnemyInstanceId, int ContactDamage, double GameTime` |
 | `WeaponFired` | CombatService | `int TargetEnemyInstanceId, string WeaponId, int Damage, double GameTime` |
 | `WeaponChanged` | CombatService | `string PreviousWeaponId, string WeaponId, double GameTime` (F1-21) |
-| `PlayerDamaged` | CombatService | `int Damage, int RemainingHealth, double GameTime` |
-| `PlayerLaneChanged` | CombatService | `LaneIndex From, LaneIndex To, double GameTime` |
-| `MathEventPreviewStarted` | MathEventDirector | `MathEventId EventId, ProblemType Type, MathProblemId? ProblemId, string DisplayExpression, GateGoal Goal, int? TargetValue, int RewardAmount, double GameTime` |
-| `MathEventGatesSpawned` | MathEventDirector | `MathEventId EventId, int GateBaseValue, double GameTime` (ADR-019: bázisérték, **nem** erőforrás-snapshot) |
+| `MathEventPreviewStarted` | MathEventDirector | `MathEventId EventId, ProblemType Type, MathProblemId? ProblemId, string DisplayExpression, ResourceType Resource, GateGoal Goal, int? TargetValue, double GameTime` |
+| `MathEventGatesSpawned` | MathEventDirector | `MathEventId EventId, int GateBaseValue, ResourceType RewardResource, double GameTime` (ADR-019: **generált bázisérték**, nem erőforrás-snapshot) |
 | `MathEventDecisionWindowOpened` | MathEventDirector | `MathEventId EventId, double DeadlineGameTime, double GameTime` |
 | `MathEventResolved` | GateResolutionService | `MathEventId EventId, LaneIndex SelectedLane, bool WasCorrect, double GameTime` |
-| `MathEventCompleted` | MathEventDirector | `MathEventId EventId, int AppliedDelta, ResourceType Resource, double GameTime` (`Resource` mindig `Health`) |
+| `MathEventCompleted` | MathEventDirector | `MathEventId EventId, int AppliedDelta, ResourceType Resource, double GameTime` |
 | `MathEventExpired` | MathEventDirector | `MathEventId EventId, string ReasonCode, double GameTime` (`"DEADLINE"`, `"SESSION_ENDED"`, `"PREPARATION_FAILED"`) |
 | `MathEventPreparationFailed` | MathEventDirector | `MathEventId EventId, string ErrorCode, double GameTime` (tartalom-/kontrakthiba, nem gyermek-timeout) |
+| `PlayerDamaged` | CombatService | `int Damage, int RemainingHealth, double GameTime` |
+| `PlayerLaneChanged` | CombatService | `LaneIndex From, LaneIndex To, double GameTime` |
 | `RewardApplied` | RewardService | `MathEventId EventId, ResourceType Resource, int AppliedDelta, double GameTime` |
 | `RewardSkipped` | RewardService | `MathEventId EventId, string ReasonCode, double GameTime` (`"INCORRECT"`, `"ALREADY_APPLIED"`, `"EXPIRED"`) |
 | `ChallengeLevelChanged` | AdaptiveDifficultyService | `int Previous, int New, string Reason, double GameTime` (Fázis 4) |
 | `AssistTierChanged` | AdaptiveDifficultyService | `int PreviousTier, int NewTier, string TriggerCode, double GameTime` (Fázis 4) |
 
-A `MathEventPreviewStarted` korábbi `ResourceType Resource` mezője **törölve**: a
-jutalom erőforrása mindig `Health`, ezért nem információ. Helyette a fix
-`RewardAmount` (a `RewardSpec.FlatAmount`) kerül a payloadba, hogy a HUD előre
-mutathassa, mennyi életerő a tét. A `MathEventGatesSpawned` korábbi
-`SnapshotResource` mezője szintén **törölve**.
+A math-események `Resource` / `RewardResource` mezője az ADR-018 óta **mindig
+`ResourceType.Health`**; a mezők a payload-stabilitás és a presenter-szimmetria
+miatt maradnak. Más érték publikálása kontraktsértés.
+A **fix jutalom összege** nem eseménymező: a presenter az
+`ActiveMathEvent.RewardAmount`-ból olvassa, amely már `Preview`-ban kész.
+A korábbi `MathEventGatesSpawned.SnapshotValue` / `SnapshotResource` mezőpár
+**kivezetve** (helyén `GateBaseValue` + `RewardResource`).
 
 A Presentation réteg **kizárólag** ezekre az eseményekre és az olvasó property-kre
 támaszkodhat; a GameLogic belső mezőihez nem fér hozzá.
@@ -100,6 +102,8 @@ public interface IResourceService
     /// Aktív erőforrásnál a [Min, Max] tartományra vág; a vágás nem dob kivételt.
     /// reasonCode: "MATH_GATE" | "ENEMY_CONTACT" | "PICKUP" | "LEVEL_INIT"
     ///           | "BOSS_PHASE"
+    /// "MATH_GATE" + nem Health típus ⇒ ArgumentException("REWARD_RESOURCE_NOT_ALLOWED")
+    /// (ADR-018 3. pont, programozói hiba a pool módosítása ELŐTT).
     ResourceChange ApplyDelta(ResourceType type, int delta, string reasonCode);
 
     /// Lefoglalás: csak akkor von le, ha a teljes mennyiség rendelkezésre áll.
@@ -123,7 +127,7 @@ public interface IResourceService
 | `ApplyDelta` hívása a Presentation rétegből | A HUD csak olvas és `ResourceChanged` eseményre animál. |
 | `ResourcePool` közvetlen mutálása | `ResourceState` immutable. |
 | A `Max` levezetése a `Starting*` értékből | Minden erőforrásnak **saját** `Max` mezője van a `LevelDefinition`-ben (`MaxHealth`, `MaxShield`) — spec 4.3. |
-| Pajzs matematikai jutalomként | ADR-018 3. pont: `ApplyDelta(Shield, …)` kizárólag `"ENEMY_CONTACT"`, `"LEVEL_INIT"` vagy `"BOSS_PHASE"` indokkal hívható; `"MATH_GATE"` indokkal **csak `Health`** módosítható. |
+| Pajzs matematikai jutalomként | ADR-018 3. pont: `"MATH_GATE"` indokkal **csak `Health`** módosítható; a `Shield` kizárólag `"ENEMY_CONTACT"`, `"LEVEL_INIT"`, `"PICKUP"` vagy `"BOSS_PHASE"` indokkal változhat. |
 
 ### 2.2. `Initialize` kötelező viselkedése
 
@@ -156,7 +160,8 @@ ApplyDelta(Health, +30, "MATH_GATE") -> PreviousValue = 90, NewValue = 100,
 ```
 
 A `WasClamped` nem hiba és nem „elvesztegetett” feladat: a `Max` kemény korlát
-(core-domain 5.). A HUD a tényleges `AppliedDelta`-t animálja.
+(core-domain 5.). A HUD a tényleges `AppliedDelta`-t animálja, és a
+`RewardApplicationStatus` ekkor is `Applied`.
 
 Ammo pool nem inicializálódik. Az Ammo-t fogadó `GetCurrent`/`GetMax`/
 `ApplyDelta`/`TryConsume`/`SetMax` út `ArgumentException` programozói hibával
@@ -354,8 +359,8 @@ public sealed class ActiveMathEvent
     public MathEventId EventId { get; }
     public MathEventState State { get; }
     public ProblemType Type { get; }
-    /// Resource-kapunál csak Approaching-tól (a fokozatos felfedés miatt), minden
-    /// más típusnál Preview-tól. Ugyanaz az előre legenerált MathProblemId.
+    /// A Problem azonosítója: resource-kapunál csak Approaching-tól (fokozatos
+    /// felfedés), minden más típusnál Preview-tól. Származtatott: Problem?.Id.
     public MathProblemId? ProblemId { get; }
     /// Az előkészítés során legenerált, immutable feladat. Nem-resource típusnál
     /// Preview-tól, resource-kapunál Approaching-tól NEM null; előtte null.
@@ -364,7 +369,8 @@ public sealed class ActiveMathEvent
     public MathProblem Problem { get; }
     /// A fix jutalom erőforrása; az ADR-018 óta mindig ResourceType.Health.
     public ResourceType RewardResource { get; }
-    /// A fix jutalom összege (Problem.Reward.FlatAmount), már Preview-ban ismert.
+    /// A fix jutalom összege (Problem.Reward.FlatAmount), már Preview-ban ismert —
+    /// ez a HUD egyetlen jutalom-forrása.
     public int RewardAmount { get; }
     public GateGoal Goal { get; }
     public int? TargetValue { get; }
@@ -422,12 +428,12 @@ RewardProcessed         : Resolving -> Completed (Applied vagy SkippedIncorrect)
 | A matek-állapotgép nem hívhat `IGameClock.Pause()`-t | a `IGameClock` mutáló metódusait csak a `GameSessionService` kapja meg |
 | A `CombatService` entitáslistája nem tartalmaz `GateCarrier`-t | külön lista, külön típus (3. szakasz 4. szabály) |
 | **A matek-feladat tartalma nem függ a harctól** (ADR-018, G8) | a `MathEventDirector` `Tick`-je nem hív `IResourceService`-t; a feladat a `Tick` előtt készen van |
-| Teszt-kapu | `MathEventDirectorIndependenceTests`: `MathEventDirector` 10 000 Tick-en végigfut `ICombatService` példány NÉLKÜL; `CombatService` ugyanígy `IMathEventDirector` nélkül; továbbá ugyanazon seeddel generált esemény tartalma azonos, akármilyen erőforrás-állapot mellett futtatjuk |
+| Teszt-kapu | `MathEventDirectorIndependenceTests`: `MathEventDirector` 10 000 Tick-en végigfut `ICombatService` példány NÉLKÜL; `CombatService` ugyanígy `IMathEventDirector` nélkül; továbbá ugyanazon seeddel előkészített esemény tartalma azonos, akármilyen erőforrás-állapot mellett futtatjuk |
 
 > `IsCorrect` a `GateCarrier`-ben **csak a feloldás után** használható fel vizuálisan.
 > Döntés előtt a Presentation nem jeleníthet meg semmit belőle, és az opciók
 > **értékét** sem (spec 5.1: „A két kapu eredményét a döntés előtt ne jelenítsd meg”).
-> A Presentation a műveleti címkét kizárólag a `Carriers[].DisplayLabel`-ből veheti,
+> A Presentation a műveleti címkét kizárólag a `Carriers[].DisplayLabel`-ből veheti;
 > az `ActiveMathEvent.Problem.Options` nem prezentációs adat. Ezt a code-reviewer ellenőrzi.
 
 ### 5.1. Implementációs határok és lezárás
@@ -435,7 +441,7 @@ RewardProcessed         : Resolving -> Completed (Applied vagy SkippedIncorrect)
 A konkrét `MathEventDirector` konstruktora az 5.2. szerinti Unity-mentes beállítást
 és meglévő `IResourceService`/`IGameEventSink` függőséget kapja; továbbra sem kaphat
 `ICombatService` vagy `IWaveDirector` referenciát. Az `IResourceService` függőség
-**kizárólag** a jutalom-oldali diagnosztikára és a hostkonfiguráció ellenőrzésére
+**kizárólag** a hostkonfiguráció ellenőrzésére és a jutalom-oldali diagnosztikára
 szolgál: a director `Tick`-ben és `Prepare`-ben **nem olvas** erőforrásállást vagy
 `Max`-ot (ADR-018; a korábbi `CaptureSnapshot`/`GetMax` hívás törölve). A konfigurációs
 assetek későbbi implementációja nem jogosít beégetett balance-értékekre: a director
@@ -460,7 +466,7 @@ jutalomszolgáltatást. Azonos EventId-jú, `Resolving` eseménynél `Applied` �
 már terminális esemény jelzése hatástalan. Az ismételt visszajelzés nem ismétel
 jutalmat, átmenetet vagy completion-eseményt. A már `Expired` esemény nem válhat
 `Completed`-dé. A jelzés önmagában nem mutál erőforrást, és nem engedélyez
-Tick-allokációt. Indoklás: [ADR-015 4.](../decisions/ADR-015.md#4-resolving--completed-bejövő-visszajelzés).
+Tick-allokációt. Indoklás: [ADR-015 4.](../decisions/ADR-015.md#4-resolving--completed-bejövő-visszajelzés---hatályos).
 
 ### 5.2. Előkészítés és hibák — F3 szerződés (ADR-018/019 szerinti végleges alak)
 
@@ -479,7 +485,8 @@ public sealed class MathEventDirectorSettings
     public float GateApproachSpeed { get; }
     public float FeedbackDisplaySeconds { get; }
     /// A MathEventConfigSO globális kapu-korlátai (SO-séma 6.), amelyeket a director
-    /// változatlanul továbbít a ProblemGenerationRequest.GateLimits mezőjébe.
+    /// változatlanul továbbít a ProblemGenerationRequest.GateLimits mezőjébe —
+    /// kizárólag ResourceOperationComparison típusnál, máskor null.
     /// Érvénytelen tartomány startup konfigurációs hiba (GATE_LIMITS_INVALID).
     public GateGenerationLimits GateLimits { get; }
     public IReadOnlyDictionary<int, RewardSpec> RewardsByScheduleIndex { get; }
@@ -494,8 +501,9 @@ A schedule-index az eredeti `LevelDefinition.MathEvents` lista 0-alapú indexe;
 idő szerinti rendezés után is ezt kell használni az ID-hez és a mapekhez. Az
 értékek/tartományok a SO-séma 5.1., 6., 6.1.-ből jönnek; SpawnDepth > ZoneDepth,
 sebesség pozitív és véges. Reward bejegyzés minden schedule-elemre kötelező:
-`Resource == Health`, `FlatAmount > 0`, `0 <= IncorrectAmount <= FlatAmount`
-(MVP-ben `IncorrectAmount == 0`) — ADR-018. `UseSnapshotDelta` mező nem létezik.
+`Resource == Health` és egyezik a schedule `RewardResource`-ával, `FlatAmount > 0`,
+`0 <= IncorrectAmount <= FlatAmount` (MVP-ben `IncorrectAmount == 0`) — ADR-018.
+`UseSnapshotDelta` mező nem létezik.
 `TargetValueSelection`, illetve `ResourceOperationComparison` + `ReachTarget` esetén
 a targetmap bejegyzése kötelező, máskor nem alkalmazandó. A konfigurációs adapter
 oldja fel a SO override-jait/tábláit **Initialize előtt**, nem a director talál ki
@@ -539,12 +547,12 @@ csak a `Goal`, a `TargetValue` és a fix `RewardAmount` előjelezhető. Nem-reso
 `Preview`-ben a `Problem`/`ProblemId` és a teljes kifejezés már elérhető.
 
 A Preview lejártakor a resource-esemény **egyszerűen publikálja** az előre
-legenerált feladatot: `Problem`/`ProblemId` beállítása, `GateBaseValue =
-Problem.GateBaseValue.Value`, a carrierek feltöltése az opciók
+legenerált feladatot: `Problem` beállítása (ebből származik a `ProblemId` és a
+`GateBaseValue`), a carrierek feltöltése az opciók
 `Lane`/`DisplayLabel`/`IsCorrect` adataiból, állapot `Approaching`, majd
-`MathEventGatesSpawned(EventId, GateBaseValue, t)`. Ez a konkrét feladat
-kezdete: innentől a bázisérték és a műveletek láthatók, az **eredmények** nem.
-Nincs `Bind`, nincs erőforrás-olvasás, nincs új RNG-húzás és nincs allokáció.
+`MathEventGatesSpawned(EventId, GateBaseValue, RewardResource, t)`. Ez a konkrét
+feladat kezdete: innentől a bázisérték és a műveletek láthatók, az **eredmények**
+nem. Nincs `Bind`, nincs erőforrás-olvasás, nincs új RNG-húzás és nincs allokáció.
 A pozíció a rögzített `GateApproachSpeed * gateSpeedMultiplier` és a
 játékidő-különbség alapján halad `SpawnDepth`-től `ZoneDepth`-ig; zónába lépéskor
 nyílik a döntési ablak. A `GateApproachSeconds` design-idő nem második,
@@ -640,7 +648,8 @@ dereferálhat null `Problem`-et: ha a `Problem` még null (az esemény nincs
 deadline-commandhoz a már publikált feladat metaadatai tartoznak.
 `PREPARATION_FAILED` nem timeout-command. A `MathAnswerSnapshot` ProblemId-je
 mindkét úton ugyanaz, amelyet az `ActiveMathEvent` a konkrét feladat kezdetétől
-publikál.
+publikál. `Duplicate` esetén az `Answer` default (egy visszajátszás nem gyárt új
+attemptet).
 
 | Eset | `Outcome` | `RewardDelta` |
 |---|---|---|
@@ -667,8 +676,9 @@ public interface IRewardService
     RewardApplication ApplyReward(in GateResolution resolution);
 
     /// Nem matematikai jutalom — nem idempotencia-köteles, mert nincs esemény-azonosítója.
-    /// Meglévő használata: BOSS_PHASE: boss-fázisok közti életerő-jóváírás (GAME_DESIGN.md 6.1: +15 HP),
-    /// illetve (F5-től) a boss legyőzéséért adott pajzs-jóváírás — ez NEM matematikai jutalom.
+    /// Meglévő használata: "BOSS_PHASE" boss-fázisok közti életerő-jóváírás
+    /// (GAME_DESIGN.md 6.1: +15 HP), illetve (F5-től) a boss legyőzéséért adott
+    /// pajzs-jóváírás — ez NEM matematikai jutalom, ezért nem sérti az ADR-018-at.
     ResourceChange ApplyCombatReward(ResourceType type, int amount, string reasonCode);
 
     IReadOnlyCollection<Guid> AppliedRewardEventIds { get; }
@@ -691,13 +701,12 @@ public enum RewardApplicationStatus
 ```
 
 **Jutalomhatár (ADR-017 + ADR-018):** `ApplyReward` kizárólag `Health` jutalmat
-könyvelhet el. `Ammo` ⇒ `ArgumentException` (programozói hiba, ADR-017);
-`Shield`/`EnemyArmor`/`Energy` matematikai jutalomként ⇒ ugyancsak
-`ArgumentException`, a pool és az idempotencia-napló módosítása **előtt**.
+könyvelhet el. `Ammo` ⇒ `ArgumentException("AMMO_NOT_ALLOWED")`;
+`Shield`/`EnemyArmor`/`Energy` ⇒ `ArgumentException("REWARD_RESOURCE_NOT_ALLOWED")`,
+mindkettő a pool és az idempotencia-napló módosítása **előtt**.
 A `RewardApplicationStatus` nem kaphat hamis `Applied`/`SkippedIncorrect` értéket.
-`ApplyCombatReward` továbbra is módosíthat `Shield`-et `"BOSS_PHASE"`/`"PICKUP"`
-indokkal — ez harci, nem matematikai jutalom, ezért nem sérti az ADR-018-at.
-`RequestedDelta` a fix összeg, `AppliedDelta` a `Max`-vágás utáni tényleges érték.
+`RequestedDelta` a fix összeg, `AppliedDelta` a `Max`-vágás utáni tényleges érték;
+tele életerőnél `AppliedDelta` lehet 0, a státusz mégis `Applied`.
 
 ---
 

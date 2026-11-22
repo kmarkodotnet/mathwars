@@ -14,7 +14,7 @@
 > az `EquationSolving` készség-leképezés tisztázva.
 >
 > **Revízió r3 (2026-11-19, architect, ADR-013):** a kapacitás a kész
-> `MathProblem` része; a validátor aláírása változatlan. (Ezt az r4 felülírta.)
+> `MathProblem` része. (Ezt az r4 felülírta.)
 >
 > **Revízió r4 (2026-11-22, architect, ADR-018 + ADR-019) — ÉRVÉNYES:**
 > a matematikai feladatoknak nincs élő játékos-értékből származó operandusa.
@@ -39,6 +39,9 @@ profilváltoztatás nélkül.
 | R4 | A jutalom összege **nem** a feladat aritmetikájából származik. Nincs delta-képzés, nincs `UseSnapshotDelta` (a mező törölve). | — (szerkezeti) |
 | R5 | A feladattípus, a `Goal`, az opciócímke és a `DisplayLabel` nem rejthet el tiltott erőforrást vagy számolt jutalmat. Nincs szöveges alias, nincs csendes erőforráscsere. | `REWARD_RESOURCE_NOT_ALLOWED` |
 
+A közös döntési szabály helye a Core `ResourceRules` (pl. `AmmoNotAllowed`
+konstans): a generátor, a validátor, a `RewardService`, a `ResourceService` és a
+konfigurációs adapter **ugyanezt** a szabályt használja, nem saját másolatot.
 Az `EnemyArmor` és az `Energy` **enumértéke megmarad** (ordinal-stabilitás), de
 aktív matematikai jutalomként le van tiltva; újraengedélyezése új termékdöntést
 (ADR) igényel — nem a MathEngine implementációs szabadsága. A generikus AST számai
@@ -317,13 +320,15 @@ public enum ValidationSeverity { Warning = 0, Error = 1 }
 
 A két belépés szerződése azonos: `IsValid(problem, profile) == Validate(problem, profile).IsValid`.
 A validátor **nem** kap új paramétert, nem olvas session-/globális állapotot és nem
-feltételez alapértéket. Egy jelölt több hibakódot is hordozhat.
+feltételez alapértéket. Egy jelölt több **különböző** hibakódot is hordozhat, de
+**egy kódot legfeljebb egyszer** jelentünk (deduplikált `Issues` lista) — a hívó a
+kód jelenlétére, nem a darabszámra támaszkodhat.
 
 **Kötelező ellenőrzések:**
 
 | Kód | Ellenőrzés | Súlyosság |
 |---|---|---|
-| `ANSWER_MISMATCH` | `CorrectAnswer` == `Evaluate(Expression)` | Error |
+| `ANSWER_MISMATCH` | `CorrectAnswer` == `Evaluate(Expression)`; **kapunál** továbbá: minden opció `Value`-ja egyezik a saját `GateOperation`-ja kiértékelésével, és a `Goal` szerinti egyedi optimum az `IsCorrect == true` opció, amelynek értéke a `CorrectAnswer` | Error |
 | `NO_CORRECT_OPTION` / `MULTIPLE_CORRECT_OPTIONS` | pontosan egy `IsCorrect` | Error |
 | `DUPLICATE_OPTIONS` | minden opció értéke különböző | Error |
 | `OPTION_COUNT_OUT_OF_RANGE` | `2 <= Count <= 4` és `== profile.AnswerOptionCount` | Error |
@@ -341,11 +346,9 @@ feltételez alapértéket. Egy jelölt több hibakódot is hordozhat.
 | `REWARD_RESOURCE_NOT_ALLOWED` | `Reward.Resource != Health` (`Shield`/`EnemyArmor`/`Energy`) — ld. 0. R2 | Error |
 | `AMMO_NOT_ALLOWED` | `Reward.Resource == Ammo` tombstone (ADR-017; elsőbbség az előző kóddal szemben) | Error |
 | `REWARD_AMOUNT_INVALID` | `Reward.FlatAmount <= 0`, vagy `IncorrectAmount < 0`, vagy `IncorrectAmount > FlatAmount` | Error |
-| `GATE_BASE_VALUE_MISSING` | `ResourceOperationComparison`: `GateBaseValue` hiányzik; más feladattípusnál nem `null` | Error |
-| `GATE_BASE_MISMATCH` | `ResourceOperationComparison`: van olyan opció, amelynek `GateOperation` bal operandusa nem a közös `GateBaseValue` konstans | Error |
-| `GATE_OPERATION_NOT_CONCRETE` | `ResourceOperationComparison`: valamely `GateOperation` `UnknownNode`-ot tartalmaz, vagy nem `BinaryOperationNode(op, Constant, Constant)` alakú | Error |
-| `GATE_OPERATOR_NOT_SUPPORTED` | `ResourceOperationComparison`: `Modulo` vagy `IntegerDivisionWithRemainder` kapuműveletként, illetve bármely opcióérték `Remainder != null` | Error |
-| `GATE_DUPLICATE_OPERATION` | `ResourceOperationComparison`: két opció `(operátor, operandus)` párja — és így a `DisplayLabel`-je — azonos | Error |
+| `GATE_BASE_VALUE_MISSING` | `ResourceOperationComparison`: `GateBaseValue` hiányzik vagy `<= 0`; **más** feladattípusnál nem `null` | Error |
+| `GATE_OPERATION_NOT_CONCRETE` | `ResourceOperationComparison`: valamely opció `GateOperation`-ja nem `BinaryOperationNode(op, ConstantNode(GateBaseValue), ConstantNode(k))` alakú — ide tartozik az eltérő/hiányzó közös bázis, az `UnknownNode`, az összetett részfa, valamint a nem engedélyezett operátor (csak `+`, `−`, `×`, `÷`; `Modulo` és `IntegerDivisionWithRemainder` tilos), illetve a maradékot adó érték | Error |
+| `GATE_DUPLICATE_OPERATION` | `ResourceOperationComparison`: két opció művelete megjelenítésben azonos (ugyanaz az `(operátor, operandus)` pár) | Error |
 | `GATE_TARGET_MISSING` | `ResourceOperationComparison` + `ReachTarget`: `TargetValue` hiányzik | Error |
 | `GATE_TIE` | `ResourceOperationComparison`: bármely két opcióérték egyenlő, vagy a `Goal` szerinti optimum nem egyértelmű (`ReachTarget`: azonos legkisebb céltávolság) | Error |
 | `GATE_GAP_TOO_SMALL` | bármely opciópárra `|A − B| < profile.MinGateGap` (CL1–3: 8, CL4+: 4 — GAME_DESIGN 3.5/1.) | Error |
@@ -358,6 +361,9 @@ Ezek kódstringek, nem szerializált ordinalok, ezért a kivezetés nem
 adatformátum-változás. Új kód nem veheti át a nevüket. A kapacitás-vágás és a
 „nyers vs effektív optimum” fogalompár **megszűnt**: a jutalom fix, ezért az
 erőforrás `Max`-ja nem befolyásolja az optimális opciót.
+Hiányzó `ReachTarget` célérték esetén a céltávolságot igénylő ellenőrzések
+(optimum-egyértelműség, `ANSWER_MISMATCH` optimum-ága) kimaradnak; a többi
+független szabály továbbra is lefut.
 
 **Egyértelműségi szabály (`Goal`):** `Maximize` ⇒ a legnagyobb érték az egyetlen
 helyes; `Minimize` ⇒ a legkisebb; `ReachTarget` ⇒ a legkisebb `|érték − TargetValue|`.
@@ -482,6 +488,8 @@ public sealed class ProblemGenerationRequest
 }
 
 /// Namespace: MathHorde.MathEngine. Immutable, allokációmentes bemeneti korlát.
+/// Érvénytelen tartomány konstruktorban ArgumentOutOfRangeException("GATE_LIMITS_INVALID")
+/// — programozói/konfigurációs hiba, nem futásidejű üzleti ág.
 public readonly struct GateGenerationLimits
 {
     public int OperandMin { get; }      // >= 1
@@ -548,7 +556,8 @@ döntés előtt soha nem jeleníthető meg (spec 5.1).
    `profile.AllowedOperators ∩ { Addition, Subtraction, Multiplication, Division }`.
    Üres halmaz ⇒ `Result.Fail("GATE_OPERATOR_SET_EMPTY")`. `Modulo` és
    `IntegerDivisionWithRemainder` kapuműveletként tilos (az eredmény
-   `(hányados, maradék)` pár nem rendezhető egyértelműen).
+   `(hányados, maradék)` pár nem rendezhető egyértelműen); ilyen jelölt a
+   validátorban `GATE_OPERATION_NOT_CONCRETE`.
 3. **Szorzó/osztó operandus:** `Multiplication` és `Division` esetén
    `k ∈ [max(GateLimits.MultiplierMin, 2), GateLimits.MultiplierMax] ∩ [lo, hi]`;
    üres metszet ⇒ `GATE_LIMITS_INVALID`. `Addition`/`Subtraction` esetén
@@ -673,7 +682,7 @@ public sealed class ExplanationStep
 | Nincs `UnityEngine` | a `tests/` solution buildje Unity nélkül sikeres |
 | Teljesítmény | `Generate` átlagos ideje `< 2 ms` közepes nehézségen (prefetch miatt nem blokkoló) |
 | Hibaágak | `DIVISION_BY_ZERO`, `OVERFLOW`, `NO_INTEGER_SOLUTION`, `GENERATION_EXHAUSTED`, `GATE_LIMITS_INVALID`, `GATE_OPERATOR_SET_EMPTY`, `REWARD_RESOURCE_NOT_ALLOWED`, `REWARD_AMOUNT_INVALID` mindegyikére explicit teszt |
-| Kapu-invariánsok | 10 000 generált kapupár: egyik sem sérti a `GATE_TIE`, `GATE_GAP_TOO_SMALL`, `GATE_DUPLICATE_OPERATION`, `GATE_BASE_MISMATCH`, `GATE_OPERATION_NOT_CONCRETE` szabályt (GAME_DESIGN 10./1.) |
+| Kapu-invariánsok | 10 000 generált kapupár: egyik sem sérti a `GATE_TIE`, `GATE_GAP_TOO_SMALL`, `GATE_DUPLICATE_OPERATION`, `GATE_OPERATION_NOT_CONCRETE`, `GATE_BASE_VALUE_MISSING` szabályt (GAME_DESIGN 10./1.) |
 | **CL1-játszhatóság** | a szállított CL1 profillal + a szállított `MathEventConfigSO` kapu-korlátokkal `GenerateBatch` 10 000 seeden **0 `GENERATION_EXHAUSTED`** hibát ad `ResourceOperationComparison`-ra. Ez az ADR-018 1. problémájának (coverage-lehetetlenség) tényleges lezárása. |
 | Időbeli stabilitás | a kész `MathProblem` immutable: a generálás után bármennyi erőforrás-/harcváltozás mellett a `CorrectAnswer` és az `IsCorrect` kiosztás változatlan (ADR-018 2. problémája) |
 | Erőforrás-függetlenség | a MathEngine assembly nem hivatkozik `IResourceService`-re és nem kap erőforrásállást; statikus ellenőrzés + fordítási kapu |
