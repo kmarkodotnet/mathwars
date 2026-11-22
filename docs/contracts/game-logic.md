@@ -8,8 +8,14 @@
 >
 > **Revízió r2 (2026-11-16, architect):** a `ResourceService.Initialize` pajzs-viselkedése
 > rögzítve (`MaxShield`); `EnemySnapshot` definíció/snapshot szétválasztása explicit;
-> történeti r2-jutalomszemantika (az ammo részt ADR-017 felülírta); `CalculateStars` küszöbök SO-ból;
-> `LossDiagnosis` bevezetve az adaptációs bemenethez (ld. core-domain.md 6.).
+> `CalculateStars` küszöbök SO-ból; `LossDiagnosis` bevezetve az adaptációs bemenethez.
+>
+> **Revízió r3 — ADR-018 + ADR-019 (2026-11-22, architect) — ÉRVÉNYES:**
+> a matematikai esemény **nem olvas élő erőforrásállást**. A kapu-feladat a
+> Ticken kívül, teljesen legenerált, immutable `MathProblem`; a snapshot-alapú
+> `Bind`, a kapacitásfigyelés és `IResourceService.CaptureSnapshot` **kivezetve**.
+> A jutalom mindkét kötelező mechanikán **fix, pozitív `Health`-összeg**
+> (`RewardSpec.FlatAmount`); nincs delta-képzés.
 
 ## 0. Alapszabályok
 
@@ -22,6 +28,7 @@
 | G5 | A `MathEventDirector` és a `WaveDirector` **nem hivatkozik egymásra** — sem fordításilag, sem futásidőben. Ezt a konstruktor-szignatúrák kényszerítik ki (egyiknek sincs a másikra mutató paramétere). |
 | G6 | Minden véletlen `IRandomSource`-ból (ADR-006). |
 | G7 | A GameLogic csak `*Definition` (statikus) és saját `*Snapshot`/`Active*` (futásidejű) típusokkal dolgozik. Futásidejű mezőt `*Definition`-re visszaírni TILOS — a definíció immutable és példányok között osztott (ADR-009). |
+| G8 | **A matematikai feladat tartalma nem függ futásidejű játékállapottól** (ADR-018). A `MathEventDirector` a feladat előkészítése után erőforrást nem olvas, feladatot nem módosít és nem generál újra. A kész `MathProblem` a feloldásig változatlan. |
 
 ---
 
@@ -55,11 +62,11 @@ public interface IGameEvent { double GameTime { get; } }
 | `WeaponChanged` | CombatService | `string PreviousWeaponId, string WeaponId, double GameTime` (F1-21) |
 | `PlayerDamaged` | CombatService | `int Damage, int RemainingHealth, double GameTime` |
 | `PlayerLaneChanged` | CombatService | `LaneIndex From, LaneIndex To, double GameTime` |
-| `MathEventPreviewStarted` | MathEventDirector | `MathEventId EventId, ProblemType Type, MathProblemId? ProblemId, string DisplayExpression, ResourceType Resource, GateGoal Goal, int? TargetValue, double GameTime` |
-| `MathEventGatesSpawned` | MathEventDirector | `MathEventId EventId, int SnapshotValue, ResourceType SnapshotResource, double GameTime` |
+| `MathEventPreviewStarted` | MathEventDirector | `MathEventId EventId, ProblemType Type, MathProblemId? ProblemId, string DisplayExpression, GateGoal Goal, int? TargetValue, int RewardAmount, double GameTime` |
+| `MathEventGatesSpawned` | MathEventDirector | `MathEventId EventId, int GateBaseValue, double GameTime` (ADR-019: bázisérték, **nem** erőforrás-snapshot) |
 | `MathEventDecisionWindowOpened` | MathEventDirector | `MathEventId EventId, double DeadlineGameTime, double GameTime` |
 | `MathEventResolved` | GateResolutionService | `MathEventId EventId, LaneIndex SelectedLane, bool WasCorrect, double GameTime` |
-| `MathEventCompleted` | MathEventDirector | `MathEventId EventId, int AppliedDelta, ResourceType Resource, double GameTime` |
+| `MathEventCompleted` | MathEventDirector | `MathEventId EventId, int AppliedDelta, ResourceType Resource, double GameTime` (`Resource` mindig `Health`) |
 | `MathEventExpired` | MathEventDirector | `MathEventId EventId, string ReasonCode, double GameTime` (`"DEADLINE"`, `"SESSION_ENDED"`, `"PREPARATION_FAILED"`) |
 | `MathEventPreparationFailed` | MathEventDirector | `MathEventId EventId, string ErrorCode, double GameTime` (tartalom-/kontrakthiba, nem gyermek-timeout) |
 | `RewardApplied` | RewardService | `MathEventId EventId, ResourceType Resource, int AppliedDelta, double GameTime` |
@@ -67,12 +74,18 @@ public interface IGameEvent { double GameTime { get; } }
 | `ChallengeLevelChanged` | AdaptiveDifficultyService | `int Previous, int New, string Reason, double GameTime` (Fázis 4) |
 | `AssistTierChanged` | AdaptiveDifficultyService | `int PreviousTier, int NewTier, string TriggerCode, double GameTime` (Fázis 4) |
 
+A `MathEventPreviewStarted` korábbi `ResourceType Resource` mezője **törölve**: a
+jutalom erőforrása mindig `Health`, ezért nem információ. Helyette a fix
+`RewardAmount` (a `RewardSpec.FlatAmount`) kerül a payloadba, hogy a HUD előre
+mutathassa, mennyi életerő a tét. A `MathEventGatesSpawned` korábbi
+`SnapshotResource` mezője szintén **törölve**.
+
 A Presentation réteg **kizárólag** ezekre az eseményekre és az olvasó property-kre
 támaszkodhat; a GameLogic belső mezőihez nem fér hozzá.
 
 ---
 
-## 2. IResourceService (spec 4.3, 5.1 — a legszigorúbb kontrakt)
+## 2. IResourceService (spec 4.3)
 
 ```csharp
 namespace MathHorde.GameLogic;
@@ -96,10 +109,6 @@ public interface IResourceService
     /// Maximum módosítása (upgrade). A Current soha nem haladhatja meg az új Max-ot.
     ResourceChange SetMax(ResourceType type, int newMax, string reasonCode);
 
-    /// A matematikai feladat bázisának rögzítése (spec 5.1).
-    /// A snapshot CSAK olvasási másolat; semmilyen későbbi művelet nem írja vissza.
-    int CaptureSnapshot(ResourceType type);
-
     /// Pálya kezdeti feltöltése a LevelDefinition alapján. Csak a GameSessionService hívja.
     void Initialize(LevelDefinition level);
 }
@@ -109,14 +118,16 @@ public interface IResourceService
 
 | Tilos | Miért |
 |---|---|
-| **Nincs publikus `SetCurrent(type, absoluteValue)`** | A kapu soha nem írhatja felül a harc által módosított tényleges értéket (spec 5.1, 17.3). |
+| **Nincs publikus `SetCurrent(type, absoluteValue)`** | A matematikai jutalom soha nem írhatja felül a harc által módosított tényleges értéket (spec 5.1, 17.3). Minden jóváírás delta. |
+| **Nincs `CaptureSnapshot`** (ADR-019 2.10. — kivezetve) | Nincs olyan mechanika, amely az erőforrás pillanatnyi állását feladatbemenetként használná (ADR-018 1. pont). A metódus visszavezetése kontraktsértés. |
 | `ApplyDelta` hívása a Presentation rétegből | A HUD csak olvas és `ResourceChanged` eseményre animál. |
 | `ResourcePool` közvetlen mutálása | `ResourceState` immutable. |
 | A `Max` levezetése a `Starting*` értékből | Minden erőforrásnak **saját** `Max` mezője van a `LevelDefinition`-ben (`MaxHealth`, `MaxShield`) — spec 4.3. |
+| Pajzs matematikai jutalomként | ADR-018 3. pont: `ApplyDelta(Shield, …)` kizárólag `"ENEMY_CONTACT"`, `"LEVEL_INIT"` vagy `"BOSS_PHASE"` indokkal hívható; `"MATH_GATE"` indokkal **csak `Health`** módosítható. |
 
 ### 2.2. `Initialize` kötelező viselkedése
 
-A `LevelDefinition` három `Starting*`/`Max*` párjából **pontosan** három pool jön létre,
+A `LevelDefinition` `Starting*`/`Max*` párjaiból **pontosan** két aktív pool jön létre,
 azonos véges-erőforrás minta szerint. Az Ammo tombstone nem aktív erőforrás:
 
 | Pool | `Current` | `Max` | Mikor jön létre |
@@ -131,22 +142,25 @@ helyes ábrázolása. A `Max = max(StartingShield, 1)` jellegű kerülő megold�
 `ResourceType.EnemyArmor` és `Energy` poolokat az `Initialize` **nem** hoz létre az
 F1–F4 fázisban (F5-től a `LevelDefinition` bővítése után).
 
-### 2.3. Kötelező referencia-viselkedés (spec 17.3 teszt)
+### 2.3. Kötelező referencia-viselkedés (fix jutalom, ADR-018)
 
-Ez explicit, érvényes matekprofilú Shield unit-teszt, nem a szállított CL1
-lefedettségi bizonyítéka (ADR-017).
+A matematikai jutalom fix, pozitív `Health`-összeg, amelyet a harc által már
+módosított tényleges értékhez **deltaként** adunk, `Max`-ra vágva:
 
 ```
-Initialize: Shield = 20 (Max 50)
-CaptureSnapshot(Shield) -> 20
-... harc: ENEMY_CONTACT 12 pajzssebzés -> Current = 8
-GateResolution: operationResult = 45, snapshot = 20 => delta = +25
-ApplyDelta(Shield, +25, "MATH_GATE") -> PreviousValue = 8, NewValue = 33
+Initialize: Health = 100 (Max 100), Shield = 20 (Max 50)
+... harc: ENEMY_CONTACT 30 sebzés -> Shield 0, Health 90
+Helyes kapuválasz, RewardSpec.FlatAmount = 30 (Health)
+ApplyDelta(Health, +30, "MATH_GATE") -> PreviousValue = 90, NewValue = 100,
+                                        AppliedDelta = 10, WasClamped = true
 ```
 
-Ammo pool nem inicializálódik. Az Ammo-t fogadó Get/GetCurrent/GetMax,
-CaptureSnapshot/ApplyDelta/TryConsume/SetMax út `ArgumentException` programozói
-hibával elutasít; sem 0/Max, sem int.MaxValue nem reprezentál végtelent.
+A `WasClamped` nem hiba és nem „elvesztegetett” feladat: a `Max` kemény korlát
+(core-domain 5.). A HUD a tényleges `AppliedDelta`-t animálja.
+
+Ammo pool nem inicializálódik. Az Ammo-t fogadó `GetCurrent`/`GetMax`/
+`ApplyDelta`/`TryConsume`/`SetMax` út `ArgumentException` programozói hibával
+elutasít; sem 0/Max, sem `int.MaxValue` nem reprezentál végtelent.
 
 ---
 
@@ -304,13 +318,14 @@ public interface IMathEventDirector
     void Initialize(LevelDefinition level, DifficultyProfile difficulty,
                     IMathProblemGenerator generator, IRandomSource random);
 
-    /// KIZÁRÓLAG a session Ticken kívül. Minden még előkészítetlen, illetve
-    /// kapacitásváltozás miatt érvénytelen, még nem bindolt eseményt előkészít.
+    /// KIZÁRÓLAG a session Ticken kívül. Minden még előkészítetlen eseményhez
+    /// teljes, validált MathProblem-et generál (MathEngine 7.).
     /// Ismételt, változatlan kontextusú hívás cache-találat; true = minden kész.
     Result<bool> PrepareUpcomingEvents(double gameTime);
 
-    /// Léptetés. NEM módosít harci állapotot és NEM hívja az IGameClock.Pause-t.
-    /// A feloldásokat parancsként sorba állítja (PendingResolutions), nem alkalmazza.
+    /// Léptetés. NEM módosít harci állapotot, NEM olvas erőforrást és NEM hívja
+    /// az IGameClock.Pause-t. A feloldásokat parancsként sorba állítja
+    /// (PendingResolutions), nem alkalmazza.
     void Tick(double gameTime);
 
     /// A játékos sávváltása. Csak AwaitingDecision állapotú eseményre hat.
@@ -339,17 +354,27 @@ public sealed class ActiveMathEvent
     public MathEventId EventId { get; }
     public MathEventState State { get; }
     public ProblemType Type { get; }
-    public MathProblemId? ProblemId { get; } // resource gate-nél csak sikeres bindtól
-    public MathProblem Problem { get; } // nem resource típus: Preview-tól; resource: mindig null
-    public ResourceGateBinding? ResourceGate { get; } // resource: Approaching-tól; máskor null
+    /// Resource-kapunál csak Approaching-tól (a fokozatos felfedés miatt), minden
+    /// más típusnál Preview-tól. Ugyanaz az előre legenerált MathProblemId.
+    public MathProblemId? ProblemId { get; }
+    /// Az előkészítés során legenerált, immutable feladat. Nem-resource típusnál
+    /// Preview-tól, resource-kapunál Approaching-tól NEM null; előtte null.
+    /// Az Approaching-ba lépés CSAK referencia-hozzárendelés (nincs generálás,
+    /// erőforrás-olvasás, RNG vagy allokáció — G4).
+    public MathProblem Problem { get; }
+    /// A fix jutalom erőforrása; az ADR-018 óta mindig ResourceType.Health.
     public ResourceType RewardResource { get; }
+    /// A fix jutalom összege (Problem.Reward.FlatAmount), már Preview-ban ismert.
+    public int RewardAmount { get; }
     public GateGoal Goal { get; }
     public int? TargetValue { get; }
     public double PreviewStartedAt { get; }
     public double DecisionOpenedAt { get; }
     public double DeadlineGameTime { get; }
-    public int SnapshotValue { get; }               // ResourceOperationComparison esetén
-    public ResourceType SnapshotResource { get; }
+    /// ResourceOperationComparison esetén a feladat közös, GENERÁLT bázisértéke
+    /// (Problem.GateBaseValue); Approaching előtt és más típusnál 0.
+    /// NEM erőforrásállás (ADR-018).
+    public int GateBaseValue { get; }
     public IReadOnlyList<GateCarrier> Carriers { get; }
 }
 
@@ -371,11 +396,17 @@ public readonly struct ResolveCommand
 }
 ```
 
+**Kivezetett tagok (ADR-019):** `ActiveMathEvent.ResourceGate`
+(`ResourceGateBinding?`), `SnapshotValue`, `SnapshotResource`. Visszavezetésük
+kontraktsértés.
+
 **Állapotgép-időzítés:**
 
 ```
-t0                      : Inactive -> Preview (resource: cél+erőforrás; más: teljes feladat)
-t0 + PreviewDuration    : friss snapshot+Max, Bind -> Approaching (resource); kapuk spawn
+t0                      : Inactive -> Preview
+                          (resource: cél + fix jutalom; más: teljes feladat)
+t0 + PreviewDuration    : a kész MathProblem publikálása -> Approaching (resource);
+                          kapuk/carrierek spawnolása, GateBaseValue láthatóvá válik
 kapuk a döntési zónában : Approaching -> AwaitingDecision
 DecisionOpenedAt + ThinkTime : -> Expired, ha nincs választás
 LaneSelected            : AwaitingDecision -> Resolving  (ResolveCommand sorba állítva)
@@ -390,21 +421,25 @@ RewardProcessed         : Resolving -> Completed (Applied vagy SkippedIncorrect)
 | `ICombatService`/`IWaveDirector` konstruktorában nincs `IMathEventDirector` | ua. |
 | A matek-állapotgép nem hívhat `IGameClock.Pause()`-t | a `IGameClock` mutáló metódusait csak a `GameSessionService` kapja meg |
 | A `CombatService` entitáslistája nem tartalmaz `GateCarrier`-t | külön lista, külön típus (3. szakasz 4. szabály) |
-| Teszt-kapu | `MathEventDirectorIndependenceTests`: `MathEventDirector` 10 000 Tick-en végigfut `ICombatService` példány NÉLKÜL; `CombatService` ugyanígy `IMathEventDirector` nélkül |
+| **A matek-feladat tartalma nem függ a harctól** (ADR-018, G8) | a `MathEventDirector` `Tick`-je nem hív `IResourceService`-t; a feladat a `Tick` előtt készen van |
+| Teszt-kapu | `MathEventDirectorIndependenceTests`: `MathEventDirector` 10 000 Tick-en végigfut `ICombatService` példány NÉLKÜL; `CombatService` ugyanígy `IMathEventDirector` nélkül; továbbá ugyanazon seeddel generált esemény tartalma azonos, akármilyen erőforrás-állapot mellett futtatjuk |
 
 > `IsCorrect` a `GateCarrier`-ben **csak a feloldás után** használható fel vizuálisan.
-> Döntés előtt a Presentation nem jeleníthet meg semmit belőle (spec 5.1: „A két kapu
-> eredményét a döntés előtt ne jelenítsd meg”). Ezt a code-reviewer ellenőrzi.
+> Döntés előtt a Presentation nem jeleníthet meg semmit belőle, és az opciók
+> **értékét** sem (spec 5.1: „A két kapu eredményét a döntés előtt ne jelenítsd meg”).
+> A Presentation a műveleti címkét kizárólag a `Carriers[].DisplayLabel`-ből veheti,
+> az `ActiveMathEvent.Problem.Options` nem prezentációs adat. Ezt a code-reviewer ellenőrzi.
 
-### 5.1. Implementációs határok és lezárás (ADR-015)
+### 5.1. Implementációs határok és lezárás
 
 A konkrét `MathEventDirector` konstruktora az 5.2. szerinti Unity-mentes beállítást
 és meglévő `IResourceService`/`IGameEventSink` függőséget kapja; továbbra sem kaphat
-`ICombatService` vagy `IWaveDirector` referenciát. A konfigurációs
+`ICombatService` vagy `IWaveDirector` referenciát. Az `IResourceService` függőség
+**kizárólag** a jutalom-oldali diagnosztikára és a hostkonfiguráció ellenőrzésére
+szolgál: a director `Tick`-ben és `Prepare`-ben **nem olvas** erőforrásállást vagy
+`Max`-ot (ADR-018; a korábbi `CaptureSnapshot`/`GetMax` hívás törölve). A konfigurációs
 assetek későbbi implementációja nem jogosít beégetett balance-értékekre: a director
-tesztben explicit bemeneti értékekkel is létrehozható. Az F1-es, csak `Tick`-et
-tartalmazó kódbeli placeholder nem alternatív kontrakt; az F3-ban a fenti teljes
-felületet kell implementálni.
+tesztben explicit bemeneti értékekkel is létrehozható.
 
 Az `ApplyTimePressure` az ezután `Preview`-ba belépő események időnyomását állítja.
 A director belépéskor rögzíti az esemény effektív idejét és sebességét. A gondolkodási
@@ -427,7 +462,7 @@ jutalmat, átmenetet vagy completion-eseményt. A már `Expired` esemény nem v�
 `Completed`-dé. A jelzés önmagában nem mutál erőforrást, és nem engedélyez
 Tick-allokációt. Indoklás: [ADR-015 4.](../decisions/ADR-015.md#4-resolving--completed-bejövő-visszajelzés).
 
-### 5.2. Előkészítés, binding és hibák — végleges F3-02 szerződés
+### 5.2. Előkészítés és hibák — F3 szerződés (ADR-018/019 szerinti végleges alak)
 
 ```csharp
 // Namespace: MathHorde.GameLogic. Immutable, másolt olvasó nézetű konfiguráció.
@@ -435,6 +470,7 @@ public sealed class MathEventDirectorSettings
 {
     public MathEventDirectorSettings(int maxConcurrentMathEvents, float gateSpawnDepth,
         float decisionZoneDepth, float gateApproachSpeed, float feedbackDisplaySeconds,
+        GateGenerationLimits gateLimits,
         IReadOnlyDictionary<int, RewardSpec> rewardsByScheduleIndex,
         IReadOnlyDictionary<int, int> targetsByScheduleIndex = null);
     public int MaxConcurrentMathEvents { get; }
@@ -442,6 +478,10 @@ public sealed class MathEventDirectorSettings
     public float DecisionZoneDepth { get; }
     public float GateApproachSpeed { get; }
     public float FeedbackDisplaySeconds { get; }
+    /// A MathEventConfigSO globális kapu-korlátai (SO-séma 6.), amelyeket a director
+    /// változatlanul továbbít a ProblemGenerationRequest.GateLimits mezőjébe.
+    /// Érvénytelen tartomány startup konfigurációs hiba (GATE_LIMITS_INVALID).
+    public GateGenerationLimits GateLimits { get; }
     public IReadOnlyDictionary<int, RewardSpec> RewardsByScheduleIndex { get; }
     public IReadOnlyDictionary<int, int> TargetsByScheduleIndex { get; }
 }
@@ -453,13 +493,13 @@ public MathEventDirector(IResourceService resources, IGameEventSink events,
 A schedule-index az eredeti `LevelDefinition.MathEvents` lista 0-alapú indexe;
 idő szerinti rendezés után is ezt kell használni az ID-hez és a mapekhez. Az
 értékek/tartományok a SO-séma 5.1., 6., 6.1.-ből jönnek; SpawnDepth > ZoneDepth,
-sebesség pozitív és véges. Reward bejegyzés minden schedule-elemre kötelező;
-Resource/UseSnapshotDelta/FlatAmount/IncorrectAmount a feladattípusnak megfelelő,
-IncorrectAmount az MVP-ben 0. TargetValueSelection/ReachTarget esetén a targetmap
-bejegyzése kötelező, máskor nem alkalmazandó. A konfigurációs adapter oldja fel a
-SO override-jait/tábláit **Initialize előtt**, nem a director talál ki jutalmat vagy
-hiányzó célértéket. A MathEventConfig/Reward/TimePressure SO-k későbbi bekötése
-ezen értékek előállítása; F3-02 tesztben explicit beállítás adható.
+sebesség pozitív és véges. Reward bejegyzés minden schedule-elemre kötelező:
+`Resource == Health`, `FlatAmount > 0`, `0 <= IncorrectAmount <= FlatAmount`
+(MVP-ben `IncorrectAmount == 0`) — ADR-018. `UseSnapshotDelta` mező nem létezik.
+`TargetValueSelection`, illetve `ResourceOperationComparison` + `ReachTarget` esetén
+a targetmap bejegyzése kötelező, máskor nem alkalmazandó. A konfigurációs adapter
+oldja fel a SO override-jait/tábláit **Initialize előtt**, nem a director talál ki
+jutalmat vagy hiányzó célértéket.
 
 Initialize a teljes schedule méretéhez előre lefoglalja az eseményobjektumokat,
 állapotgépeket, legfeljebb négy carrier/hely per eseményt, pending command- és
@@ -469,49 +509,67 @@ forrásának Seed értéke (nem új húzás). Az esemény generálási seedje
 `random.Derive("math-event:" + index invariant-decimal)` forrás Seedje; ez a
 string és az ID is Initialize/Prepare alatt keletkezik, nem Tickben.
 
-Prepare az összes előkészítetlen schedule-elemet elkészíti: resource gate-hez a
-MathEngine 7.3. PrepareResourceGate-jét, minden más támogatott típushoz a meglévő
-Generate-et használja. A request időértéke a pozitív schedule-override, különben
-DifficultyProfile.BaseThinkTimeSeconds; az effektív szorzók csak Preview-belépéskor
-fagynak be. A resource pool támogatandó Maxát GetMax-ból olvassa. Poolhiány/Max=0
-GATE_CAPACITY_INVALID; hiányzó reward MATH_EVENT_CONFIG_INVALID, hiányzó target
-GATE_TARGET_MISSING. Nincs kitalált fallback resource/profil/jutalom.
+**Prepare (a session Ticken kívül):** minden előkészítetlen schedule-elemhez
+`IMathProblemGenerator.Generate`-tel teljes, validált `MathProblem`-et készít —
+`ResourceOperationComparison`-ra és minden más típusra **ugyanazon az úton**
+(MathEngine 7.). A request összeállítása:
 
-Resource Preview-ben Problem és ResourceGate null, ProblemId null, Carriers üres.
-A Preview-esemény DisplayExpression = string.Empty, és csak Resource/Goal/TargetValue
-előjelzésére használható. A prepared sablonokat a director belső állapota őrzi;
-a Presentation nem kap műveleteket vagy snapshotot ebből az állapotból.
-Nem-resource Preview-ben Problem/ProblemId és a teljes kifejezés már elérhető.
+| Request-mező | Forrás |
+|---|---|
+| `Seed` | `random.Derive("math-event:<index>")` Seed értéke |
+| `Type`, `Goal` | `MathEventScheduleEntry` |
+| `Difficulty` | az `Initialize`-ban átadott `DifficultyProfile` |
+| `LaneCount` | `LevelDefinition.LaneCount` |
+| `ThinkTimeSeconds` | pozitív schedule-override, különben `Difficulty.BaseThinkTimeSeconds` |
+| `RewardResource`, `Reward` | `RewardsByScheduleIndex[index]` (kötelezően `Health`) |
+| `GateLimits` | `Settings.GateLimits`, **csak** `ResourceOperationComparison`-nál; máskor `null` |
+| `TargetValue` | `TargetsByScheduleIndex[index]`, ha a típus/cél megköveteli |
 
-A Preview lejártakor a resource director egyszer olvassa a `CaptureSnapshot` és
-`GetMax` párt a **harci rész után**, szinkron főszálon, majd BindResourceGate-et
-hív. Siker esetén az immutable binding rögzül, a carrier-label/lane a kiválasztott
-Template-ből jön, és az állapot Approaching lesz. Ez a konkrét feladat kezdete;
-MathEventGatesSpawned után a snapshot és a műveletek láthatók. Később nem rebindol.
-A pozíció a rögzített GateApproachSpeed * gateSpeedMultiplier és a játékidő-különbség
-alapján halad SpawnDepthtől ZoneDepthig; zónába lépéskor nyílik a döntési ablak.
-A GateApproachSeconds design-idő nem második, geometriafüggetlen ütközési óra.
+A director **nem** olvas `GetCurrent`/`GetMax`-ot, nem számol kapacitást és nem
+rendel hozzá erőforrásállást. Hibakódok Prepare-ből (`Result.Fail`):
+hiányzó/érvénytelen reward → `MATH_EVENT_CONFIG_INVALID`; hiányzó célérték →
+`GATE_TARGET_MISSING`; hiányzó/ellentmondó kapu-korlát → `GATE_LIMITS_INVALID`;
+tiltott jutalom-erőforrás → `REWARD_RESOURCE_NOT_ALLOWED` (Ammo:
+`AMMO_NOT_ALLOWED`); generátor-kimerülés → `GENERATION_EXHAUSTED`.
+Nincs kitalált fallback resource, profil, cél vagy jutalom.
 
-**Kapacitásváltozás:** a kompozíciós gyökér Maxot módosító parancsai a külső
-Prepare előtt futnak, nem wave/combat/math Tick közben. A következő Prepare a
-még nem bindolt resource események új Maxához új sablont készít. Preview-ben csak
-cél látszik, ezért ez nem módosít látható műveleti feladatot vagy rögzített időszorzót.
-A már bindolt esemény Snapshot/ResourceCapacity adata továbbra is változatlan.
+Resource `Preview`-ben `Problem` és `ProblemId` null, `Carriers` üres,
+`GateBaseValue == 0`, és a Preview-esemény `DisplayExpression = string.Empty`;
+csak a `Goal`, a `TargetValue` és a fix `RewardAmount` előjelezhető. Nem-resource
+`Preview`-ben a `Problem`/`ProblemId` és a teljes kifejezés már elérhető.
 
-**Hibaág:** Prepare az első hibakódot Result.Fail-ként adja vissza, de minden
+A Preview lejártakor a resource-esemény **egyszerűen publikálja** az előre
+legenerált feladatot: `Problem`/`ProblemId` beállítása, `GateBaseValue =
+Problem.GateBaseValue.Value`, a carrierek feltöltése az opciók
+`Lane`/`DisplayLabel`/`IsCorrect` adataiból, állapot `Approaching`, majd
+`MathEventGatesSpawned(EventId, GateBaseValue, t)`. Ez a konkrét feladat
+kezdete: innentől a bázisérték és a műveletek láthatók, az **eredmények** nem.
+Nincs `Bind`, nincs erőforrás-olvasás, nincs új RNG-húzás és nincs allokáció.
+A pozíció a rögzített `GateApproachSpeed * gateSpeedMultiplier` és a
+játékidő-különbség alapján halad `SpawnDepth`-től `ZoneDepth`-ig; zónába lépéskor
+nyílik a döntési ablak. A `GateApproachSeconds` design-idő nem második,
+geometriafüggetlen ütközési óra.
+
+**Erőforrás-változás hatása:** nincs. Mivel a feladatnak nincs erőforrás-bemenete,
+a `Max` vagy a `Current` menet közbeni változása nem érvénytelenít előkészített
+vagy aktív eseményt, és nem igényel újraelőkészítést (a korábbi
+„Kapacitásváltozás” szabály törölve). A jutalom jóváírásakor a `Max` vághat
+(2.3.), ami normál működés.
+
+**Hibaág:** Prepare az első hibakódot `Result.Fail`-ként adja vissza, de minden
 schedule-elemet ellenőriz; a hibás elemeket megjelöli, a sikeres cache-t megőrzi.
 Még az első gameplay Tick előtt észlelt hiba esetén a host konfigurációs hibaként
 jelenti, és nem indít szimulációs frame-et. Ez nem játék közbeni matekszünet.
-Ha futó sessionben egy új kontextus előkészítése vagy egy Bind hibás, az érintett
-még nem véglegesített esemény Expired lesz, MathEventPreparationFailed és
-MathEventExpired(PREPARATION_FAILED) keletkezik. Nincs ResolveCommand, jutalom,
-MathAnswer/QuestionAttempt, vagy gyermek-timeout; a host a frame után jelzi a
+Ha futó sessionben egy új elem előkészítése hibás, az érintett, még nem
+véglegesített esemény `Expired` lesz, `MathEventPreparationFailed` és
+`MathEventExpired(PREPARATION_FAILED)` keletkezik. Nincs `ResolveCommand`, jutalom,
+`MathAnswer`/`QuestionAttempt` vagy gyermek-timeout; a host a frame után jelzi a
 tartalomhibát. A harci Tick sorrendje és a többi érvényes esemény tovább fut.
 Előkészítés nélkül esedékes esemény ugyanezt az ágat használja
-MATH_EVENT_NOT_PREPARED kóddal, Tickbeli lusta generálás helyett.
+`MATH_EVENT_NOT_PREPARED` kóddal, Tickbeli lusta generálás helyett.
 Ez nem normál pályaelfogadási siker: F3-integráció nem lehet zöld ilyen diagnosztikával.
-A deadline miatti Expired továbbra is TimedOut=true attempt; sessionvégi megszakítás
-SESSION_ENDED okú, és nem gyárt gyermek-timeoutot egy el nem indult feladatra.
+A deadline miatti Expired továbbra is `TimedOut = true` attempt; sessionvégi megszakítás
+`SESSION_ENDED` okú, és nem gyárt gyermek-timeoutot egy el nem indult feladatra.
 
 A host pontos hívási helye a [Presentation-kontrakt 1.](presentation.md)-ben van.
 A `Tick` belsejében és az onnan szinkron hívott eseménykezelőkben a G4 változatlan.
@@ -551,12 +609,18 @@ public readonly struct GateResolution
     public GateResolutionOutcome Outcome { get; }
     public bool WasCorrect { get; }
     public int SelectedOptionIndex { get; }     // -1, ha timeout
-    public int OperationResult { get; }         // a választott kapu matematikai eredménye
-    public int SnapshotValue { get; }
-    /// RewardDelta = OperationResult − SnapshotValue (spec 5.1).
-    /// AnswerLaneSelection esetén = RewardSpec.FlatAmount.
+    /// A választott opció matematikai eredménye — KIZÁRÓLAG a visszajelzés
+    /// megjelenítéséhez (spec 5.1 „lássa mindkét művelet eredményét”).
+    /// Jutalmat NEM képez (ADR-018). Timeoutnál 0.
+    public int OperationResult { get; }
+    /// ResourceOperationComparison esetén a feladat generált bázisértéke
+    /// (visszajelzéshez); más típusnál 0. NEM erőforrásállás.
+    public int GateBaseValue { get; }
+    /// A FIX jutalom: helyes válasznál RewardSpec.FlatAmount, hibásnál
+    /// RewardSpec.IncorrectAmount (alap 0), timeout/duplikátum esetén 0.
+    /// MINDKÉT kötelező feladattípusnál ugyanez a szabály (ADR-018 2. pont).
     public int RewardDelta { get; }
-    public ResourceType Resource { get; }
+    public ResourceType Resource { get; }       // mindig Health
     public MathAnswerSnapshot Answer { get; }   // readonly struct; Analytics később materializálja
 }
 
@@ -568,23 +632,27 @@ public enum GateResolutionOutcome
 
 **Feloldási szabályok:**
 
-Resource típusnál a feloldó csak a végleges `mathEvent.ResourceGate.Value`-ból
-olvas: Lane/OptionIndex a Template-ből, OperationResult a GetValue-ból,
-SnapshotValue/Resource a bindingból/Prepared.Rewardból. Nem dereferálhat null
-Problem-et, nem Bindolhat újra és nem generálhat MathProblem-et. Nem-resource
-esetén továbbra is Problem.Options/Reward használatos. A hiányzó binding normál
-választással nem oldható fel (az esemény még nem AwaitingDecision); a deadline-
-commandhoz a már véglegesített feladat metaadatai tartoznak. PREPARATION_FAILED
-nem timeout-command. A MathAnswerSnapshot ProblemId-je mindkét úton ugyanaz,
-amelyet az ActiveMathEvent a konkrét feladat kezdetétől publikál.
+A feloldó **mindkét** típusnál ugyanabból az adatból dolgozik:
+`mathEvent.Problem.Options` (Lane, OptionIndex, Value, IsCorrect) és
+`mathEvent.Problem.Reward`. Nem generál, nem bindol, nem olvas erőforrást és nem
+dereferálhat null `Problem`-et: ha a `Problem` még null (az esemény nincs
+`AwaitingDecision`-ben), normál választással nem oldható fel; a
+deadline-commandhoz a már publikált feladat metaadatai tartoznak.
+`PREPARATION_FAILED` nem timeout-command. A `MathAnswerSnapshot` ProblemId-je
+mindkét úton ugyanaz, amelyet az `ActiveMathEvent` a konkrét feladat kezdetétől
+publikál.
 
 | Eset | `Outcome` | `RewardDelta` |
 |---|---|---|
-| helyes sáv, `ResourceOperationComparison` | `CorrectRewarded` | `OperationResult − SnapshotValue` |
-| helyes sáv, `AnswerLaneSelection` | `CorrectRewarded` | `RewardSpec.FlatAmount` |
-| hibás sáv | `IncorrectNoReward` | `RewardSpec.IncorrectAmount` (alap 0) |
+| helyes sáv, `ResourceOperationComparison` | `CorrectRewarded` | `Reward.FlatAmount` |
+| helyes sáv, `AnswerLaneSelection` | `CorrectRewarded` | `Reward.FlatAmount` |
+| hibás sáv (bármely típus) | `IncorrectNoReward` | `Reward.IncorrectAmount` (alap 0) |
 | határidő lejárt | `Expired` | 0 |
 | ugyanaz az `EventId` másodszor | `Duplicate` | 0, erőforrás nem változik |
+
+A korábbi `RewardDelta = OperationResult − SnapshotValue` szabály **törölve**
+(ADR-018). A két mechanika jutalma ugyanazzal a mechanizmussal működik; csak a
+konfigurált összeg tér el (SO-séma 6.1.).
 
 ---
 
@@ -599,7 +667,8 @@ public interface IRewardService
     RewardApplication ApplyReward(in GateResolution resolution);
 
     /// Nem matematikai jutalom — nem idempotencia-köteles, mert nincs esemény-azonosítója.
-    /// Meglévő használata: BOSS_PHASE: boss-fázisok közti életerő-jóváírás (GAME_DESIGN.md 6.1: +15 HP).
+    /// Meglévő használata: BOSS_PHASE: boss-fázisok közti életerő-jóváírás (GAME_DESIGN.md 6.1: +15 HP),
+    /// illetve (F5-től) a boss legyőzéséért adott pajzs-jóváírás — ez NEM matematikai jutalom.
     ResourceChange ApplyCombatReward(ResourceType type, int amount, string reasonCode);
 
     IReadOnlyCollection<Guid> AppliedRewardEventIds { get; }
@@ -621,11 +690,14 @@ public enum RewardApplicationStatus
 }
 ```
 
-**Jutalomhatár (ADR-017):** ammo és kill-refund nem támogatott. `ApplyReward`
-és `ApplyCombatReward` Ammo-t programozói hibaként (`ArgumentException`) utasít el,
-a pool vagy idempotencia-napló módosítása előtt. `RewardApplicationStatus` nem kap
-hamis Applied/SkippedIncorrect értéket. Más aktív erőforrások meglévő idempotenciája,
-nyers delta- és kapacitásszabálya változatlan.
+**Jutalomhatár (ADR-017 + ADR-018):** `ApplyReward` kizárólag `Health` jutalmat
+könyvelhet el. `Ammo` ⇒ `ArgumentException` (programozói hiba, ADR-017);
+`Shield`/`EnemyArmor`/`Energy` matematikai jutalomként ⇒ ugyancsak
+`ArgumentException`, a pool és az idempotencia-napló módosítása **előtt**.
+A `RewardApplicationStatus` nem kaphat hamis `Applied`/`SkippedIncorrect` értéket.
+`ApplyCombatReward` továbbra is módosíthat `Shield`-et `"BOSS_PHASE"`/`"PICKUP"`
+indokkal — ez harci, nem matematikai jutalom, ezért nem sérti az ADR-018-at.
+`RequestedDelta` a fix összeg, `AppliedDelta` a `Max`-vágás utáni tényleges érték.
 
 ---
 
@@ -638,7 +710,7 @@ public interface IGameSessionService
     SessionResult Result { get; }
     bool IsRunning { get; }
 
-    // A meglévő F1 explicit kompozíció végrehajtható bemenete, F1-21-ben listára bővül:
+    // A meglévő F1 explicit kompozíció végrehajtható bemenete, F1-21-ben listára bővült:
     void StartSession(LevelDefinition level, IReadOnlyList<WeaponDefinition> weapons,
                       IReadOnlyDictionary<string, EnemyDefinition> enemyCatalog, int seed);
     IReadOnlyList<WeaponDefinition> AvailableWeapons { get; }
@@ -672,7 +744,8 @@ _waveDirector.ClearPendingSpawns();
 
 _combatService.Tick(t, deltaTime);    // HARC — a mateseménytől FÜGGETLENÜL
 
-_mathEventDirector.Tick(t);           // matek állapotgép — harcot NEM módosít
+_mathEventDirector.Tick(t);           // matek állapotgép — harcot NEM módosít,
+                                      // erőforrást NEM olvas (G8)
 
 foreach (var res in _mathEventDirector.PendingResolutions)
 {
@@ -685,6 +758,9 @@ _mathEventDirector.ClearPendingResolutions();
 
 EvaluateVictoryOrDefeat(t);
 ```
+
+A `PrepareUpcomingEvents` **nem** ebben a hurokban fut: a host a frame előtt/után,
+a szimulációs lépésen kívül hívja (Presentation-kontrakt 1.).
 
 **Győzelem/vereség (spec 1.2, 1.3):**
 - Győzelem: `WaveDirector.AllWavesCompleted && !IsBossActive && Health > 0 &&
@@ -776,7 +852,7 @@ public readonly struct InLevelAssistance
 Hiszterézis: a `ChallengeLevel` legfeljebb `±1` egy pálya után, és a `Recalculate` a három
 dimenziót pályánként legfeljebb `±1`-gyel mozdítja (spec 7.6 „lassan változzon”).
 A konkrét számértékek: `balance/difficulty-model.md` 6. szakasz; a konfiguráció helye
-`AdaptationRulesSO` + `InLevelAssistSO` (scriptable-object-schema.md 8.1, 8.2).
+`AdaptiveDifficultyConfigSO` + `InLevelAssistSO` (scriptable-object-schema.md 8.1, 8.2).
 
 ---
 
@@ -813,8 +889,8 @@ Implementáció: `LocalSaveRepository`, `GameConfigurationRepository` (Infrastru
 | Kritérium | Mely kontrakt-elem fedi |
 |---|---|
 | A. Folyamatos harc | `ICombatService.Tick`, `IWaveDirector.Tick` |
-| B. Erőforrás-kapu | `IGateResolutionService` + `IResourceService.CaptureSnapshot/ApplyDelta` |
-| C. Eredményválasztó sávok | `IMathEventDirector` + `AnswerLaneSelection` |
-| F. Valós idejű működés | `IGameSessionService.Tick` sorrend (8. szakasz), G5 szabály, 5. szakasz függetlenségi táblázata |
-| G. Erőforráshiány | elmaradó Health/Shield jutalom, kontaktsebzés és HealthDepleted |
+| B. Erőforrás-kapu (összehasonlító kapu) | `IMathEventDirector` + `ProblemType.ResourceOperationComparison` (önálló bázisérték) + `IGateResolutionService` + `IResourceService.ApplyDelta(Health, FlatAmount, "MATH_GATE")` |
+| C. Eredményválasztó sávok | `IMathEventDirector` + `AnswerLaneSelection` + ugyanaz a fix `Health`-jutalom-út |
+| F. Valós idejű működés | `IGameSessionService.Tick` sorrend (8. szakasz), G5/G8 szabály, 5. szakasz függetlenségi táblázata |
+| G. Erőforráshiány | elmaradó `Health`-jutalom, kontaktsebzés és `HealthDepleted` |
 | H. Adaptív nehézség | `IAdaptiveDifficultyService` (Fázis 4) |
