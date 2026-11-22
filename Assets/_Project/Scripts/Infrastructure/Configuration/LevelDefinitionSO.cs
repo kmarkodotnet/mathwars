@@ -43,13 +43,13 @@ namespace MathHorde.Infrastructure.Configuration
                 if (!System.Enum.IsDefined(typeof(ResourceType), _rewardResource)) errors.Add($"{path}.RewardResource érvénytelen.");
                 if (_rewardResource == ResourceType.Ammo) errors.Add($"{path}.RewardResource: AMMO_NOT_ALLOWED.");
                 if (!System.Enum.IsDefined(typeof(GateGoal), _goal)) errors.Add($"{path}.Goal érvénytelen.");
-                if (_goal == GateGoal.ReachTarget && _problemType != ProblemType.TargetValueSelection)
+                if (_rewardResource != ResourceType.Health && _rewardResource != ResourceType.Ammo)
+                    errors.Add($"{path}.RewardResource: REWARD_RESOURCE_NOT_ALLOWED.");
+                if (_goal == GateGoal.ReachTarget && _problemType != ProblemType.TargetValueSelection && _problemType != ProblemType.ResourceOperationComparison)
                     errors.Add($"{path}.Goal ReachTarget csak TargetValueSelection esetén engedett.");
-                if (_goal == GateGoal.Minimize && _rewardResource != ResourceType.EnemyArmor)
-                    errors.Add($"{path}.Goal Minimize csak EnemyArmor esetén engedett.");
-                if (_problemType == ProblemType.ResourceOperationComparison && _rewardAmountOverride != 0)
-                    errors.Add($"{path}.RewardAmountOverride resource gate esetén 0: a jutalom snapshot-delta.");
-                if (_problemType != ProblemType.TargetValueSelection && _targetValueOverride != 0)
+                if (_problemType == ProblemType.ResourceOperationComparison && _goal == GateGoal.ReachTarget && _targetValueOverride == 0)
+                    errors.Add($"{path}.TargetValueOverride: GATE_TARGET_MISSING.");
+                if (_problemType != ProblemType.TargetValueSelection && !(_problemType == ProblemType.ResourceOperationComparison && _goal == GateGoal.ReachTarget) && _targetValueOverride != 0)
                     errors.Add($"{path}.TargetValueOverride csak TargetValueSelection esetén alkalmazható.");
             }
 

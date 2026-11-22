@@ -46,7 +46,7 @@ namespace MathHorde.GameLogic
             // Replay lookup precedes all task inspection: restored IDs need no surviving ActiveMathEvent.
             if (IsResolved(command.EventId))
                 return new GateResolution(command.EventId, GateResolutionOutcome.Duplicate, false,
-                    -1, 0, 0, 0, default, default);
+                    -1, 0, 0, 0, Core.Resources.ResourceType.Health, default);
 
             if (mathEvent == null) throw new ArgumentNullException(nameof(mathEvent));
             if (command.EventId != mathEvent.EventId)
@@ -62,14 +62,11 @@ namespace MathHorde.GameLogic
                 && !(command.TimedOut && mathEvent.State == MathEventState.Expired))
                 throw new InvalidOperationException("Only a decision or a finalized deadline can be resolved.");
 
-            bool resourceGate = mathEvent.Type == ProblemType.ResourceOperationComparison;
-            ResourceGateBinding binding = mathEvent.ResourceGate.GetValueOrDefault();
-            if (resourceGate ? binding.Prepared == null : mathEvent.Problem == null)
+            if (mathEvent.Problem == null)
                 throw new InvalidOperationException("A finalized problem is required for resolution.");
-
-            var reward = resourceGate ? binding.Prepared.Reward : mathEvent.Problem.Reward;
-            var problemId = resourceGate ? binding.ProblemId : mathEvent.Problem.Id;
-            int snapshot = resourceGate ? binding.SnapshotValue : mathEvent.SnapshotValue;
+            var reward = mathEvent.Problem.Reward;
+            var problemId = mathEvent.Problem.Id;
+            int basis = mathEvent.GateBaseValue;
             bool timedOut = command.TimedOut || command.GameTime >= mathEvent.DeadlineGameTime;
             int optionIndex = -1;
             int operationResult = 0;
@@ -78,26 +75,14 @@ namespace MathHorde.GameLogic
 
             if (!timedOut)
             {
-                int count = resourceGate ? binding.OptionCount : mathEvent.Problem.Options.Count;
-                for (int i = 0; i < count; i++)
+                for (int i = 0; i < mathEvent.Problem.Options.Count; i++)
                 {
-                    if (resourceGate)
-                    {
-                        var option = binding.Template.Options[i];
-                        if (option.Lane != command.SelectedLane) continue;
-                        optionIndex = option.OptionIndex;
-                        operationResult = binding.GetValue(i).Value;
-                        correct = i == binding.CorrectOptionIndex;
-                    }
-                    else
-                    {
-                        var option = mathEvent.Problem.Options[i];
-                        if (option.Lane != command.SelectedLane) continue;
-                        optionIndex = option.OptionIndex;
-                        operationResult = option.Value.Value;
-                        correct = option.IsCorrect;
-                        error = option.DistractorErrorModel ?? ErrorCategory.Unclassified;
-                    }
+                    var option = mathEvent.Problem.Options[i];
+                    if (option.Lane != command.SelectedLane) continue;
+                    optionIndex = option.OptionIndex;
+                    operationResult = option.Value.Value;
+                    correct = option.IsCorrect;
+                    error = option.DistractorErrorModel ?? ErrorCategory.Unclassified;
                     break;
                 }
                 if (optionIndex < 0)
@@ -105,15 +90,14 @@ namespace MathHorde.GameLogic
                 if (correct) error = ErrorCategory.None;
             }
 
-            int delta = timedOut ? 0 : !correct ? reward.IncorrectAmount
-                : resourceGate ? checked(operationResult - snapshot) : reward.FlatAmount;
+            int delta = timedOut ? 0 : !correct ? reward.IncorrectAmount : reward.FlatAmount;
             var answer = new MathAnswerSnapshot(problemId, timedOut ? (int?)null : optionIndex,
                 timedOut ? (Core.Common.LaneIndex?)null : command.SelectedLane, correct,
                 (float)(command.GameTime - mathEvent.DecisionOpenedAt), timedOut, error, command.GameTime);
             var outcome = timedOut ? GateResolutionOutcome.Expired
                 : correct ? GateResolutionOutcome.CorrectRewarded : GateResolutionOutcome.IncorrectNoReward;
             var resolution = new GateResolution(command.EventId, outcome, correct, optionIndex,
-                operationResult, snapshot, delta, reward.Resource, answer);
+                operationResult, basis, delta, reward.Resource, answer);
 
             // Never permit HashSet growth inside Tick. Invalid callers must fix startup reservation.
             if (_resolvedEvents.Count >= _reservedCount)

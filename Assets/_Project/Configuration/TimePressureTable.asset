@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbbe392763ce03149a3b40b8f5a82535, type: 3}
+  m_Name: TimePressureTable
+  m_EditorClassIdentifier: MathHorde.Infrastructure::MathHorde.Infrastructure.Configuration.TimePressureTableSO
+  _levels:
+  - _level: 1
+    _thinkTimeSeconds: 14
+    _gateApproachSeconds: 12
+    _answerSpawnDelaySeconds: 2.5
+    _gateApproachSpeed: 1.2
+    _minGapBetweenProblemsSeconds: 14
+  - _level: 2
+    _thinkTimeSeconds: 13
+    _gateApproachSeconds: 11
+    _answerSpawnDelaySeconds: 2.5
+    _gateApproachSpeed: 1.3
+    _minGapBetweenProblemsSeconds: 13
+  - _level: 3
+    _thinkTimeSeconds: 11.5
+    _gateApproachSeconds: 10
+    _answerSpawnDelaySeconds: 2
+    _gateApproachSpeed: 1.5
+    _minGapBetweenProblemsSeconds: 12
+  - _level: 4
+    _thinkTimeSeconds: 10
+    _gateApproachSeconds: 9
+    _answerSpawnDelaySeconds: 2
+    _gateApproachSpeed: 1.7
+    _minGapBetweenProblemsSeconds: 11
+  - _level: 5
+    _thinkTimeSeconds: 8
+    _gateApproachSeconds: 8
+    _answerSpawnDelaySeconds: 1.5
+    _gateApproachSpeed: 1.9
+    _minGapBetweenProblemsSeconds: 10
+  - _level: 6
+    _thinkTimeSeconds: 7.5
+    _gateApproachSeconds: 7.5
+    _answerSpawnDelaySeconds: 1.5
+    _gateApproachSpeed: 2.1
+    _minGapBetweenProblemsSeconds: 10
+  - _level: 7
+    _thinkTimeSeconds: 7
+    _gateApproachSeconds: 7
+    _answerSpawnDelaySeconds: 1.5
+    _gateApproachSpeed: 2.3
+    _minGapBetweenProblemsSeconds: 9
+  - _level: 8
+    _thinkTimeSeconds: 6.5
+    _gateApproachSeconds: 6.5
+    _answerSpawnDelaySeconds: 1.2
+    _gateApproachSpeed: 2.6
+    _minGapBetweenProblemsSeconds: 9
+  - _level: 9
+    _thinkTimeSeconds: 5.5
+    _gateApproachSeconds: 6
+    _answerSpawnDelaySeconds: 1
+    _gateApproachSpeed: 2.9
+    _minGapBetweenProblemsSeconds: 8
+  - _level: 10
+    _thinkTimeSeconds: 4.5
+    _gateApproachSeconds: 5
+    _answerSpawnDelaySeconds: 1
+    _gateApproachSpeed: 3.3
+    _minGapBetweenProblemsSeconds: 8

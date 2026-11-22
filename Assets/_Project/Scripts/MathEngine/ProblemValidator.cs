@@ -11,8 +11,7 @@ namespace MathHorde.MathEngine
     /// <summary>
     /// Stateless candidate validation (math-engine.md 5., ADR-013).
     /// Unknown-answer problems use an EqualityNode: its solution, rather than
-    /// either side's value, is CorrectAnswer. Resource GateOperation unknowns
-    /// denote the snapshot, so do not count as missing operands in Expression.
+    /// either side's value, is CorrectAnswer. Resource gates use fully concrete expressions on a generated common operand.
     /// The main expression carries the concrete raw winning calculation; all
     /// displayed gate operations also contribute operator/operand/skill checks.
     /// </summary>
@@ -41,6 +40,8 @@ namespace MathHorde.MathEngine
             var issues = new List<ValidationIssue>();
             string rewardError = ResourceRules.ValidateRewardPair(problem.Reward.Resource, problem.Reward.Resource);
             if (rewardError != null) Add(issues, rewardError, "Ammunition is not mathematical content.");
+            if (problem.Reward.FlatAmount <= 0 || problem.Reward.IncorrectAmount < 0 || problem.Reward.IncorrectAmount > problem.Reward.FlatAmount)
+                Add(issues, "REWARD_AMOUNT_INVALID", "Rewards require a positive fixed amount and a bounded incorrect amount.");
             var evaluation = new EvaluationOptions
             {
                 AllowNegativeIntermediate = true,
@@ -70,7 +71,7 @@ namespace MathHorde.MathEngine
             foreach (var tag in problem.SkillTags)
                 if (!unlocked.Contains(tag)) Add(issues, "SKILL_NOT_UNLOCKED", "A required skill is not unlocked.");
 
-            if (_evaluator.CountUnknowns(problem.Expression) != profile.UnknownOperandCount)
+            if (problem.Type != ProblemType.ResourceOperationComparison && _evaluator.CountUnknowns(problem.Expression) != profile.UnknownOperandCount)
                 Add(issues, "UNKNOWN_COUNT_MISMATCH", "Unknown count differs from the difficulty profile.");
             if (_evaluator.MeasureParenthesisDepth(problem.Expression) > profile.MaxParenthesisDepth)
                 Add(issues, "PARENTHESIS_DEPTH_EXCEEDED", "Displayed parentheses exceed the configured depth.");
@@ -209,58 +210,52 @@ namespace MathHorde.MathEngine
             }
         }
 
-        private static void ValidateGates(MathProblem problem, DifficultyProfile profile, List<ValidationIssue> issues)
+        private void ValidateGates(MathProblem problem, DifficultyProfile profile, List<ValidationIssue> issues)
         {
             bool gate = problem.Type == ProblemType.ResourceOperationComparison;
-            bool capacityValid = problem.ResourceCapacity.HasValue && problem.ResourceCapacity.Value > 0;
-            if (gate ? !capacityValid : problem.ResourceCapacity.HasValue)
-                Add(issues, "GATE_CAPACITY_INVALID", "Resource gates require a positive captured capacity; other types require null.");
+            if (gate ? !problem.GateBaseValue.HasValue || problem.GateBaseValue.Value <= 0 : problem.GateBaseValue.HasValue)
+                Add(issues, "GATE_BASE_VALUE_MISSING", "Only gates require a positive common generated operand.");
             if (!gate) return;
             bool targetMissing = problem.Goal == GateGoal.ReachTarget && !problem.TargetValue.HasValue;
             if (targetMissing) Add(issues, "GATE_TARGET_MISSING", "ReachTarget requires TargetValue.");
-
-            for (int i = 0; i < problem.Options.Count; i++)
-            {
-                for (int j = i + 1; j < problem.Options.Count; j++)
-                {
-                    long a = problem.Options[i].Value.Value, b = problem.Options[j].Value.Value;
-                    if (GateMathRules.IsTie(a, b, null)) Add(issues, "GATE_TIE", "Two raw gate values are equal.");
-                    if (!capacityValid) continue;
-                    a = Math.Min(a, problem.ResourceCapacity.Value);
-                    b = Math.Min(b, problem.ResourceCapacity.Value);
-                    if (GateMathRules.IsTie(a, b, null)) Add(issues, "GATE_TIE", "Two effective gate values are equal.");
-                    if (GateMathRules.GapTooSmall(a, b, problem.ResourceCapacity.Value, profile.MinGateGap))
-                        Add(issues, "GATE_GAP_TOO_SMALL", "An effective gate pair is closer than MinGateGap.");
-                }
-            }
-
-            if (targetMissing || problem.Options.Count == 0) return;
-            int raw = FindOptimum(problem, null);
-            if (raw < 0) Add(issues, "GATE_TIE", "The raw gate optimum is not unique.");
-            else if (!problem.Options[raw].IsCorrect || problem.Options[raw].Value != problem.CorrectAnswer)
-                Add(issues, "ANSWER_MISMATCH", "The raw gate optimum must be the correct option and answer.");
-            if (!capacityValid) return;
-            int effective = FindOptimum(problem, problem.ResourceCapacity);
-            if (effective < 0) Add(issues, "GATE_TIE", "The effective gate optimum is not unique.");
-            if (raw >= 0 && effective >= 0 && raw != effective)
-                Add(issues, "GATE_ORDER_INVERTED_BY_CAP", "Capacity changes the unique winning gate.");
-        }
-
-        private static int FindOptimum(MathProblem problem, int? capacity)
-        {
+            var operations = new HashSet<string>();
             long best = long.MaxValue;
             int winner = -1;
             bool tie = false;
             for (int i = 0; i < problem.Options.Count; i++)
             {
-                long value = problem.Options[i].Value.Value;
-                if (capacity.HasValue) value = Math.Min(value, capacity.Value);
-                long score = GateMathRules.Score(value, problem.Goal, problem.TargetValue);
+                var option = problem.Options[i];
+                if (!(option.GateOperation is BinaryOperationNode operation)
+                    || !(operation.Left is ConstantNode common) || common.Value != problem.GateBaseValue
+                    || !(operation.Right is ConstantNode)
+                    || (operation.Operator != BinaryOperator.Addition && operation.Operator != BinaryOperator.Subtraction
+                        && operation.Operator != BinaryOperator.Multiplication && operation.Operator != BinaryOperator.Division))
+                    Add(issues, "GATE_OPERATION_NOT_CONCRETE", "A gate is one permitted operation on the common generated operand.");
+                else
+                {
+                    var evaluated = _evaluator.Evaluate(operation, new EvaluationOptions
+                    { AllowNegativeResult = profile.AllowNegativeResults, AllowNegativeIntermediate = profile.AllowNegativeResults,
+                        MinValue = int.MinValue, MaxValue = int.MaxValue });
+                    if (!evaluated.IsSuccess || evaluated.Value.Remainder.HasValue || evaluated.Value != option.Value)
+                        Add(issues, "ANSWER_MISMATCH", "The gate value must match its concrete expression.");
+                    if (!operations.Add(operation.ToDisplayString()))
+                        Add(issues, "GATE_DUPLICATE_OPERATION", "Gate operations must be distinct.");
+                }
+                for (int j = 0; j < i; j++)
+                {
+                    long difference = Math.Abs((long)option.Value.Value - problem.Options[j].Value.Value);
+                    if (difference == 0) Add(issues, "GATE_TIE", "Gate values must be distinct.");
+                    if (difference < profile.MinGateGap) Add(issues, "GATE_GAP_TOO_SMALL", "Gate values must respect MinGateGap.");
+                }
+                if (targetMissing) continue;
+                long score = GateMathRules.Score(option.Value.Value, problem.Goal, problem.TargetValue);
                 if (score < best) { best = score; winner = i; tie = false; }
                 else if (score == best) tie = true;
             }
-
-            return tie ? -1 : winner;
+            if (targetMissing) return;
+            if (tie) Add(issues, "GATE_TIE", "The optimum must be unique.");
+            else if (winner >= 0 && (!problem.Options[winner].IsCorrect || problem.Options[winner].Value != problem.CorrectAnswer))
+                Add(issues, "ANSWER_MISMATCH", "The optimum must be the correct option and answer.");
         }
 
         private static void Add(List<ValidationIssue> issues, string code, string message, ValidationSeverity severity = ValidationSeverity.Error)

@@ -1,4 +1,5 @@
 using System;
+using MathHorde.Core.Resources;
 using System.Collections.Generic;
 using System.Linq;
 using MathHorde.Core.Expressions;
@@ -71,7 +72,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
                 AssertOptionOracle(p, context);
                 if (type == ProblemType.ResourceOperationComparison)
                 {
-                    AssertGateOracle(p, request.ResourceSnapshotValue.Value, request.Difficulty.MinGateGap, evaluator, context);
+                    AssertGateOracle(p, result.Value.GateBaseValue.Value, request.Difficulty.MinGateGap, evaluator, context);
                 }
                 else if (type == ProblemType.MissingOperand || type == ProblemType.EquationSolving)
                 {
@@ -124,46 +125,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             }
         }
 
-        [Test]
-        public void Generate_TenThousandResourceSnapshots_KeepRawArithmeticAndCapacityOptimumForEveryGoal()
-        {
-            var generator = new MathProblemGenerator();
-            var evaluator = new ExpressionEvaluator();
-            var evaluation = new EvaluationOptions { AllowNegativeIntermediate = true, AllowNegativeResult = true };
-            var validator = new ProblemValidator();
-            var operators = new[] { BinaryOperator.Addition, BinaryOperator.Subtraction,
-                BinaryOperator.Multiplication, BinaryOperator.Division, BinaryOperator.Modulo };
-            var profile = ProblemValidatorTests.Profile(count: 2, maxOperand: 100, allowNegative: true, operators: operators);
-            var observedOperators = new HashSet<BinaryOperator>();
-            int clampedWinners = 0, zeroSnapshots = 0;
-            for (int i = 0; i < Samples; i++)
-            {
-                int snapshot = i % 101, capacity = Math.Max(12, snapshot + 1 + i % 41);
-                var request = MathProblemGeneratorTests.Request(seed: 305000 + i, type: ProblemType.ResourceOperationComparison,
-                    count: 2, goal: (GateGoal)(i % 3), capacity: capacity, profile: profile, snapshot: snapshot);
-                var result = generator.Generate(request);
-                string context = "seed=" + request.Seed + " snapshot=" + snapshot + " capacity=" + capacity + " goal=" + request.Goal;
-                Assert.That(result.IsSuccess, Is.True, context + " " + result.ErrorCode);
-                var problem = result.Value;
-                Assert.That(validator.IsValid(problem, profile), Is.True, context);
-                Assert.That(problem.ResourceCapacity, Is.EqualTo(capacity), context);
-                Assert.That(problem.Goal, Is.EqualTo(request.Goal), context);
-                Assert.That(problem.TargetValue, Is.EqualTo(request.TargetValue), context);
-                Assert.That(problem.Reward, Is.SameAs(request.Reward), context);
-                AssertGateOracle(problem, snapshot, profile.MinGateGap, evaluator, context, evaluation);
-                foreach (var option in problem.Options)
-                    observedOperators.Add(((BinaryOperationNode)option.GateOperation).Operator);
-                if (snapshot == 0) zeroSnapshots++;
-                if (problem.CorrectAnswer.Value > capacity) clampedWinners++;
-                if (request.Goal == GateGoal.Minimize)
-                    Assert.That(problem.CorrectAnswer.Value - snapshot, Is.LessThan(0), context);
-            }
-            Assert.That(observedOperators, Is.EquivalentTo(operators));
-            Assert.That(zeroSnapshots, Is.GreaterThan(0));
-            Assert.That(clampedWinners, Is.GreaterThan(0));
-            TestContext.WriteLine("Resource Generate: 10000 seeds=305000..314999, snapshots=0..100, all scalar operators/goals, "
-                + "zeroSnapshots=" + zeroSnapshots + ", rawWinnersAboveCapacity=" + clampedWinners);
-        }
+
 
         [Test]
         public void Generate_TenThousandMixedOperationGatePairs_LargerOperandIsNotAWinningStrategy()
@@ -193,34 +155,24 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That((double)nonObvious / measured, Is.GreaterThanOrEqualTo(.30));
         }
 
-        private static void AssertGateOracle(MathProblem p, int snapshot, int gap, IExpressionEvaluator evaluator, string context,
-            EvaluationOptions evaluation = null)
+        private static void AssertGateOracle(MathProblem p, int basis, int gap, IExpressionEvaluator evaluator, string context, params object[] unused)
         {
-            var values = p.Options.Select(o => o.Value.Value).ToArray();
-            var effective = values.Select(v => Math.Min(v, p.ResourceCapacity.Value)).ToArray();
-            for (int i = 0; i < p.Options.Count; i++)
+            foreach (var option in p.Options)
             {
-                Assert.That(evaluator.EvaluateWith(p.Options[i].GateOperation, snapshot, evaluation ?? EvaluationOptions.Default).Value, Is.EqualTo(p.Options[i].Value), context);
-                EvaluationResult independent;
-                Assert.That(TryEvaluate(p.Options[i].GateOperation, snapshot, out independent), Is.True, context + " gate arithmetic");
-                Assert.That(independent, Is.EqualTo(p.Options[i].Value), context + " gate arithmetic value");
-                for (int j = i + 1; j < p.Options.Count; j++)
-                    Assert.That(Math.Abs((long)effective[i] - effective[j]), Is.GreaterThanOrEqualTo(gap), context);
+                var tree = (BinaryOperationNode)option.GateOperation;
+                Assert.That(((ConstantNode)tree.Left).Value, Is.EqualTo(basis), context);
+                Assert.That(evaluator.Evaluate(tree, EvaluationOptions.Default).Value, Is.EqualTo(option.Value), context);
+                foreach (var other in p.Options)
+                    if (other.OptionIndex != option.OptionIndex)
+                        Assert.That(Math.Abs((long)option.Value.Value - other.Value.Value), Is.GreaterThanOrEqualTo(gap), context);
             }
-            Func<int, long> score = v => p.Goal == GateGoal.Maximize ? -(long)v
-                : p.Goal == GateGoal.Minimize ? v : Math.Abs((long)v - p.TargetValue.Value);
-            var rawScores = values.Select(score).ToArray();
-            var effectiveScores = effective.Select(score).ToArray();
-            int rawWinner = Array.IndexOf(rawScores, rawScores.Min());
-            int effectiveWinner = Array.IndexOf(effectiveScores, effectiveScores.Min());
-            Assert.That(rawScores.Count(v => v == rawScores.Min()), Is.EqualTo(1), context);
-            Assert.That(effectiveScores.Count(v => v == effectiveScores.Min()), Is.EqualTo(1), context);
-            Assert.That(rawWinner, Is.EqualTo(effectiveWinner), context);
-            Assert.That(p.Options[rawWinner].IsCorrect, Is.True, context);
+            var best = p.Options.OrderBy(o => p.Goal == GateGoal.Maximize ? -(long)o.Value.Value
+                : p.Goal == GateGoal.Minimize ? o.Value.Value : Math.Abs((long)o.Value.Value - p.TargetValue.Value)).First();
+            Assert.That(best.IsCorrect, Is.True, context);
+            Assert.That(p.Reward.Resource, Is.EqualTo(ResourceType.Health), context);
+            Assert.That(p.Reward.FlatAmount, Is.GreaterThan(0), context);
         }
 
-        // The option oracle deliberately does not use the production evaluator,
-        // solver or validator: two components sharing a defect cannot certify it.
         private static void AssertOptionOracle(MathProblem p, string context)
         {
             if (p.Type == ProblemType.ResourceOperationComparison) return;

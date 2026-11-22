@@ -58,10 +58,11 @@ namespace MathHorde.Tests.EditMode.MathEngine
 
                     Shuffle(values, rng.Derive("values"));
                     int correctValue = start + gap * winner;
-                    options = values.Select((value, lane) => ProblemValidatorTests.Option(lane, value, value == correctValue)).ToArray();
+                    options = values.Select((value, lane) => new AnswerOption(lane, new LaneIndex(lane), new EvaluationResult(value),
+                        ProblemValidatorTests.Binary(BinaryOperator.Addition, 1, value - 1), value == correctValue, null, "+" + (value - 1))).ToArray();
                     answer = new EvaluationResult(correctValue);
-                    expr = new ConstantNode(correctValue);
-                    capacity = values.Max() + rng.Next(0, 30);
+                    expr = options.Single(o => o.IsCorrect).GateOperation;
+                    capacity = 1;
                 }
                 else
                 {
@@ -94,7 +95,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
         }
 
         [Test]
-        public void Validate_TenThousandSeededGateContexts_MatchesIndependentCapacityOracle()
+        public void Validate_TenThousandSeededGateContexts_MatchesIndependentArithmeticOracle()
         {
             var rng = new DeterministicRandomSource(208014);
             var validator = new ProblemValidator();
@@ -104,7 +105,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
                 var values = Enumerable.Range(0, count).Select(_ => rng.Next(-100, 200)).ToArray();
                 var goal = (GateGoal)rng.Next(0, 3);
                 int? target = goal == GateGoal.ReachTarget ? rng.Next(-100, 200) : (int?)null;
-                var effective = values.Select(v => Math.Min(v, capacity)).ToArray();
+                var effective = values;
                 var rawScores = values.Select(v => Score(v, goal, target)).ToArray();
                 var effectiveScores = effective.Select(v => Score(v, goal, target)).ToArray();
                 bool rawUnique = rawScores.Count(s => s == rawScores.Min()) == 1;
@@ -119,7 +120,6 @@ namespace MathHorde.Tests.EditMode.MathEngine
                 string context = "iteration " + i;
                 Assert.That(codes.Contains("GATE_TIE"), Is.EqualTo(tie), context);
                 Assert.That(codes.Contains("GATE_GAP_TOO_SMALL"), Is.EqualTo(close), context);
-                Assert.That(codes.Contains("GATE_ORDER_INVERTED_BY_CAP"), Is.EqualTo(inverted), context);
                 Assert.That(validator.IsValid(problem, profile), Is.EqualTo(report.IsValid), context);
             }
         }

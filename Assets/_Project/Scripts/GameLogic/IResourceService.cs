@@ -42,7 +42,6 @@ namespace MathHorde.GameLogic
         /// a later gate resolution; the reward is always computed as a delta
         /// against this captured value.
         /// </summary>
-        int CaptureSnapshot(ResourceType type);
 
         /// <summary>Initial fill for a level, from its LevelDefinition. Only the GameSessionService calls this.</summary>
         void Initialize(LevelDefinition level);

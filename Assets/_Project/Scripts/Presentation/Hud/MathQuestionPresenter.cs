@@ -103,13 +103,13 @@ namespace MathHorde.Presentation.Hud
         private string Question(ActiveMathEvent item)
         {
             if (item.Type != ProblemType.ResourceOperationComparison) return item.Problem.DisplayExpression;
-            string resource = _localization.Resolve("gate.resource." + item.SnapshotResource);
+            string resource = _localization.Resolve("gate.resource." + item.RewardResource);
             string goal = item.Goal == GateGoal.ReachTarget
                 ? _localization.Resolve("gate.goal.target", item.TargetValue)
                 : _localization.Resolve(item.Goal == GateGoal.Maximize ? "gate.goal.maximize" : "gate.goal.minimize");
             return item.State == MathEventState.Preview
-                ? _localization.Resolve("question.resourcePreview", resource, goal)
-                : _localization.Resolve("gate.snapshot", resource, item.SnapshotValue, goal);
+                ? _localization.Resolve("question.resourcePreview", resource, item.RewardAmount, goal)
+                : _localization.Resolve("gate.base", item.GateBaseValue, goal, item.RewardAmount);
         }
 
         private static bool Visible(MathEventState state) => state == MathEventState.Preview

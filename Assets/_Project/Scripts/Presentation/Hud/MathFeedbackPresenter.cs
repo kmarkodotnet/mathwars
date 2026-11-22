@@ -112,7 +112,7 @@ namespace MathHorde.Presentation.Hud
                 bool selected = carrier.Lane == record.Resolution.SelectedLane;
                 // Completed is the only route into this method. Never read results/correctness before a decision.
                 string result = gate
-                    ? _localization.Resolve("feedback.operation", carrier.DisplayLabel, item.ResourceGate.Value.GetValue(carrier.OptionIndex).ToDisplayString())
+                    ? _localization.Resolve("feedback.operation", carrier.DisplayLabel, item.Problem.Options[carrier.OptionIndex].Value.ToDisplayString())
                     : item.Problem.Options[carrier.OptionIndex].Value.ToDisplayString();
                 string marker = carrier.IsCorrect
                     ? _localization.Resolve(gate ? "feedback.best" : "feedback.answer") : string.Empty;

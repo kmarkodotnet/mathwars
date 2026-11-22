@@ -78,13 +78,13 @@ namespace MathHorde.Tests.PlayMode.Gates
             var targets = new Dictionary<int, int>();
             for (int i = 0; i < entries.Length; i++)
             {
-                rewards[i] = new RewardSpec(resource, type == ProblemType.ResourceOperationComparison ? 0 : 10, type == ProblemType.ResourceOperationComparison);
+                rewards[i] = new RewardSpec(resource, 10);
                 if (goal == GateGoal.ReachTarget || type == ProblemType.TargetValueSelection) targets[i] = 0;
             }
-            _director = new MathEventDirector(_resources, _bus, new MathEventDirectorSettings(3, 5, 3, 2, 1, rewards, targets));
+            _director = new MathEventDirector(_resources, _bus, new MathEventDirectorSettings(3, 5, 3, 2, 1, new MathHorde.MathEngine.GateGenerationLimits(1, 100, 2, 4), rewards, targets));
             // Four operations must stay distinct at snapshot zero as well.
             bool subtraction = goal == GateGoal.Minimize || (type == ProblemType.ResourceOperationComparison && count > 2);
-            var operators = subtraction ? new[] { BinaryOperator.Subtraction } : new[] { BinaryOperator.Addition, BinaryOperator.Modulo };
+            var operators = subtraction ? new[] { BinaryOperator.Subtraction } : new[] { BinaryOperator.Addition, BinaryOperator.Subtraction };
             var profile = new DifficultyProfile(1, 1, 1, 1, operators,
                 (SkillTag[])Enum.GetValues(typeof(SkillTag)), 0, 100, 1000, 2, 2, false, 0, false, 0, subtraction, count, 6, 1, false);
             _director.Initialize(_level, profile, new MathProblemGenerator(), new DeterministicRandomSource(7));
@@ -140,9 +140,9 @@ namespace MathHorde.Tests.PlayMode.Gates
             }
         }
 
-        [TestCase(GateGoal.Maximize, ResourceType.Health, "Életerő: 17\nLegtöbb", "MaximizeIcon")]
-        [TestCase(GateGoal.Minimize, ResourceType.EnemyArmor, "Páncél: 17\nLegkevesebb", "MinimizeIcon")]
-        [TestCase(GateGoal.ReachTarget, ResourceType.Shield, "Pajzs: 17\nCél: 0", "TargetIcon")]
+        [TestCase(GateGoal.Maximize, ResourceType.Health, "Legtöbb", "MaximizeIcon")]
+        [TestCase(GateGoal.Minimize, ResourceType.Health, "Legkevesebb", "MinimizeIcon")]
+        [TestCase(GateGoal.ReachTarget, ResourceType.Health, "Cél: 0", "TargetIcon")]
         public void ResourcePreviewIsEmptyAndSpawnShowsFrozenSnapshotGoalIconAndOnlyOperation(GateGoal goal, ResourceType resource, string context, string icon)
         {
             Create(goal: goal, resource: resource);
@@ -159,14 +159,14 @@ namespace MathHorde.Tests.PlayMode.Gates
             Assert.That(views.Length, Is.EqualTo(active.Carriers.Count));
             foreach (var view in views)
             {
-                Assert.That(view.ContextText, Is.EqualTo(context));
+                Assert.That(view.ContextText, Does.Contain(context));
                 Assert.That(view.OptionText, Is.EqualTo(active.Carriers[view.OptionIndex].DisplayLabel));
                 Assert.That(view.OptionText.Contains("="), Is.False, "No result before a choice.");
                 Assert.That(view.transform.Find(icon).gameObject.activeSelf, Is.True);
             }
             _resources.ApplyDelta(resource, -2, "WEAPON_FIRE");
             _presenter.RenderPending();
-            foreach (var view in views) Assert.That(view.ContextText, Is.EqualTo(context));
+            foreach (var view in views) Assert.That(view.ContextText, Does.Contain(context));
         }
 
         [TestCase(2)]
@@ -219,14 +219,16 @@ namespace MathHorde.Tests.PlayMode.Gates
         }
 
         [Test]
-        public void PreparationFailureHidesNoResultAndProducesNoChildFeedback()
+        public void ResourceChangeKeepsCarriersAndSessionEndClearsWithoutChildFeedback()
         {
             Create(); _director.Tick(0); _presenter.RenderPending();
             int resolved = 0;
             _bus.Subscribe<MathEventResolved>(e => resolved++);
             _resources.SetMax(ResourceType.Health, 40, "INVALID_ORDER");
             _director.Tick(1); _presenter.RenderPending();
-            Assert.That(_director.ActiveEvents[0].State, Is.EqualTo(MathEventState.Expired));
+            Assert.That(_director.ActiveEvents[0].State, Is.EqualTo(MathEventState.Approaching));
+            Assert.That(_presenter.ActiveCarrierCount, Is.EqualTo(2));
+            _director.OnSessionEnded(1); _presenter.RenderPending();
             Assert.That(_presenter.ActiveCarrierCount, Is.EqualTo(0));
             Assert.That(resolved, Is.EqualTo(0));
         }
@@ -307,7 +309,7 @@ namespace MathHorde.Tests.PlayMode.Gates
             var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
             if (rewardField)
                 typeof(RewardSpec).GetField("<Resource>k__BackingField", flags)
-                    .SetValue(item.ResourceGate.Value.Prepared.Reward, ResourceType.Ammo);
+                    .SetValue(item.Problem.Reward, ResourceType.Ammo);
             else
                 typeof(ActiveMathEvent).GetField("<RewardResource>k__BackingField", flags).SetValue(item, ResourceType.Ammo);
             Assert.That(() => _presenter.RenderPending(), Throws.TypeOf<ArgumentException>());

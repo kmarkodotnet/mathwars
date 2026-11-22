@@ -199,55 +199,20 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That(Codes(_validator.Validate(Candidate(options: options), Profile())), Does.Not.Contain("DISTRACTOR_TOO_FAR"));
         }
 
-        [TestCase(null)]
-        [TestCase(0)]
-        [TestCase(-5)]
-        public void Validate_InvalidCapacity_SkipsOnlyCapacityDependentRules(int? capacity)
-        {
-            var report = Has(Gates(new[] { 40, 40 }, capacity), "GATE_CAPACITY_INVALID", Profile(count: 2));
-            Assert.That(Codes(report), Does.Contain("GATE_TIE"));
-            Assert.That(Codes(report), Does.Contain("DUPLICATE_OPTIONS"));
-            Assert.That(Codes(report), Does.Not.Contain("GATE_GAP_TOO_SMALL"));
-            Assert.That(Codes(report), Does.Not.Contain("GATE_ORDER_INVERTED_BY_CAP"));
-            Has(Gates(new[] { 40, 45 }, capacity, GateGoal.ReachTarget), "GATE_TARGET_MISSING", Profile(count: 2));
-        }
 
-        [Test]
-        public void Validate_CapacityOnOtherType_IsInvalid()
-        {
-            Has(Candidate(capacity: 100), "GATE_CAPACITY_INVALID");
-        }
 
-        [TestCase(40, 45, 100, 4, null)]
-        [TestCase(40, 45, 40, 4, "GATE_TIE")]
-        [TestCase(40, 50, 45, 8, "GATE_GAP_TOO_SMALL")]
-        public void Validate_ContractCapacityExamples(int a, int b, int capacity, int gap, string code)
-        {
-            var problem = Gates(new[] { a, b }, capacity);
-            var report = _validator.Validate(problem, Profile(count: 2, gap: gap));
-            if (code == null) Assert.That(report.IsValid, Is.True);
-            else Assert.That(Codes(report), Does.Contain(code));
-            if (capacity == 40) Assert.That(Codes(report), Does.Contain("GATE_GAP_TOO_SMALL"));
-            Assert.That(Codes(report), Does.Not.Contain("GATE_ORDER_INVERTED_BY_CAP"));
-            Assert.That(_validator.IsValid(problem, Profile(count: 2, gap: gap)), Is.EqualTo(report.IsValid));
-        }
 
-        [TestCase(75, "GATE_TIE")]
-        [TestCase(65, "GATE_ORDER_INVERTED_BY_CAP")]
-        public void Validate_ReachTarget_UsesUnchangedTarget(int capacity, string code)
-        {
-            var report = Has(Gates(new[] { 45, 80 }, capacity, GateGoal.ReachTarget, 60), code, Profile(count: 2));
-            Assert.That(Codes(report), Does.Not.Contain("ANSWER_MISMATCH"));
-            Assert.That(Codes(report), Does.Not.Contain(code == "GATE_TIE" ? "GATE_ORDER_INVERTED_BY_CAP" : "GATE_TIE"));
-        }
+
+
+
+
 
         [Test]
         public void Validate_ReachTarget_RawDistanceTieAndMissingTarget()
         {
             Has(Gates(new[] { 45, 75 }, 100, GateGoal.ReachTarget, 60), "GATE_TIE", Profile(count: 2));
             var report = Has(Gates(new[] { 40, 50 }, 42, GateGoal.ReachTarget), "GATE_TARGET_MISSING", Profile(count: 2));
-            Assert.That(Codes(report), Does.Contain("GATE_GAP_TOO_SMALL"));
-            Assert.That(Codes(report), Does.Not.Contain("GATE_ORDER_INVERTED_BY_CAP"));
+            Assert.That(Codes(report), Does.Not.Contain("GATE_GAP_TOO_SMALL"));
         }
 
         [Test]
@@ -255,7 +220,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
         {
             Has(Gates(new[] { 10, 20, 22, 80 }, 100), "GATE_GAP_TOO_SMALL", Profile(count: 4));
             Assert.That(_validator.IsValid(Gates(new[] { 40, 80 }, 60, GateGoal.Minimize), Profile(count: 2)), Is.True);
-            Has(Gates(new[] { 40, 80 }, 35, GateGoal.Minimize), "GATE_TIE", Profile(count: 2));
+            Assert.That(_validator.IsValid(Gates(new[] { 40, 80 }, 35, GateGoal.Minimize), Profile(count: 2)), Is.True);
             Has(Gates(new[] { 10, 20, 20, 80 }, 100), "GATE_TIE", Profile(count: 4));
         }
 
@@ -279,18 +244,17 @@ namespace MathHorde.Tests.EditMode.MathEngine
                 GateGoal.ReachTarget, int.MinValue), Profile(count: 2, allowNegative: true, maxOperand: int.MaxValue, maxResult: int.MaxValue));
             Assert.That(Codes(report), Does.Not.Contain("GATE_GAP_TOO_SMALL"));
             Assert.That(Codes(report), Does.Not.Contain("GATE_TIE"));
-            Assert.That(Codes(report), Does.Not.Contain("GATE_ORDER_INVERTED_BY_CAP"));
         }
 
         [Test]
         public void Validate_GateOperations_AreIncludedInSkillAndOperatorChecks()
         {
             var ops = new[] {
-                new AnswerOption(0, new LaneIndex(0), new EvaluationResult(40), new BinaryOperationNode(BinaryOperator.Multiplication, new UnknownNode(), new ConstantNode(2)), false, null, "x2"),
-                new AnswerOption(1, new LaneIndex(1), new EvaluationResult(45), new BinaryOperationNode(BinaryOperator.Addition, new UnknownNode(), new ConstantNode(25)), true, null, "+25") };
+                new AnswerOption(0, new LaneIndex(0), new EvaluationResult(40), new BinaryOperationNode(BinaryOperator.Multiplication, new ConstantNode(20), new ConstantNode(2)), false, null, "x2"),
+                new AnswerOption(1, new LaneIndex(1), new EvaluationResult(45), new BinaryOperationNode(BinaryOperator.Addition, new ConstantNode(20), new ConstantNode(25)), true, null, "+25") };
             var expr = Binary(BinaryOperator.Addition, 20, 25);
-            var tags = new SkillClassifier().Classify(expr, ProblemType.ResourceOperationComparison).Concat(new[] { SkillTag.Multiplication }).Distinct().ToArray();
-            var good = Candidate(type: ProblemType.ResourceOperationComparison, expr: expr, answer: new EvaluationResult(45), options: ops, capacity: 100, tags: tags);
+            var tags = ops.SelectMany(o => new SkillClassifier().Classify(o.GateOperation, ProblemType.ResourceOperationComparison)).Distinct().ToArray();
+            var good = Candidate(type: ProblemType.ResourceOperationComparison, expr: expr, answer: new EvaluationResult(45), options: ops, capacity: 20, tags: tags);
             Assert.That(_validator.IsValid(good, Profile(count: 2)), Is.True);
             Has(good, "OPERATOR_NOT_ALLOWED", Profile(count: 2, operators: new[] { BinaryOperator.Addition }));
             Has(good, "OPERAND_RANGE_VIOLATION", Profile(count: 2, maxOperand: 24));
@@ -334,9 +298,11 @@ namespace MathHorde.Tests.EditMode.MathEngine
             GateGoal goal = GateGoal.Maximize, int? target = null, float thinkTime = 6f, int seed = 808)
         {
             expr = expr ?? DefaultExpression();
+            if (tags == null && type == ProblemType.ResourceOperationComparison && options != null)
+                tags = options.Where(o => o.GateOperation != null).SelectMany(o => new SkillClassifier().Classify(o.GateOperation, type)).Distinct().ToArray();
             return new MathProblem(new MathProblemId(new Guid("08080808-0808-0808-0808-080808080808")), type,
                 expr, expr.ToDisplayString(), answer ?? new EvaluationResult(50), options ?? Options(50, 1, 48, 50, 53), 4,
-                tags ?? new SkillClassifier().Classify(expr, type), thinkTime, new RewardSpec(ResourceType.Health, 0, type == ProblemType.ResourceOperationComparison, 0),
+                tags ?? new SkillClassifier().Classify(expr, type), thinkTime, new RewardSpec(ResourceType.Health, 30, 0),
                 seed, goal, target, null, capacity);
         }
 
@@ -351,9 +317,10 @@ namespace MathHorde.Tests.EditMode.MathEngine
         {
             int winner = correctIndex ?? Enumerable.Range(0, values.Length).OrderBy(i => goal == GateGoal.Maximize ? -(long)values[i]
                 : goal == GateGoal.Minimize ? values[i] : Math.Abs((long)values[i] - (target ?? 0))).First();
-            var options = values.Select((value, i) => Option(i, value, i == winner)).ToArray();
-            return Candidate(expr: new ConstantNode(values[winner]), answer: new EvaluationResult(values[winner]), options: options,
-                type: ProblemType.ResourceOperationComparison, capacity: capacity, goal: goal, target: target);
+            var options = values.Select((value, i) => new AnswerOption(i, new LaneIndex(i), new EvaluationResult(value),
+                Binary(BinaryOperator.Subtraction, 100, 100 - value), i == winner, null, "−" + (100 - value))).ToArray();
+            return Candidate(expr: options[winner].GateOperation, answer: new EvaluationResult(values[winner]), options: options,
+                type: ProblemType.ResourceOperationComparison, capacity: 100, goal: goal, target: target);
         }
     }
 }

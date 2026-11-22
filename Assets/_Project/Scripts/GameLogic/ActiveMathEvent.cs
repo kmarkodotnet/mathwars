@@ -12,17 +12,16 @@ namespace MathHorde.GameLogic
         public MathEventId EventId => Machine.EventId;
         public MathEventState State => Machine.State;
         public ProblemType Type { get; }
-        public MathProblemId? ProblemId => ResourceGate.HasValue ? ResourceGate.Value.ProblemId : Problem?.Id;
+        public MathProblemId? ProblemId => Problem?.Id;
         public MathProblem Problem { get; internal set; }
-        public ResourceGateBinding? ResourceGate { get; internal set; }
         public ResourceType RewardResource { get; }
         public GateGoal Goal { get; }
         public int? TargetValue { get; }
         public double PreviewStartedAt { get; internal set; }
         public double DecisionOpenedAt { get; internal set; }
         public double DeadlineGameTime { get; internal set; }
-        public int SnapshotValue { get; internal set; }
-        public ResourceType SnapshotResource => RewardResource;
+        public int GateBaseValue => Problem?.GateBaseValue ?? 0;
+        public int RewardAmount { get; internal set; }
         public IReadOnlyList<GateCarrier> Carriers { get; }
 
         internal ActiveMathEvent(MathEventId id, ProblemType type, ResourceType resource, GateGoal goal, int? target)

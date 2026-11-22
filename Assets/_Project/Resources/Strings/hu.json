@@ -16,14 +16,10 @@
   "result.nextLevel": "Következő pálya",
   "result.backToWorlds": "Vissza a világokhoz",
   "gate.resource.Health": "Életerő",
-  "gate.resource.Shield": "Pajzs",
-  "gate.resource.EnemyArmor": "Páncél",
-  "gate.resource.Energy": "Energia",
   "gate.goal.maximize": "Legtöbb",
   "gate.goal.minimize": "Legkevesebb",
   "gate.goal.target": "Cél: {0}",
-  "gate.snapshot": "{0}: {1}\n{2}",
-  "question.resourcePreview": "{0}\n{1}",
+  "question.resourcePreview": "{0} +{1}\n{2}",
   "question.preview": "Készülj!",
   "question.approaching": "Közeledik",
   "question.time": "{0} mp",
@@ -34,5 +30,6 @@
   "feedback.operation": "{0} = {1}",
   "feedback.best": "Jobb választás",
   "feedback.answer": "Helyes válasz",
-  "feedback.selected": "Választottad\n{0}"
+  "feedback.selected": "Választottad\n{0}",
+  "gate.base": "Kezdő szám: {0}\n{1} / Életerő +{2}"
 }

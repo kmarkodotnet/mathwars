@@ -652,3 +652,72 @@ A reprodukálható GameplaySceneBuilder.BuildAll létrehozza a két valódi SO-t
 az explicit W1L01-listát, az alsó HUD-gombokat és a működő EventSystemet.
 Új mentési verzió, aktívfegyver-mentés, shop/unlock/matek→fegyver jutalom nincs.
 Az Android/eszközös bizonyíték és a kézi ellenőrzés korlátja: [ANDROID_BUILD](ANDROID_BUILD.md).
+
+## F3-12 — Valódi matematikai scene-integráció (2026-11-22)
+
+Parancs a gyár gyökeréből:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File game/scripts/test.ps1 -Full -LogDir F:/Claude/math-horde/game/artifacts/dev/F3-12-a341a16ed219
+```
+
+Zöld teljes futás: .NET **809/809/0**, Unity EditMode **808/808/0**, PlayMode
+**368/368/0**. A review után a Presentation mentési útja kapott IO-hiba kezelést;
+az érintett teljes PlayMode kapu friss futása **369/369/0**, `result=Passed`,
+`skipped=0`. A pure rétegek és EditMode tesztek közben nem változtak.
+Az utóbbi tényleges parancs:
+
+```text
+Unity.exe -batchmode -nographics -projectPath F:/Claude/math-horde/game -runTests -testPlatform PlayMode -testResults F:/Claude/math-horde/game/artifacts/dev/F3-12-a341a16ed219/results-playmode.xml -logFile F:/Claude/math-horde/game/artifacts/dev/F3-12-a341a16ed219/test-playmode.log
+```
+
+A `MathGameplaySceneIntegrationTests` a szállított Gameplay scene-t tölti be,
+nem helyettesítő magasabb profilú fixture-t. Mindkét fegyverrel ugyanabban a
+150 s-os, Victoryig futó sessionben öt kapu és öt válaszsáv oldódik fel; a
+tizedik döntés kb. 133,22 s. A driver 0,8 s után választ, döntési ablakon kívül
+a középső sávba tér vissza, kizárólag InputAdapter.ApplyGesture útján.
+WeaponFired és EnemyDamaged mindkét típus alatt, mozgó ellenség, változatlan
+feladattartalom, tíz valós attempt, helyi statistics.json roundtrip és Ammo-pool
+hiánya ellenőrzött. A korábbi valódi pointeres HUD fegyverváltó tesztek is zöldek.
+A teljes 14 s ablakra nem állítunk minden-játékos tízfeloldásos garanciát.
+
+A startup hibateszt a globális kapulimit és CL1 profil üres metszetét állítja
+elő egy izolált konfigurációpéldányon: `GATE_LIMITS_INVALID`, 0 gameplayidő,
+gyermekvereség nélkül. A táblateszt a szállított MathDifficulty/TimePressure/
+Reward táblákat validálja, minden CL kapugenerálását ellenőrzi és a CL1 képletből
+30/15 Health jutalmat olvas. A `MathSessionPipelineTests` az első valódi
+resolve/reward/completion/analytics-buffer út teljes Tick allokációját méri:
+**0 bájt**. A válaszok materializálása külön drain, nem a mért Tick része.
+
+Kapu-invariánsok: CL1 Maximize és Minimize külön-külön **10 000 seed**, 0
+GENERATION_EXHAUSTED; a meglévő típus/opciószám és aritmetikai fuzz szintén zöld.
+Explicit referencia: bázis 2 (+7/−2), bázis 9 (−1/−9, mindkét cél), bázis 20
+(×2/+25, megfelelő explicit profillal), valamint 7×8 négy lane. A régi snapshot,
+full-capacity coverage, binding és nyers delta tesztek az ADR-019 szerint
+kivezetett API-khoz tartoztak; helyettük konkrét operandus-, fix jutalom-,
+tiltott erőforrás-, időbeli stabilitás- és teljes scene-regressziók futnak.
+A tesztszám csökkenése a megszűnt modell eltávolításából ered, nincs kihagyott teszt.
+
+Review-javítás: a scene-teszt saját TempSaveDirectory-t használ. Az új esetben
+145 s után `profile.json` és `statistics.json` helyén üres könyvtárak blokkolják
+az atomikus írást. A session ettől még Finalize/Victory/LevelComplete állapotba
+jut; az akadály eltávolítása után a meglévő 30 s-os autosave mindkét fájlt
+újraírja, és pontosan egy tízkérdéses session olvasható vissza. Nincs retry-UI.
+
+Első Full: .NET 809/807/2, EditMode 808/806/2, PlayMode 368/349/19. A két
+referencia profiljából hiányzott a szorzás; a PlayMode eltérések a régi
+snapshot/Shield/0-flat/kapacitás-failure elvárások és a startup-teszt handlerének
+takarítása voltak. Második Full: .NET 809/808/1 (JIT/G4 inicializációs zaj),
+EditMode 808/808/0, PlayMode 368/367/1 (U+00B7 hiányzó glyph). A generikus
+feloldóút külön eldobott warmup-journalt kapott; a mért friss 10 000 első
+feloldás és replay, valamint a szigorú 0 bájt küszöb megmaradt. A lokalizáció
+ASCII / elválasztót használ. A hibás XML-ek `*-initial.xml`, `*-second.xml`
+néven maradtak meg; az érvényesek `results-editmode.xml`, `results-playmode.xml`.
+
+A reprodukálható scene-építő parancsa:
+`Unity.exe -batchmode -nographics -quit -projectPath F:/Claude/math-horde/game -executeMethod GameplaySceneBuilder.BuildAll -logFile F:/Claude/math-horde/game/artifacts/dev/F3-12-a341a16ed219/rebuild.log`.
+Exit=0 és `BuildAll finished` marker igazolt. A geometria 5/4,5, sebesség 1,2,
+preview 2 s, concurrency 1, trigger 4+14×index; a második wave 150 s-ig tart,
+minden spawnköz a séma 10 s-os maximumán belül van. A CL1 profil, Health/Shield
+kapacitás és kezdő készletek változatlanok. Android build és eszközös vizuális QA
+ebben a jegyben nem futott; a [meglevő Android-útmutató](ANDROID_BUILD.md) érvényes.

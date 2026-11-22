@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MathHorde.Core.Common;
 using MathHorde.Core.Levels;
 using MathHorde.Core.Progress;
+using MathHorde.Core.Problems;
 using MathHorde.GameLogic.Events;
 
 namespace MathHorde.GameLogic
@@ -20,10 +21,7 @@ namespace MathHorde.GameLogic
     ///   there is no code path here that ends the session for ammo being 0;
     ///   the player can keep surviving and reach another resource gate.
     ///
-    /// MathAccuracy is hardcoded to 1.0 (vacuously satisfied) in Phase 1:
-    /// IMathEventDirector is currently the no-op placeholder (no math
-    /// events exist yet, F3), so "0 questions asked, 0 wrong" is the only
-    /// honest value — see IMathEventDirector.cs.
+    /// Real resolutions determine accuracy; immutable answer metadata is buffered during Tick.
     /// </summary>
     public sealed class GameSessionService : IGameSessionService
     {
@@ -36,6 +34,11 @@ namespace MathHorde.GameLogic
         private readonly IResourceService _resourceService;
         private readonly IGameEventSink _eventSink;
 
+        private readonly IGateResolutionService _resolution;
+        private readonly IRewardService _rewards;
+        private readonly Action<MathAnswerSnapshot, MathProblem> _recordAnswer;
+        private readonly Func<IReadOnlyList<QuestionAttempt>> _getAttempts;
+        private int _totalQuestions, _correctQuestions, _timedOutQuestions;
         private LevelDefinition _level;
         private int _seed;
         private DateTimeOffset _startedAt;
@@ -48,7 +51,10 @@ namespace MathHorde.GameLogic
             ICombatService combatService,
             IMathEventDirector mathEventDirector,
             IResourceService resourceService,
-            IGameEventSink eventSink)
+            IGameEventSink eventSink,
+            IGateResolutionService resolution = null, IRewardService rewards = null,
+            Action<MathAnswerSnapshot, MathProblem> recordAnswer = null,
+            Func<IReadOnlyList<QuestionAttempt>> getAttempts = null)
         {
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _waveDirector = waveDirector ?? throw new ArgumentNullException(nameof(waveDirector));
@@ -56,6 +62,8 @@ namespace MathHorde.GameLogic
             _mathEventDirector = mathEventDirector ?? throw new ArgumentNullException(nameof(mathEventDirector));
             _resourceService = resourceService ?? throw new ArgumentNullException(nameof(resourceService));
             _eventSink = eventSink ?? throw new ArgumentNullException(nameof(eventSink));
+            if ((resolution == null) != (rewards == null)) throw new ArgumentException("Resolution and reward services must be composed together.");
+            _resolution = resolution; _rewards = rewards; _recordAnswer = recordAnswer; _getAttempts = getAttempts;
         }
 
         public GameSessionId SessionId { get; private set; }
@@ -92,6 +100,7 @@ namespace MathHorde.GameLogic
             FailureReason = FailureReason.None;
             _finalized = false;
             _finalizedRecord = null;
+            _totalQuestions = _correctQuestions = _timedOutQuestions = 0;
             IsRunning = true;
 
             _resourceService.Initialize(level);
@@ -132,14 +141,34 @@ namespace MathHorde.GameLogic
 
             _waveDirector.ClearPendingSpawns();
 
-            // Step 3: combat — intentionally BEFORE the math step (spec 5.1 snapshot mechanics).
+            // Step 3: combat precedes math, independently of question state.
             _combatService.Tick(t, deltaTime);
 
             // Step 4: prepared math lifecycle, after combat's resource changes.
-            // The resolution/reward/analytics composition remains F3-12 work;
-            // its commands stay available on the director until explicitly drained.
+            // Resolve/reward/record below drain every command exactly once.
             _mathEventDirector.Tick(t);
 
+            if (_resolution != null)
+            {
+                var pending = _mathEventDirector.PendingResolutions;
+                for (int i = 0; i < pending.Count; i++)
+                {
+                    ActiveMathEvent item = null;
+                    for (int j = 0; j < _mathEventDirector.ActiveEvents.Count; j++)
+                        if (_mathEventDirector.ActiveEvents[j].EventId == pending[i].EventId) { item = _mathEventDirector.ActiveEvents[j]; break; }
+                    var resolved = _resolution.Resolve(pending[i], item);
+                    var application = _rewards.ApplyReward(resolved);
+                    if (resolved.Outcome != GateResolutionOutcome.Duplicate)
+                    {
+                        _totalQuestions++;
+                        if (resolved.WasCorrect) _correctQuestions++;
+                        if (resolved.Answer.TimedOut) _timedOutQuestions++;
+                        _recordAnswer?.Invoke(resolved.Answer, item.Problem);
+                    }
+                    _mathEventDirector.OnRewardProcessed(application, t);
+                }
+                _mathEventDirector.ClearPendingResolutions();
+            }
             EvaluateVictoryOrDefeat(t);
         }
 
@@ -167,12 +196,12 @@ namespace MathHorde.GameLogic
                 result,
                 reason,
                 LossDiagnosis.None,
-                mathAccuracy: 1.0f,
-                totalQuestions: 0,
-                correctQuestions: 0,
-                timedOutQuestions: 0,
-                appliedRewardEventIds: Array.Empty<Guid>(),
-                attempts: Array.Empty<QuestionAttempt>());
+                mathAccuracy: _totalQuestions == 0 ? 1f : (float)_correctQuestions / _totalQuestions,
+                totalQuestions: _totalQuestions,
+                correctQuestions: _correctQuestions,
+                timedOutQuestions: _timedOutQuestions,
+                appliedRewardEventIds: _rewards?.AppliedRewardEventIds ?? (IReadOnlyCollection<Guid>)Array.Empty<Guid>(),
+                attempts: _getAttempts?.Invoke() ?? Array.Empty<QuestionAttempt>());
 
             return _finalizedRecord;
         }
@@ -192,7 +221,7 @@ namespace MathHorde.GameLogic
 
             if (_waveDirector.AllWavesCompleted && !_waveDirector.IsBossActive)
             {
-                const float mathAccuracy = 1.0f;
+                float mathAccuracy = _totalQuestions == 0 ? 1f : (float)_correctQuestions / _totalQuestions;
                 if (mathAccuracy >= _level.RequiredMathAccuracy)
                 {
                     EndSession(SessionResult.Victory, FailureReason.None, gameTime);

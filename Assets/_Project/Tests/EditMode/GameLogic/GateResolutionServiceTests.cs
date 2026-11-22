@@ -25,20 +25,9 @@ namespace MathHorde.Tests.EditMode.GameLogic
         // Only generation is fixed. Real director timing, binding, lane commands and resolver run below.
         private sealed class FixedGenerator : IMathProblemGenerator
         {
-            private readonly MathProblemGenerator _binder = new MathProblemGenerator();
-            internal PreparedResourceGate Prepared;
             internal MathProblem Problem;
-            internal int Binds;
             public Result<MathProblem> Generate(ProblemGenerationRequest request) => Result<MathProblem>.Ok(Problem);
-            public IReadOnlyList<Result<MathProblem>> GenerateBatch(ProblemGenerationRequest request, int count)
-                => throw new NotSupportedException();
-            public Result<PreparedResourceGate> PrepareResourceGate(ResourceGatePreparationRequest request)
-                => Result<PreparedResourceGate>.Ok(Prepared);
-            public Result<ResourceGateBinding> BindResourceGate(PreparedResourceGate prepared, int snapshot, int capacity)
-            {
-                Binds++;
-                return _binder.BindResourceGate(prepared, snapshot, capacity);
-            }
+            public IReadOnlyList<Result<MathProblem>> GenerateBatch(ProblemGenerationRequest request, int count) => throw new NotSupportedException();
         }
 
         private sealed class Fixture
@@ -50,40 +39,30 @@ namespace MathHorde.Tests.EditMode.GameLogic
 
             internal Fixture(ProblemType type = ProblemType.ResourceOperationComparison, int count = 1,
                 IGameEventSink sink = null, GateGoal goal = GateGoal.Maximize,
-                ResourceType resource = ResourceType.Shield, bool decreasing = false,
+                ResourceType resource = ResourceType.Health, bool decreasing = false,
                 ErrorCategory? distractor = ErrorCategory.OnesDigitError, int incorrectAmount = 0,
                 int seed = 7)
             {
                 sink = sink ?? new EmptySink();
                 bool gate = type == ProblemType.ResourceOperationComparison;
-                var reward = new RewardSpec(resource, gate ? 0 : 30, gate, incorrectAmount);
+                var reward = new RewardSpec(resource, 30, incorrectAmount);
                 var tags = new[] { SkillTag.Addition, SkillTag.Multiplication };
-                var options = new[]
+                var operations = new ExpressionNode[]
                 {
-                    new ResourceGateOptionTemplate(0, new LaneIndex(1), new BinaryOperationNode(
-                        decreasing ? BinaryOperator.Subtraction : BinaryOperator.Multiplication,
-                        new UnknownNode(), new ConstantNode(decreasing ? 10 : 2)), decreasing ? "−10" : "×2"),
-                    new ResourceGateOptionTemplate(1, new LaneIndex(0), new BinaryOperationNode(
-                        decreasing ? BinaryOperator.Subtraction : BinaryOperator.Addition,
-                        new UnknownNode(), new ConstantNode(decreasing ? 5 : 25)), decreasing ? "−5" : "+25")
+                    new BinaryOperationNode(decreasing ? BinaryOperator.Subtraction : BinaryOperator.Multiplication,
+                        new ConstantNode(20), new ConstantNode(decreasing ? 10 : 2)),
+                    new BinaryOperationNode(decreasing ? BinaryOperator.Subtraction : BinaryOperator.Addition,
+                        new ConstantNode(20), new ConstantNode(decreasing ? 5 : 25))
                 };
-                var metadata = new IReadOnlyList<SkillTag>[44];
-                for (int i = 0; i < metadata.Length; i++) metadata[i] = tags;
-                Generator = new FixedGenerator
-                {
-                    Prepared = new PreparedResourceGate(new MathProblemId(new Guid("11111111-2222-3333-4444-555555555555")),
-                        seed, ResourceGatePreparationTests.Profile(capacity: 100, operators: new[]
-                            { BinaryOperator.Addition, BinaryOperator.Multiplication, BinaryOperator.Subtraction }), 6f, reward, goal,
-                        goal == GateGoal.ReachTarget ? 44 : (int?)null, 43,
-                        new[] { new ResourceGateTemplate(options, tags) }, new[] { metadata }),
-                    Problem = new MathProblem(new MathProblemId(new Guid("66666666-7777-8888-9999-000000000000")),
-                        type, new ConstantNode(42), "42 = ?", new EvaluationResult(42),
-                        new[]
-                        {
-                            new AnswerOption(0, new LaneIndex(1), new EvaluationResult(41), null, false, distractor, "41"),
-                            new AnswerOption(1, new LaneIndex(0), new EvaluationResult(42), null, true, null, "42")
-                        }, 1, tags, 6f, reward, seed, goal, type == ProblemType.TargetValueSelection ? 42 : (int?)null, null)
-                };
+                int a = decreasing ? 10 : 40, b = decreasing ? 15 : 45;
+                Generator = new FixedGenerator { Problem = new MathProblem(new MathProblemId(Guid.NewGuid()), type,
+                    gate ? operations[decreasing ? 0 : 1] : (ExpressionNode)new ConstantNode(42), "42 = ?",
+                    new EvaluationResult(gate ? decreasing ? a : b : 42), new[]
+                    {
+                        new AnswerOption(0, new LaneIndex(1), new EvaluationResult(gate ? a : 41), gate ? operations[0] : null, decreasing, decreasing || gate ? null : distractor, gate ? "×2" : "41"),
+                        new AnswerOption(1, new LaneIndex(0), new EvaluationResult(gate ? b : 42), gate ? operations[1] : null, !decreasing, null, gate ? "+25" : "42")
+                    }, 1, tags, 6f, reward, seed, goal,
+                    type == ProblemType.TargetValueSelection ? 42 : goal == GateGoal.ReachTarget ? 44 : (int?)null, null, gate ? 20 : (int?)null) };
                 var entries = new MathEventScheduleEntry[count];
                 var rewards = new Dictionary<int, RewardSpec>();
                 var targets = new Dictionary<int, int>();
@@ -92,7 +71,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                     entries[i] = new MathEventScheduleEntry(0, type, 1, 6, resource, goal);
                     // MVP director validates IncorrectAmount == 0; the fixed generated task below
                     // can exercise the resolver's wider RewardSpec contract independently.
-                    rewards[i] = new RewardSpec(resource, gate ? 0 : 30, gate);
+                    rewards[i] = new RewardSpec(resource, 30);
                     if (goal == GateGoal.ReachTarget) targets[i] = 44;
                     else if (type == ProblemType.TargetValueSelection) targets[i] = 42;
                 }
@@ -101,7 +80,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                     startingHealth: 20, maxHealth: 43, mathEvents: entries);
                 Resources.Initialize(level);
                 Director = new MathEventDirector(Resources, sink,
-                    new MathEventDirectorSettings(count, 5, 3, 2, 1, rewards, targets));
+                    new MathEventDirectorSettings(count, 5, 3, 2, 1, new MathHorde.MathEngine.GateGenerationLimits(1, 100, 2, 4), rewards, targets));
                 Director.Initialize(level, ResourceGatePreparationTests.Profile(capacity: 100), Generator,
                     new DeterministicRandomSource(seed));
                 Assert.That(Director.PrepareUpcomingEvents(0).IsSuccess, Is.True);
@@ -127,18 +106,19 @@ namespace MathHorde.Tests.EditMode.GameLogic
         {
             var f = new Fixture();
             f.Open();
-            Assert.That(f.Event.Problem, Is.Null);
-            f.Resources.ApplyDelta(ResourceType.Shield, -12, "WEAPON_FIRE");
-            f.Resources.SetMax(ResourceType.Shield, 60, "UPGRADE");
+            Assert.That(f.Event.Problem, Is.Not.Null);
+            f.Resources.ApplyDelta(ResourceType.Health, -12, "WEAPON_FIRE");
+            f.Resources.SetMax(ResourceType.Health, 60, "UPGRADE");
             var command = f.Choose();
-            var result = new GateResolutionService(new EmptySink(), 1).Resolve(command, f.Event);
+            var resolver = new GateResolutionService(new EmptySink(), 1);
+            var result = resolver.Resolve(command, f.Event);
             Assert.That(result.Outcome, Is.EqualTo(GateResolutionOutcome.CorrectRewarded));
             Assert.That(result.WasCorrect, Is.True);
             Assert.That(result.SelectedOptionIndex, Is.EqualTo(1)); // lane 0 contains option 1
             Assert.That(result.OperationResult, Is.EqualTo(45)); // raw, not the frozen Max=43
-            Assert.That(result.SnapshotValue, Is.EqualTo(20));
-            Assert.That(result.RewardDelta, Is.EqualTo(25));
-            Assert.That(result.Resource, Is.EqualTo(ResourceType.Shield));
+            Assert.That(result.GateBaseValue, Is.EqualTo(20));
+            Assert.That(result.RewardDelta, Is.EqualTo(30));
+            Assert.That(result.Resource, Is.EqualTo(ResourceType.Health));
             Assert.That(result.Answer.ProblemId, Is.EqualTo(f.Event.ProblemId.Value));
             Assert.That(result.Answer.SelectedOptionIndex, Is.EqualTo(1));
             Assert.That(result.Answer.SelectedLane, Is.EqualTo(new LaneIndex(0)));
@@ -147,13 +127,17 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(result.Answer.ResponseTimeSeconds, Is.EqualTo(1.25f));
             Assert.That(result.Answer.AnsweredAtGameTime, Is.EqualTo(3.25));
             Assert.That(result.Answer.TimedOut, Is.False);
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(8));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(8));
             Assert.That(f.Event.State, Is.EqualTo(MathEventState.Resolving));
-            Assert.That(f.Generator.Binds, Is.EqualTo(1));
-            var application = new RewardService(f.Resources, new EmptySink(), new GameClock(), 1).ApplyReward(result);
-            Assert.That(application.RequestedDelta, Is.EqualTo(25));
-            Assert.That(application.AppliedDelta, Is.EqualTo(25));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(33));
+            var rewards = new RewardService(f.Resources, new EmptySink(), new GameClock(), 1);
+            var application = rewards.ApplyReward(result);
+            Assert.That(application.RequestedDelta, Is.EqualTo(30));
+            Assert.That(application.AppliedDelta, Is.EqualTo(30));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(38));
+            var duplicate = resolver.Resolve(command, f.Event);
+            Assert.That(duplicate.Resource, Is.EqualTo(ResourceType.Health));
+            Assert.That(rewards.ApplyReward(duplicate).Status, Is.EqualTo(RewardApplicationStatus.AlreadyApplied));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(38));
         }
 
         [Test]
@@ -167,12 +151,12 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(result.RewardDelta, Is.EqualTo(0));
             Assert.That(result.Answer.WasCorrect, Is.False);
             Assert.That(result.Answer.ErrorCategory, Is.EqualTo(ErrorCategory.Unclassified));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(20));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(20));
         }
 
-        [TestCase(GateGoal.Maximize, 0, 45, 25)]
-        [TestCase(GateGoal.Minimize, 1, 10, -10)]
-        [TestCase(GateGoal.ReachTarget, 0, 45, 25)]
+        [TestCase(GateGoal.Maximize, 0, 45, 30)]
+        [TestCase(GateGoal.Minimize, 1, 10, 30)]
+        [TestCase(GateGoal.ReachTarget, 0, 45, 30)]
         public void ResourceGoal_UsesBindingWinner_IncludingNegativeDelta(GateGoal goal, int lane, int value, int delta)
         {
             var f = new Fixture(goal: goal, decreasing: goal == GateGoal.Minimize); f.Open();
@@ -204,10 +188,10 @@ namespace MathHorde.Tests.EditMode.GameLogic
         [TestCase(null)]
         public void NonResourceIncorrect_CarriesDistractorErrorOrUnclassified(ErrorCategory? category)
         {
-            var f = new Fixture(ProblemType.AnswerLaneSelection, distractor: category, incorrectAmount: -2); f.Open();
+            var f = new Fixture(ProblemType.AnswerLaneSelection, distractor: category, incorrectAmount: 2); f.Open();
             var result = new GateResolutionService(new EmptySink(), 1).Resolve(f.Choose(1), f.Event);
             Assert.That(result.Outcome, Is.EqualTo(GateResolutionOutcome.IncorrectNoReward));
-            Assert.That(result.RewardDelta, Is.EqualTo(-2));
+            Assert.That(result.RewardDelta, Is.EqualTo(2));
             Assert.That(result.Answer.ErrorCategory, Is.EqualTo(category ?? ErrorCategory.Unclassified));
             Assert.That(result.Answer.SelectedOptionIndex, Is.EqualTo(0));
             Assert.That(result.Answer.SelectedLane, Is.EqualTo(new LaneIndex(1)));
@@ -356,6 +340,14 @@ namespace MathHorde.Tests.EditMode.GameLogic
             {
                 var f = new Fixture(type, seed: i); f.Open();
                 activeEvents[i] = f.Event;
+            }
+            // Warm runtime/generic dispatch on an expendable journal; every
+            // measured event below is still a first resolution on a fresh journal.
+            var warm = new GateResolutionService(new EmptySink(), count);
+            for (int i = 0; i < count; i++)
+            {
+                var command = new ResolveCommand(activeEvents[i].EventId, new LaneIndex(i % 2), false, 3);
+                warm.Resolve(command, activeEvents[i]); warm.Resolve(command, activeEvents[i]);
             }
             var service = new GateResolutionService(new EmptySink(), count);
             int correctCount = 0, duplicateCount = 0;

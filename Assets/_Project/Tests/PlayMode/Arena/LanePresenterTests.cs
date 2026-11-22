@@ -63,8 +63,7 @@ namespace MathHorde.Tests.PlayMode.Arena
             for (int i = 0; i < simultaneous; i++)
             {
                 entries[i] = new MathEventScheduleEntry(0, type, 1, 6, ResourceType.Health, GateGoal.Maximize);
-                rewards[i] = new RewardSpec(ResourceType.Health, type == ProblemType.ResourceOperationComparison ? 0 : 10,
-                    type == ProblemType.ResourceOperationComparison);
+                rewards[i] = new RewardSpec(ResourceType.Health, 10);
             }
             var level = new LevelDefinition(new LevelId("lane-test"), new WorldId("w1"), "level.test", laneCount, 200,
                 null, entries, null, 20, 30, 20, 30, 0, "basic", availableWeaponIds: new[] { "basic" });
@@ -74,7 +73,7 @@ namespace MathHorde.Tests.PlayMode.Arena
                 new Dictionary<string, EnemyDefinition> { ["bot"] = new EnemyDefinition("bot", EnemyType.Basic, 10000, .1f, 1, 1, "bot") });
             var profile = new DifficultyProfile(1, 1, 1, 1, new[] { BinaryOperator.Addition, BinaryOperator.Modulo },
                 (SkillTag[])Enum.GetValues(typeof(SkillTag)), 0, 100, 1000, 2, 2, false, 0, false, 0, false, options, 6, 1, false);
-            _director = new MathEventDirector(_resources, _bus, new MathEventDirectorSettings(3, 5, 3, 2, 1, rewards));
+            _director = new MathEventDirector(_resources, _bus, new MathEventDirectorSettings(3, 5, 3, 2, 1, new MathHorde.MathEngine.GateGenerationLimits(1, 100, 2, 4), rewards));
             _director.Initialize(level, profile, new MathProblemGenerator(), new DeterministicRandomSource(7));
             var preparation = _director.PrepareUpcomingEvents(0);
             Assert.That(preparation.IsSuccess, Is.True, preparation.ErrorCode);
@@ -206,12 +205,12 @@ namespace MathHorde.Tests.PlayMode.Arena
         }
 
         [Test]
-        public void PreparationFailureAndSessionEndClearWithoutAChildResult()
+        public void ResourceChangesAndSessionEndClearWithoutAChildResult()
         {
             Create(ProblemType.ResourceOperationComparison); Tick(0);
             _resources.SetMax(ResourceType.Health, 40, "INVALID_ORDER");
             Tick(1); AssertDecisionMask(0);
-            Assert.That(_director.ActiveEvents[0].State, Is.EqualTo(MathEventState.Expired));
+            Assert.That(_director.ActiveEvents[0].State, Is.EqualTo(MathEventState.Approaching));
             Assert.That(_director.PendingResolutions.Count, Is.EqualTo(0));
             _director.OnSessionEnded(1);
             _bus.Publish(new SessionEnded(default, SessionResult.Defeat, FailureReason.HealthDepleted, 1));

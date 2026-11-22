@@ -56,6 +56,20 @@ namespace MathHorde.MathEngine
             var rngLane = rng.Derive("lane-shuffle");
             var profile = request.Difficulty;
             var operators = EligibleOperators(request);
+            if (request.Type == ProblemType.ResourceOperationComparison)
+            {
+                operators.RemoveAll(op => op != BinaryOperator.Addition && op != BinaryOperator.Subtraction
+                    && op != BinaryOperator.Multiplication && op != BinaryOperator.Division);
+                if (operators.Count == 0) return Result<MathProblem>.Fail("GATE_OPERATOR_SET_EMPTY");
+                int lo = Math.Max(profile.MinOperandValue, request.GateLimits.Value.OperandMin);
+                int hi = Math.Min(profile.MaxOperandValue, request.GateLimits.Value.OperandMax);
+                if (lo > hi) return Result<MathProblem>.Fail("GATE_LIMITS_INVALID");
+                if ((operators.Contains(BinaryOperator.Multiplication) || operators.Contains(BinaryOperator.Division))
+                    && Math.Max(lo, request.GateLimits.Value.MultiplierMin) > Math.Min(hi, request.GateLimits.Value.MultiplierMax))
+                    return Result<MathProblem>.Fail("GATE_LIMITS_INVALID");
+                return GenerateIndependentGate(request, operators, rngExpr, rngLane,
+                    MathProblemId.New(rng.Derive("problem-id")), lo, hi);
+            }
             if (operators.Count == 0) return Result<MathProblem>.Fail("GENERATION_EXHAUSTED");
             var evaluation = new EvaluationOptions
             {
@@ -78,9 +92,7 @@ namespace MathHorde.MathEngine
             {
                 for (int attempt = 0; attempt < AttemptsPerStage; attempt++)
                 {
-                    var candidate = request.Type == ProblemType.ResourceOperationComparison
-                        ? GenerateGate(request, operators, maxOperand, rngExpr, rngLane, evaluation, id)
-                        : GenerateAnswer(request, operators, maxCount, maxOperand, rngExpr, rngDist, rngLane, evaluation, id);
+                    var candidate = GenerateAnswer(request, operators, maxCount, maxOperand, rngExpr, rngDist, rngLane, evaluation, id);
                     if (candidate.IsSuccess && _validator.Validate(candidate.Value, profile).IsValid
                         && SkillsEligible(candidate.Value.SkillTags, request.SkillProfile))
                         return candidate;
@@ -169,50 +181,8 @@ namespace MathHorde.MathEngine
             return Assemble(request, expression, answer.Value, choices, rngLane, id);
         }
 
-        private Result<MathProblem> GenerateGate(ProblemGenerationRequest request, IReadOnlyList<BinaryOperator> operators,
-            int maxOperand, IRandomSource rngExpr, IRandomSource rngLane, EvaluationOptions evaluation, MathProblemId id)
-        {
-            var p = request.Difficulty;
-            // Different available operators are drawn without replacement first.
-            // This avoids making every gate pair an operand-size comparison.
-            var pool = new List<BinaryOperator>();
-            foreach (var op in operators)
-                if (op != BinaryOperator.IntegerDivisionWithRemainder) pool.Add(op);
-            if (pool.Count == 0) return Result<MathProblem>.Fail("GENERATION_EXHAUSTED");
-            Shuffle(pool, rngExpr);
-            var choices = new List<Choice>();
-            var concrete = new List<ExpressionNode>();
-            for (int i = 0; i < p.AnswerOptionCount; i++)
-            {
-                var op = pool[i % pool.Count];
-                bool added = false;
-                for (int draw = 0; draw < 64; draw++)
-                {
-                    int operand = NextInclusive(rngExpr, p.MinOperandValue, maxOperand);
-                    var tree = new BinaryOperationNode(op, new ConstantNode(request.ResourceSnapshotValue.Value), new ConstantNode(operand));
-                    var value = _evaluator.Evaluate(tree, evaluation);
-                    if (!value.IsSuccess || value.Value.Remainder.HasValue || value.Value.Value > p.MaxResultValue) continue;
-                    choices.Add(new Choice(value.Value, new BinaryOperationNode(op, new UnknownNode(), new ConstantNode(operand)), false, null));
-                    concrete.Add(tree);
-                    added = true;
-                    break;
-                }
-
-                if (!added) return Result<MathProblem>.Fail("GENERATION_EXHAUSTED");
-            }
-
-            int winner = 0;
-            for (int i = 1; i < choices.Count; i++)
-                if (Score(choices[i].Value.Value, request) < Score(choices[winner].Value.Value, request)) winner = i;
-            var best = choices[winner];
-            if (request.Goal == GateGoal.Minimize && best.Value.Value >= request.ResourceSnapshotValue.Value)
-                return Result<MathProblem>.Fail("GENERATION_EXHAUSTED");
-            choices[winner] = new Choice(best.Value, best.Operation, true, null);
-            return Assemble(request, concrete[winner], best.Value, choices, rngLane, id);
-        }
-
         private Result<MathProblem> Assemble(ProblemGenerationRequest request, ExpressionNode expression,
-            EvaluationResult answer, List<Choice> choices, IRandomSource rngLane, MathProblemId id)
+            EvaluationResult answer, List<Choice> choices, IRandomSource rngLane, MathProblemId id, int? gateBaseValue = null)
         {
             Shuffle(choices, rngLane);
             var options = new AnswerOption[choices.Count];
@@ -226,11 +196,11 @@ namespace MathHorde.MathEngine
             }
 
             var skillTags = new List<SkillTag>(tags).AsReadOnly();
-            string display = expression.ToDisplayString();
+            string display = gateBaseValue.HasValue ? gateBaseValue.Value.ToString(CultureInfo.InvariantCulture) : expression.ToDisplayString();
             if (!(expression is EqualityNode) && request.Type != ProblemType.ResourceOperationComparison) display += " = ?";
             return Result<MathProblem>.Ok(new MathProblem(id, request.Type, expression, display, answer,
                 Array.AsReadOnly(options), request.Difficulty.ChallengeLevel, skillTags, request.ThinkTimeSeconds,
-                request.Reward, request.Seed, request.Goal, request.TargetValue, null, request.ResourceCapacity));
+                request.Reward, request.Seed, request.Goal, request.TargetValue, null, gateBaseValue));
         }
 
         private List<BinaryOperator> EligibleOperators(ProblemGenerationRequest request)
@@ -262,18 +232,17 @@ namespace MathHorde.MathEngine
             string rewardError = ResourceRules.ValidateRewardPair(r.RewardResource, r.Reward.Resource);
             if (rewardError != null) return rewardError;
             bool gate = r.Type == ProblemType.ResourceOperationComparison;
-            if (gate ? !r.ResourceCapacity.HasValue || r.ResourceCapacity.Value <= 0 : r.ResourceCapacity.HasValue)
-                return "GATE_CAPACITY_INVALID";
+            if (gate ? !r.GateLimits.HasValue || !r.GateLimits.Value.IsValid : r.GateLimits.HasValue)
+                return "GATE_LIMITS_INVALID";
+            if (r.Reward.FlatAmount <= 0 || r.Reward.IncorrectAmount < 0 || r.Reward.IncorrectAmount > r.Reward.FlatAmount)
+                return "REWARD_AMOUNT_INVALID";
             if (gate && r.Goal == GateGoal.ReachTarget && !r.TargetValue.HasValue) return "GATE_TARGET_MISSING";
             if (!Enum.IsDefined(typeof(ProblemType), r.Type) || !Enum.IsDefined(typeof(GateGoal), r.Goal)
                 || !Enum.IsDefined(typeof(ResourceType), r.RewardResource) || r.RewardResource != r.Reward.Resource
                 || r.LaneCount < 2 || r.LaneCount > 4 || r.LaneCount < r.Difficulty.AnswerOptionCount
                 || !(r.ThinkTimeSeconds > 0f) || float.IsInfinity(r.ThinkTimeSeconds)) return "INVALID_REQUEST";
             bool unknown = r.Type == ProblemType.MissingOperand || r.Type == ProblemType.EquationSolving;
-            if (r.Difficulty.UnknownOperandCount != (unknown ? 1 : 0)) return "INVALID_REQUEST";
-            if (gate && (!r.ResourceSnapshotValue.HasValue || !r.Reward.UseSnapshotDelta
-                || (r.Goal == GateGoal.Minimize && r.RewardResource != ResourceType.EnemyArmor))) return "INVALID_REQUEST";
-            if (!gate && r.Reward.UseSnapshotDelta) return "INVALID_REQUEST";
+            if (!gate && r.Difficulty.UnknownOperandCount != (unknown ? 1 : 0)) return "INVALID_REQUEST";
             if (r.Type == ProblemType.TargetValueSelection && !r.TargetValue.HasValue) return "INVALID_REQUEST";
             if (r.TargetValue.HasValue && r.Type != ProblemType.TargetValueSelection && !(gate && r.Goal == GateGoal.ReachTarget))
                 return "INVALID_REQUEST";
@@ -286,7 +255,7 @@ namespace MathHorde.MathEngine
                 Seed = seed, Type = r.Type, Difficulty = r.Difficulty, SkillProfile = r.SkillProfile,
                 LaneCount = r.LaneCount, ThinkTimeSeconds = r.ThinkTimeSeconds,
                 RewardResource = r.RewardResource, Reward = r.Reward, Goal = r.Goal,
-                ResourceSnapshotValue = r.ResourceSnapshotValue, ResourceCapacity = r.ResourceCapacity, TargetValue = r.TargetValue,
+                GateLimits = r.GateLimits, TargetValue = r.TargetValue,
             };
 
         private static ExpressionNode Substitute(ExpressionNode node, int value)
@@ -306,9 +275,9 @@ namespace MathHorde.MathEngine
         private static string GateLabel(ExpressionNode operation)
         {
             var binary = (BinaryOperationNode)operation;
-            // AST owns operator glyphs; remove only the snapshot placeholder.
+            // AST owns operator glyphs; remove the common generated operand.
             string text = binary.ToDisplayString();
-            return text.Substring(((UnknownNode)binary.Left).Symbol.Length).Trim().Replace(" ", "");
+            return text.Substring(binary.Left.ToDisplayString().Length).Trim().Replace(" ", "");
         }
 
         private static void Shuffle<T>(IList<T> values, IRandomSource random)

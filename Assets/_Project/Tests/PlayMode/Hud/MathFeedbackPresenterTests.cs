@@ -50,12 +50,11 @@ namespace MathHorde.Tests.PlayMode.Hud
             _bus = new GameEventBus(); _clock = new GameClock();
             var entries = new MathEventScheduleEntry[scheduled];
             var rewards = new Dictionary<int, RewardSpec>(); var targets = new Dictionary<int, int>();
-            var resource = goal == GateGoal.Minimize ? ResourceType.EnemyArmor : ResourceType.Health;
+            var resource = ResourceType.Health;
             for (int i = 0; i < scheduled; i++)
             {
                 entries[i] = new MathEventScheduleEntry(i < simultaneous ? 0 : 2.1, type, 1, 6, resource, goal);
-                rewards[i] = new RewardSpec(resource, type == ProblemType.ResourceOperationComparison ? 0 : 10,
-                    type == ProblemType.ResourceOperationComparison);
+                rewards[i] = new RewardSpec(resource, 10);
                 if (goal == GateGoal.ReachTarget) targets[i] = 0;
             }
             _level = new LevelDefinition(new LevelId("feedback-test"), new WorldId("w1"), "level.test", lanes, 200,
@@ -64,9 +63,9 @@ namespace MathHorde.Tests.PlayMode.Hud
             if (resource == ResourceType.EnemyArmor)
             { _resources.SetMax(resource, 30, "LEVEL_INIT"); _resources.ApplyDelta(resource, 20, "LEVEL_INIT"); }
             var profile = new DifficultyProfile(1, 1, 1, 1,
-                goal == GateGoal.Minimize ? new[] { BinaryOperator.Subtraction } : new[] { BinaryOperator.Addition, BinaryOperator.Modulo },
+                goal == GateGoal.Minimize ? new[] { BinaryOperator.Subtraction } : new[] { BinaryOperator.Addition, BinaryOperator.Subtraction },
                 (SkillTag[])Enum.GetValues(typeof(SkillTag)), 0, 100, 1000, 2, 2, false, 0, false, 0, goal == GateGoal.Minimize, 2, 6, 1, false);
-            _director = new MathEventDirector(_resources, _bus, new MathEventDirectorSettings(3, 5, 3, 2, 1, rewards, targets));
+            _director = new MathEventDirector(_resources, _bus, new MathEventDirectorSettings(3, 5, 3, 2, 1, new MathHorde.MathEngine.GateGenerationLimits(1, 100, 2, 4), rewards, targets));
             _director.Initialize(_level, profile, new MathProblemGenerator(), new DeterministicRandomSource(7));
             Assert.That(_director.PrepareUpcomingEvents(0).IsSuccess, Is.True);
             _resolution = new GateResolutionService(_bus, scheduled);
@@ -103,7 +102,7 @@ namespace MathHorde.Tests.PlayMode.Hud
         {
             Create(); Tick(0);
             Assert.That(Visible(), Is.Empty);
-            Assert.That(_director.ActiveEvents[0].ResourceGate.HasValue, Is.False);
+            Assert.That(_director.ActiveEvents[0].Problem, Is.Null);
             Tick(1); Assert.That(Visible(), Is.Empty);
             Tick(1); Assert.That(Visible(), Is.Empty);
             var item = _director.ActiveEvents[0];
@@ -124,27 +123,27 @@ namespace MathHorde.Tests.PlayMode.Hud
         public void ResourceDecisionShowsBothRawResultsBestChoiceSelectionAndActualConsequence(bool correct, GateGoal goal)
         {
             Create(goal: goal); Open();
-            var item = _director.ActiveEvents[0]; var binding = item.ResourceGate.Value;
+            var item = _director.ActiveEvents[0]; var binding = item.Problem;
             var chosen = Option(item, correct);
             _resources.ApplyDelta(item.RewardResource, -7, "COMBAT");
             var application = Resolve(item, correct);
             Assert.That(Visible(), Is.Empty);
             _presenter.RenderPending();
             var view = Visible()[0];
-            for (int i = 0; i < binding.OptionCount; i++)
+            for (int i = 0; i < binding.Options.Count; i++)
             {
-                var option = binding.Template.Options[i];
-                Assert.That(view.Result(option.Lane.Value), Is.EqualTo(option.DisplayLabel + " = " + binding.GetValue(i).ToDisplayString()));
-                Assert.That(view.Marker(option.Lane.Value).Contains("Jobb választás"), Is.EqualTo(i == binding.CorrectOptionIndex));
+                var option = binding.Options[i];
+                Assert.That(view.Result(option.Lane.Value), Is.EqualTo(option.DisplayLabel + " = " + binding.Options[i].Value.ToDisplayString()));
+                Assert.That(view.Marker(option.Lane.Value).Contains("Jobb választás"), Is.EqualTo(binding.Options[i].IsCorrect));
                 Assert.That(view.Marker(option.Lane.Value).Contains("Választottad"), Is.EqualTo(option.Lane == chosen.Lane));
             }
-            Assert.That(binding.SnapshotValue, Is.EqualTo(20));
+            Assert.That(binding.GateBaseValue, Is.GreaterThan(0));
             Assert.That(view.Summary, Does.StartWith(correct ? "Helyes döntés!" : "Próbáld újra!"));
             if (correct)
             {
                 Assert.That(view.Summary, Does.Contain(application.AppliedDelta.ToString("+0;-0;0")));
                 Assert.That(_resources.GetCurrent(item.RewardResource), Is.EqualTo(13 + application.AppliedDelta));
-                if (goal == GateGoal.Minimize) Assert.That(application.AppliedDelta, Is.LessThan(0));
+                Assert.That(application.RequestedDelta, Is.EqualTo(10));
             }
             else { Assert.That(view.Summary, Does.Contain("Nincs jutalom.")); Assert.That(application.AppliedDelta, Is.Zero); }
             Tick(.5f); Assert.That(Visible().Length, Is.EqualTo(1));
@@ -158,13 +157,13 @@ namespace MathHorde.Tests.PlayMode.Hud
         {
             Create(); Open();
             var item = _director.ActiveEvents[0]; var chosen = Option(item, true);
-            var binding = item.ResourceGate.Value;
-            Assert.That(binding.GetValue(chosen.OptionIndex).Value, Is.GreaterThan(binding.SnapshotValue));
+            var binding = item.Problem;
+            Assert.That(binding.Reward.FlatAmount, Is.EqualTo(10));
             _resources.ApplyDelta(ResourceType.Health, 100, "COMBAT_REFUND");
             var application = Resolve(item, true); _presenter.RenderPending();
             Assert.That(application.RequestedDelta, Is.GreaterThan(0)); Assert.That(application.AppliedDelta, Is.Zero);
             Assert.That(Visible()[0].Summary, Is.EqualTo("Helyes döntés! Életerő: 0"));
-            Assert.That(Visible()[0].Result(chosen.Lane.Value), Does.EndWith(binding.GetValue(chosen.OptionIndex).ToDisplayString()));
+            Assert.That(Visible()[0].Result(chosen.Lane.Value), Does.EndWith(binding.Options[chosen.OptionIndex].Value.ToDisplayString()));
             Assert.That(_resources.GetCurrent(ResourceType.Health), Is.EqualTo(30));
         }
 
@@ -193,10 +192,10 @@ namespace MathHorde.Tests.PlayMode.Hud
             var applied = Resolve(item, true); _presenter.RenderPending();
             Assert.That(applied.RequestedDelta, Is.GreaterThan(0)); Assert.That(applied.AppliedDelta, Is.Zero);
             Assert.That(Visible()[0].Summary, Is.EqualTo("Helyes döntés! Életerő: 0"));
-            var binding = item.ResourceGate.Value;
-            for (int i = 0; i < binding.OptionCount; i++)
-                Assert.That(Visible()[0].Result(binding.Template.Options[i].Lane.Value),
-                    Does.EndWith(" = " + binding.GetValue(i).ToDisplayString()));
+            var binding = item.Problem;
+            for (int i = 0; i < binding.Options.Count; i++)
+                Assert.That(Visible()[0].Result(binding.Options[i].Lane.Value),
+                    Does.EndWith(" = " + binding.Options[i].Value.ToDisplayString()));
             for (int i = 0; i < 8; i++) _presenter.RenderPending();
             Assert.That(_resources.GetCurrent(ResourceType.Health), Is.EqualTo(30));
             Assert.That(_rewards.AppliedRewardEventIds.Count, Is.EqualTo(1));
@@ -228,7 +227,7 @@ namespace MathHorde.Tests.PlayMode.Hud
         }
 
         [Test]
-        public void TimeoutAndPreparationFailureDoNotBecomeChildIncorrectFeedback()
+        public void TimeoutAndResourceChangesDoNotBecomeChildIncorrectFeedback()
         {
             Create(); Open(); Tick(6);
             var item = _director.ActiveEvents[0]; var command = _director.PendingResolutions[0];
@@ -237,7 +236,7 @@ namespace MathHorde.Tests.PlayMode.Hud
             Assert.That(item.State, Is.EqualTo(MathEventState.Expired)); Assert.That(Visible(), Is.Empty);
             Object.DestroyImmediate(_root);
             Create(); Tick(0); _resources.SetMax(ResourceType.Health, 31, "TEST"); Tick(1);
-            Assert.That(_director.ActiveEvents[0].State, Is.EqualTo(MathEventState.Expired)); Assert.That(Visible(), Is.Empty);
+            Assert.That(_director.ActiveEvents[0].State, Is.EqualTo(MathEventState.Approaching)); Assert.That(Visible(), Is.Empty);
         }
 
         [Test]
@@ -379,7 +378,7 @@ namespace MathHorde.Tests.PlayMode.Hud
             var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
             if (rewardField)
                 typeof(RewardSpec).GetField("<Resource>k__BackingField", flags)
-                    .SetValue(item.ResourceGate.Value.Prepared.Reward, ResourceType.Ammo);
+                    .SetValue(item.Problem.Reward, ResourceType.Ammo);
             else
                 typeof(ActiveMathEvent).GetField("<RewardResource>k__BackingField", flags).SetValue(item, ResourceType.Ammo);
             Assert.That(() => _presenter.RenderPending(), Throws.TypeOf<ArgumentException>());

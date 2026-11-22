@@ -20,9 +20,8 @@ namespace MathHorde.Core.Resources
         {
             if (resource == ResourceType.Ammo || rewardResource == ResourceType.Ammo)
                 return AmmoNotAllowed;
-            // Explicit, stable ordinals; avoid Enum.IsDefined boxing on the Bind hot path.
-            if (resource != rewardResource || resource < ResourceType.Health || resource > ResourceType.Energy)
-                return InvalidRequest;
+            if (resource != ResourceType.Health || rewardResource != ResourceType.Health)
+                return "REWARD_RESOURCE_NOT_ALLOWED";
             return null;
         }
     }

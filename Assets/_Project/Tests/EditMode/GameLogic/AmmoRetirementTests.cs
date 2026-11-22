@@ -44,7 +44,6 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(state.Pools.ContainsKey(ResourceType.Ammo), Is.False);
             Assert.That(() => resources.GetCurrent(ResourceType.Ammo), Throws.TypeOf<ArgumentException>());
             Assert.That(() => resources.GetMax(ResourceType.Ammo), Throws.TypeOf<ArgumentException>());
-            Assert.That(() => resources.CaptureSnapshot(ResourceType.Ammo), Throws.TypeOf<ArgumentException>());
             Assert.That(() => resources.ApplyDelta(ResourceType.Ammo, 1, "INVALID"), Throws.TypeOf<ArgumentException>());
             Assert.That(() => resources.SetMax(ResourceType.Ammo, 200, "INVALID"), Throws.TypeOf<ArgumentException>());
             Assert.That(() => resources.TryConsume(ResourceType.Ammo, 0, "INVALID", out _), Throws.TypeOf<ArgumentException>());
@@ -70,42 +69,19 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 {
                     Seed = r.Seed, Type = r.Type, Difficulty = r.Difficulty, SkillProfile = r.SkillProfile,
                     LaneCount = r.LaneCount, ThinkTimeSeconds = r.ThinkTimeSeconds, Goal = r.Goal,
-                    TargetValue = r.TargetValue, ResourceSnapshotValue = r.ResourceSnapshotValue,
-                    ResourceCapacity = r.ResourceCapacity, RewardResource = pair.Item1,
-                    Reward = new RewardSpec(pair.Item2, r.Reward.FlatAmount, r.Reward.UseSnapshotDelta)
+                    TargetValue = r.TargetValue,
+                    GateLimits = r.GateLimits, RewardResource = pair.Item1,
+                    Reward = new RewardSpec(pair.Item2, r.Reward.FlatAmount)
                 };
                 string error = pair.Item1 == ResourceType.Ammo || pair.Item2 == ResourceType.Ammo
-                    ? "AMMO_NOT_ALLOWED" : "INVALID_REQUEST";
+                    ? "AMMO_NOT_ALLOWED" : "REWARD_RESOURCE_NOT_ALLOWED";
                 Assert.That(generator.Generate(invalid).ErrorCode, Is.EqualTo(error));
                 foreach (var result in generator.GenerateBatch(invalid, 3))
                     Assert.That(result.ErrorCode, Is.EqualTo(error));
             }
         }
 
-        [Test]
-        public void PrepareAndBind_CheckBothFieldsAndRejectLegacyPreparedContent()
-        {
-            var generator = new MathProblemGenerator();
-            foreach (GateGoal goal in Enum.GetValues(typeof(GateGoal)))
-            foreach (var pair in Pairs())
-            {
-                var r = ResourceGatePreparationTests.Request(goal: goal);
-                var invalid = new ResourceGatePreparationRequest
-                {
-                    Difficulty = r.Difficulty, Seed = r.Seed, LaneCount = r.LaneCount,
-                    ThinkTimeSeconds = r.ThinkTimeSeconds, Goal = goal, ResourceCapacity = r.ResourceCapacity,
-                    RewardResource = pair.Item1, Reward = new RewardSpec(pair.Item2, 0, true)
-                };
-                Assert.That(generator.PrepareResourceGate(invalid).ErrorCode,
-                    Is.EqualTo(pair.Item1 == ResourceType.Ammo || pair.Item2 == ResourceType.Ammo
-                        ? "AMMO_NOT_ALLOWED" : "INVALID_REQUEST"));
-            }
-            var legacy = new PreparedResourceGate(new MathProblemId(Guid.NewGuid()), 7,
-                ResourceGatePreparationTests.Profile(), 6, new RewardSpec(ResourceType.Ammo, 0, true),
-                GateGoal.Maximize, null, 30, Array.Empty<ResourceGateTemplate>(),
-                Array.Empty<IReadOnlyList<SkillTag>[]>());
-            Assert.That(generator.BindResourceGate(legacy, 20, 30).ErrorCode, Is.EqualTo("AMMO_NOT_ALLOWED"));
-        }
+
 
         [TestCase(ProblemType.ResourceOperationComparison)]
         [TestCase(ProblemType.AnswerLaneSelection)]
@@ -123,8 +99,8 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 var p = good.Value;
                 var invalid = new MathProblem(p.Id, p.Type, p.Expression, p.DisplayExpression,
                     p.CorrectAnswer, p.Options, p.DifficultyLevel, p.SkillTags, p.ThinkTimeSeconds,
-                    new RewardSpec(ResourceType.Ammo, p.Reward.FlatAmount, p.Reward.UseSnapshotDelta),
-                    p.Seed, goal, p.TargetValue, p.Explanation, p.ResourceCapacity);
+                    new RewardSpec(ResourceType.Ammo, p.Reward.FlatAmount),
+                    p.Seed, goal, p.TargetValue, p.Explanation, p.GateBaseValue);
                 Assert.That(validator.Validate(invalid, r.Difficulty).Issues.Any(i => i.Code == "AMMO_NOT_ALLOWED"), Is.True);
                 Assert.That(validator.IsValid(invalid, r.Difficulty), Is.False);
             }

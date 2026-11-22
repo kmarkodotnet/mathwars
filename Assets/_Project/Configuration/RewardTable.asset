@@ -1,0 +1,88 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27f624cf278fde7439620cc2b3e5a87d, type: 3}
+  m_Name: RewardTable
+  m_EditorClassIdentifier: MathHorde.Infrastructure::MathHorde.Infrastructure.Configuration.RewardTableSO
+  _levels:
+  - _level: 1
+    _gateRewardBase: 30
+    _laneRewardBase: 20
+    _mathDecisionCount: 10
+    _healthRewardBase: 15
+    _shieldRewardBase: 10
+    _enemyArmorRewardBase: 10
+  - _level: 2
+    _gateRewardBase: 34
+    _laneRewardBase: 22
+    _mathDecisionCount: 11
+    _healthRewardBase: 15
+    _shieldRewardBase: 10
+    _enemyArmorRewardBase: 10
+  - _level: 3
+    _gateRewardBase: 40
+    _laneRewardBase: 26
+    _mathDecisionCount: 12
+    _healthRewardBase: 15
+    _shieldRewardBase: 10
+    _enemyArmorRewardBase: 10
+  - _level: 4
+    _gateRewardBase: 50
+    _laneRewardBase: 32
+    _mathDecisionCount: 13
+    _healthRewardBase: 15
+    _shieldRewardBase: 10
+    _enemyArmorRewardBase: 10
+  - _level: 5
+    _gateRewardBase: 60
+    _laneRewardBase: 38
+    _mathDecisionCount: 14
+    _healthRewardBase: 15
+    _shieldRewardBase: 10
+    _enemyArmorRewardBase: 10
+  - _level: 6
+    _gateRewardBase: 70
+    _laneRewardBase: 44
+    _mathDecisionCount: 14
+    _healthRewardBase: 15
+    _shieldRewardBase: 10
+    _enemyArmorRewardBase: 10
+  - _level: 7
+    _gateRewardBase: 82
+    _laneRewardBase: 52
+    _mathDecisionCount: 15
+    _healthRewardBase: 15
+    _shieldRewardBase: 10
+    _enemyArmorRewardBase: 10
+  - _level: 8
+    _gateRewardBase: 96
+    _laneRewardBase: 60
+    _mathDecisionCount: 15
+    _healthRewardBase: 15
+    _shieldRewardBase: 10
+    _enemyArmorRewardBase: 10
+  - _level: 9
+    _gateRewardBase: 112
+    _laneRewardBase: 70
+    _mathDecisionCount: 16
+    _healthRewardBase: 15
+    _shieldRewardBase: 10
+    _enemyArmorRewardBase: 10
+  - _level: 10
+    _gateRewardBase: 130
+    _laneRewardBase: 82
+    _mathDecisionCount: 16
+    _healthRewardBase: 15
+    _shieldRewardBase: 10
+    _enemyArmorRewardBase: 10
+  _rewardScalePerChallengeLevel: 0
+  _rescueWaveRewardMultiplier: 2
+  _gateRewardHealthMultiplier: 2

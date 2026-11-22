@@ -8,7 +8,7 @@ namespace MathHorde.Core.Resources
     /// Immutable snapshot of a whole session's resource pools (contract
     /// core-domain.md 5.). "Immutable modification" means WithPool returns a
     /// new instance — nothing here is ever mutated in place, which is what
-    /// lets ResourceService hand out CaptureSnapshot() values that can never
+    /// lets readers retain immutable state values that can never
     /// be invalidated by a later Pools lookup.
     /// </summary>
     public sealed class ResourceState

@@ -144,7 +144,7 @@ namespace MathHorde.Presentation.Gates
                 string goal = mathEvent.Goal == GateGoal.ReachTarget
                     ? _localization.Resolve("gate.goal.target", mathEvent.TargetValue)
                     : _localization.Resolve(mathEvent.Goal == GateGoal.Maximize ? "gate.goal.maximize" : "gate.goal.minimize");
-                context = _localization.Resolve("gate.snapshot", _localization.Resolve("gate.resource." + mathEvent.SnapshotResource), mathEvent.SnapshotValue, goal);
+                context = _localization.Resolve("gate.base", mathEvent.GateBaseValue, goal, mathEvent.RewardAmount);
             }
             // DisplayLabel is already the contract's operation/answer label. Do not evaluate it here.
             view.Bind(mathEvent.EventId, carrier.OptionIndex, carrier.DisplayLabel, context,

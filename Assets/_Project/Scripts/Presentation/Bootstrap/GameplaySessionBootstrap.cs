@@ -33,8 +33,11 @@
 // fully real and exercised, which is this task's actual brief.
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using MathHorde.Core.Common;
+using MathHorde.Analytics;
+using MathHorde.Presentation.Gates;
 using MathHorde.Core.Levels;
 using MathHorde.GameLogic;
 using MathHorde.GameLogic.AppFlow;
@@ -78,6 +81,24 @@ namespace MathHorde.Presentation.Bootstrap
         [Tooltip("Fix, determinisztikus seed (ADR-006) — Fázis 1-ben nincs világ-/pályaválasztó, ami egyet adna.")]
         [SerializeField] private int _seed = 20261117;
 
+        [SerializeField] private MathDifficultyTableSO _mathDifficulty;
+        [SerializeField] private TimePressureTableSO _timePressure;
+        [SerializeField] private RewardTableSO _rewardTable;
+        [SerializeField] private MathEventConfigSO _mathConfig;
+        [SerializeField] private GatePresenter _gatePresenter;
+        [SerializeField] private MathQuestionPresenter _questionPresenter;
+        [SerializeField] private MathFeedbackPresenter _feedbackPresenter;
+        [SerializeField] private LanePresenter _lanePresenter;
+        // Empty uses the platform's normal offline save directory. Composition
+        // may bind an isolated directory for replay/QA sessions before Start.
+        [SerializeField] private string _localDataDirectory;
+        private SessionAttemptRecorder _attemptRecorder;
+        private bool _statisticsWritten;
+        private MathHorde.Core.Progress.GameSessionRecord _pendingStatistics;
+        private bool _profileSaveWarned, _statisticsSaveWarned;
+        public IMathEventDirector MathDirector => _mathEventDirector;
+        public IGameClock Clock => _clock;
+        public IReadOnlyList<MathHorde.Core.Progress.QuestionAttempt> Attempts => _attemptRecorder?.Attempts;
         private IGameSessionService _session;
         private IMathEventDirector _mathEventDirector;
         private IGameClock _clock;
@@ -104,6 +125,17 @@ namespace MathHorde.Presentation.Bootstrap
 
         private void Start()
         {
+            try { Compose(); }
+            catch (Exception error)
+            {
+                _mathPreparedAtStartup = false;
+                LastMathPreparationError = error.Message;
+                Debug.LogError(error.Message, this);
+            }
+        }
+
+        private void Compose()
+        {
             _eventBus = new GameEventBus();
             _eventBus.Subscribe<MathHorde.GameLogic.Events.MathEventPreparationFailed>(HandleMathPreparationFailed);
             var localization = new ResourcesLocalizationService();
@@ -111,7 +143,7 @@ namespace MathHorde.Presentation.Bootstrap
             _clock = clock;
 
             var configRepository = new GameConfigurationRepository(
-                _enemyAssets, _weaponAssets, new[] { _levelAsset }, _combatBalance);
+                _enemyAssets, _weaponAssets, new[] { _levelAsset }, _combatBalance, mathDifficultyTable: _mathDifficulty);
 
             LevelDefinition level = configRepository.GetLevel(new MathHorde.Core.Progress.LevelId(_levelAsset.Id));
             var weapons = new WeaponDefinition[level.AvailableWeaponIds.Count];
@@ -122,19 +154,26 @@ namespace MathHorde.Presentation.Bootstrap
             var waveDirector = new WaveDirector();
             var combatService = new CombatService(Resources, _eventBus);
             Combat = combatService;
-            var mathEventDirector = new NullMathEventDirector();
+            var settings = MathEventConfigurationAdapter.CreateDirectorSettings(_mathConfig, _levelAsset,
+                _mathDifficulty, _timePressure, _rewardTable, 1);
+            var mathEventDirector = MathEventConfigurationAdapter.CreateDirector(Resources, _eventBus, settings,
+                level, configRepository.GetDifficultyForLevel(1), _seed);
+            _attemptRecorder = new SessionAttemptRecorder(level.MathEvents.Count);
             _mathEventDirector = mathEventDirector;
 
-            _session = new GameSessionService(clock, waveDirector, combatService, mathEventDirector, Resources, _eventBus);
+            _session = new GameSessionService(clock, waveDirector, combatService, mathEventDirector, Resources, _eventBus,
+                new GateResolutionService(_eventBus, level.MathEvents.Count),
+                new RewardService(Resources, _eventBus, clock, level.MathEvents.Count),
+                _attemptRecorder.Record, () => _attemptRecorder.Attempts);
 
             AppStateMachine = new AppStateMachine();
 
-            _saveRepository = new LocalSaveRepository();
+            _saveRepository = new LocalSaveRepository(string.IsNullOrEmpty(_localDataDirectory) ? null : _localDataDirectory);
             _profileSnapshot = _saveRepository.Load();
             _autosave = new AutosaveScheduler(SaveProfileSnapshot);
 
             _appFlowBinder = new GameSessionAppFlowBinder(AppStateMachine, _session, NotifyAutosaveKeyEvent);
-            _outcomeBridge = new SessionOutcomeBridge(_eventBus, AppStateMachine);
+            _outcomeBridge = new SessionOutcomeBridge(_eventBus, AppStateMachine, defer: true);
 
             IReadOnlyList<LaneAnchor> laneAnchors = _arenaRoot != null
                 ? _arenaRoot.GetComponentsInChildren<LaneAnchor>(true)
@@ -147,6 +186,15 @@ namespace MathHorde.Presentation.Bootstrap
             _sceneFlow.Initialize(AppStateMachine);
             _playerController.Initialize(combatService, _inputAdapter, level.LaneCount);
             _playerView.Initialize(_eventBus, laneAnchors, combatService.PlayerLane);
+            _inputAdapter.TapDetected += OnLaneTap;
+            _inputAdapter.SwipeDetected += OnLaneSwipe;
+            _gatePresenter.Initialize(mathEventDirector, _eventBus);
+            _questionPresenter.BindClock(clock);
+            _questionPresenter.Initialize(mathEventDirector, _eventBus);
+            _feedbackPresenter.BindLayout(level.LaneCount, level.MathEvents.Count);
+            _feedbackPresenter.Initialize(mathEventDirector, _eventBus);
+            _lanePresenter.BindGeometry(laneAnchors, settings.DecisionZoneDepth);
+            _lanePresenter.Initialize(combatService, mathEventDirector, _eventBus);
 
             // Phase-1 vertical slice (see class header): drive the state
             // machine straight to Gameplay with real, contracted triggers.
@@ -156,9 +204,10 @@ namespace MathHorde.Presentation.Bootstrap
             AppStateMachine.Fire(AppTrigger.LevelSelected);
 
             _session.StartSession(level, weapons, enemyCatalog, _seed);
+            _attemptRecorder.Begin(_session.SessionId, DateTimeOffset.UtcNow);
             _hud.InitializeWeaponSelection(_session, _eventBus);
             _inputAdapter.SetUiInputBlocker(_hud.BlocksGameplayInput);
-            // F3-12 supplies the real director/configuration/presenters here.
+            // Startup preparation is a hard gate before the first gameplay frame.
             // Resource initialization must precede this external startup gate.
             var preparation = _mathEventDirector.PrepareUpcomingEvents(clock.GameTime);
             _mathPreparedAtStartup = preparation.IsSuccess;
@@ -172,12 +221,25 @@ namespace MathHorde.Presentation.Bootstrap
             {
                 var preparation = _mathEventDirector.PrepareUpcomingEvents(_clock.GameTime);
                 _session.Tick(deltaTime);
-                // RenderPending and analytics materialization attach here in F3-12.
+                _attemptRecorder.MaterializePending();
+                _gatePresenter.RenderPending();
+                _questionPresenter.RenderPending();
+                _feedbackPresenter.RenderPending();
+                _lanePresenter.RenderPending();
+                _outcomeBridge.RenderPending();
                 ReportMathPreparation(preparation);
             }
             _autosave?.Tick(deltaTime);
-            _hud?.SetPaused(_clock.IsPaused);
+            if (_clock != null) _hud?.SetPaused(_clock.IsPaused);
             _hud?.RenderPending();
+        }
+
+        private void OnLaneTap(float _) => SubmitLane();
+        private void OnLaneSwipe(SwipeDirection _) => SubmitLane();
+        private void SubmitLane()
+        {
+            if (_mathPreparedAtStartup && _session.IsRunning && !_clock.IsPaused)
+                _mathEventDirector.OnPlayerLaneSelected(Combat.PlayerLane, _clock.GameTime);
         }
 
         private void ReportMathPreparation(Result<bool> preparation)
@@ -203,6 +265,11 @@ namespace MathHorde.Presentation.Bootstrap
                 _hud.PauseRequested -= HandlePauseRequested;
             }
 
+            if (_inputAdapter != null)
+            {
+                _inputAdapter.TapDetected -= OnLaneTap;
+                _inputAdapter.SwipeDetected -= OnLaneSwipe;
+            }
             _appFlowBinder?.Dispose();
             _outcomeBridge?.Dispose();
         }
@@ -214,12 +281,42 @@ namespace MathHorde.Presentation.Bootstrap
 
         private void NotifyAutosaveKeyEvent()
         {
+            if (_session != null && !_session.IsRunning && !_statisticsWritten)
+            {
+                _pendingStatistics = _session.Finalize(_session.Result, _session.FailureReason);
+            }
             _autosave.NotifyKeyEvent();
         }
 
         private void SaveProfileSnapshot()
         {
-            _saveRepository.Save(_profileSnapshot);
+            // Independent writes: one transient IO failure must not discard the
+            // finalized session or prevent the other offline save from running.
+            // The existing key-event/periodic scheduler retries pending writes.
+            try
+            {
+                _saveRepository.Save(_profileSnapshot);
+                _profileSaveWarned = false;
+            }
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
+            {
+                if (!_profileSaveWarned) Debug.LogWarning("Local profile save failed; retained for autosave retry: " + error.Message, this);
+                _profileSaveWarned = true;
+            }
+            if (_pendingStatistics == null || _statisticsWritten) return;
+            try
+            {
+                new LocalStatisticsRepository(string.IsNullOrEmpty(_localDataDirectory) ? null : _localDataDirectory)
+                    .Append(_pendingStatistics);
+                _statisticsWritten = true;
+                _pendingStatistics = null;
+                _statisticsSaveWarned = false;
+            }
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
+            {
+                if (!_statisticsSaveWarned) Debug.LogWarning("Local statistics save failed; retained for autosave retry: " + error.Message, this);
+                _statisticsSaveWarned = true;
+            }
         }
     }
 }

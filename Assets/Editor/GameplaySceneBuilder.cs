@@ -46,6 +46,7 @@ using MathHorde.Presentation.Arena;
 using MathHorde.Presentation.Bootstrap;
 using MathHorde.Presentation.Enemies;
 using MathHorde.Presentation.Hud;
+using MathHorde.Presentation.Gates;
 using MathHorde.Presentation.Player;
 using MathHorde.Presentation.Result;
 
@@ -68,6 +69,10 @@ public static class GameplaySceneBuilder
     {
         EnsureDependencyPrefabsExist();
         GameplayHudBuilder.BuildHud();
+        GateCarrierBuilder.Build();
+        MathQuestionHudBuilder.Build();
+        MathFeedbackHudBuilder.Build();
+        LanePresentationBuilder.Build();
         BuildDefaultGameplayConfig(out LevelDefinitionSO level);
         BuildGameplayScene(level);
         AddSceneToBuildSettings();
@@ -193,7 +198,20 @@ public static class GameplaySceneBuilder
 
         level = GetOrCreateLevel(weapon, arenaPrefab, basic, fast, armored);
         SetPrivateField(level, "_availableWeapons", new List<WeaponConfigSO> { weapon, heavy });
+        // Fixed Health rewards, ten alternating real events and combat through 150 s.
+        foreach (var entry in level.MathEvents) SetPrivateField(entry, "_rewardResource", MathHorde.Core.Resources.ResourceType.Health);
+        SetPrivateField(level.Waves[0].Spawns[0], "_spawnIntervalSeconds", 6f);
+        SetPrivateField(level.Waves[1], "_durationSeconds", 90f);
+        SetPrivateField(level.Waves[1].Spawns[0], "_spawnIntervalSeconds", 10f);
+        SetPrivateField(level.Waves[1].Spawns[1], "_spawnIntervalSeconds", 10f);
         EditorUtility.SetDirty(level);
+        var math = EnsureConfig<MathDifficultyTableSO>("MathDifficultyTable");
+        var time = EnsureConfig<TimePressureTableSO>("TimePressureTable");
+        var rewards = EnsureConfig<RewardTableSO>("RewardTable");
+        var events = EnsureConfig<MathEventConfigSO>("MathEventConfigDefault");
+        SetPrivateField(events, "_gateSpawnDepth", 5f);
+        SetPrivateField(events, "_decisionZoneDepth", 4.5f);
+        EditorUtility.SetDirty(events);
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -306,8 +324,7 @@ public static class GameplaySceneBuilder
             SetPrivateField(entry, "_problemType", resourceGate
                 ? MathHorde.Core.Problems.ProblemType.ResourceOperationComparison
                 : MathHorde.Core.Problems.ProblemType.AnswerLaneSelection);
-            SetPrivateField(entry, "_rewardResource", resourceGate
-                ? MathHorde.Core.Resources.ResourceType.Shield : MathHorde.Core.Resources.ResourceType.Health);
+            SetPrivateField(entry, "_rewardResource", MathHorde.Core.Resources.ResourceType.Health);
             mathEvents.Add(entry);
         }
         SetPrivateField(level, "_mathEvents", mathEvents);
@@ -418,6 +435,17 @@ public static class GameplaySceneBuilder
         // Fázis 1-ben nincs MainMenu/WorldSelection scene, egy AppState-átmenet
         // sem tölthet be mást, mint ezt a jelenetet.
 
+        var question = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(MathQuestionHudBuilder.PrefabPath));
+        var feedback = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(MathFeedbackHudBuilder.PrefabPath));
+        var gates = new GameObject("GatePresenter").AddComponent<GatePresenter>();
+        var lanePresentation = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(LanePresentationBuilder.PrefabPath));
+        var gateSo = new SerializedObject(gates);
+        gateSo.FindProperty("_resourceGatePrefab").objectReferenceValue = AssetDatabase.LoadAssetAtPath<GateCarrierView>(GateCarrierBuilder.Folder + "/ResourceGate.prefab");
+        gateSo.FindProperty("_answerCarrierPrefab").objectReferenceValue = AssetDatabase.LoadAssetAtPath<GateCarrierView>(GateCarrierBuilder.Folder + "/AnswerCarrier.prefab");
+        gateSo.FindProperty("_camera").objectReferenceValue = arenaInstance.GetComponentInChildren<Camera>(true);
+        AssignArray(gateSo, "_lanes", arenaInstance.GetComponentsInChildren<LaneAnchor>(true));
+        gateSo.ApplyModifiedPropertiesWithoutUndo();
+
         var bootstrapGo = new GameObject("GameSessionBootstrap");
         GameplaySessionBootstrap bootstrap = bootstrapGo.AddComponent<GameplaySessionBootstrap>();
 
@@ -430,6 +458,14 @@ public static class GameplaySceneBuilder
         WeaponConfigSO heavy = AssetDatabase.LoadAssetAtPath<WeaponConfigSO>(HeavyWeaponAssetPath);
         AssignArray(bootstrapSo, "_weaponAssets", new WeaponConfigSO[] { weapon, heavy });
         bootstrapSo.FindProperty("_levelAsset").objectReferenceValue = level;
+        bootstrapSo.FindProperty("_mathDifficulty").objectReferenceValue = AssetDatabase.LoadAssetAtPath<MathDifficultyTableSO>(ConfigFolder + "/MathDifficultyTable.asset");
+        bootstrapSo.FindProperty("_timePressure").objectReferenceValue = AssetDatabase.LoadAssetAtPath<TimePressureTableSO>(ConfigFolder + "/TimePressureTable.asset");
+        bootstrapSo.FindProperty("_rewardTable").objectReferenceValue = AssetDatabase.LoadAssetAtPath<RewardTableSO>(ConfigFolder + "/RewardTable.asset");
+        bootstrapSo.FindProperty("_mathConfig").objectReferenceValue = AssetDatabase.LoadAssetAtPath<MathEventConfigSO>(ConfigFolder + "/MathEventConfigDefault.asset");
+        bootstrapSo.FindProperty("_gatePresenter").objectReferenceValue = gates;
+        bootstrapSo.FindProperty("_questionPresenter").objectReferenceValue = question.GetComponent<MathQuestionPresenter>();
+        bootstrapSo.FindProperty("_feedbackPresenter").objectReferenceValue = feedback.GetComponent<MathFeedbackPresenter>();
+        bootstrapSo.FindProperty("_lanePresenter").objectReferenceValue = lanePresentation.GetComponent<LanePresenter>();
         bootstrapSo.FindProperty("_combatBalance").objectReferenceValue = combatBalance;
         bootstrapSo.FindProperty("_arenaRoot").objectReferenceValue = arenaInstance.transform;
         bootstrapSo.FindProperty("_hud").objectReferenceValue = hudInstance.GetComponent<GameplayHUD>();
@@ -593,6 +629,16 @@ public static class GameplaySceneBuilder
         File.WriteAllBytes(fullOutputPath, png);
 
         Debug.Log($"[GameplaySceneBuilder] RenderCameraToPreviewPng finished. path={fullOutputPath}, bytes={png.Length}");
+    }
+
+    private static T EnsureConfig<T>(string name) where T : ScriptableObject
+    {
+        string path = ConfigFolder + "/" + name + ".asset";
+        var asset = AssetDatabase.LoadAssetAtPath<T>(path);
+        if (asset != null) return asset;
+        asset = ScriptableObject.CreateInstance<T>();
+        AssetDatabase.CreateAsset(asset, path);
+        return asset;
     }
 
     private static void SetPrivateField(object target, string fieldName, object value)

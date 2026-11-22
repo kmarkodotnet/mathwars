@@ -33,7 +33,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That(p.Reward, Is.SameAs(request.Reward));
             Assert.That(p.ThinkTimeSeconds, Is.EqualTo(request.ThinkTimeSeconds));
             Assert.That(p.DifficultyLevel, Is.EqualTo(request.Difficulty.ChallengeLevel));
-            Assert.That(p.ResourceCapacity, Is.EqualTo(request.ResourceCapacity));
+            Assert.That(p.GateBaseValue.HasValue, Is.EqualTo(type == ProblemType.ResourceOperationComparison));
             Assert.That(p.TargetValue, Is.EqualTo(request.TargetValue));
             if (type == ProblemType.AnswerLaneSelection) Assert.That(p.DisplayExpression, Does.EndWith(" = ?"));
             if (type == ProblemType.TargetValueSelection) Assert.That(p.CorrectAnswer.Value, Is.EqualTo(request.TargetValue.Value));
@@ -52,20 +52,15 @@ namespace MathHorde.Tests.EditMode.MathEngine
             {
                 var binary = option.GateOperation as BinaryOperationNode;
                 Assert.That(binary, Is.Not.Null);
-                Assert.That(binary.Left is UnknownNode, Is.True);
+                Assert.That(binary.Left is ConstantNode, Is.True);
                 Assert.That(binary.Right is ConstantNode, Is.True);
-                Assert.That(evaluator.EvaluateWith(binary, request.ResourceSnapshotValue.Value, EvaluationOptions.Default).Value,
+                Assert.That(evaluator.EvaluateWith(binary, result.Value.GateBaseValue.Value, EvaluationOptions.Default).Value,
                     Is.EqualTo(option.Value));
                 Assert.That(option.DisplayLabel, Does.Not.Contain("?"));
             }
 
             Assert.That(result.Value.Goal, Is.EqualTo(goal));
-            Assert.That(result.Value.Reward.UseSnapshotDelta, Is.True);
-            if (goal == GateGoal.Minimize)
-            {
-                Assert.That(result.Value.Reward.Resource, Is.EqualTo(ResourceType.EnemyArmor));
-                Assert.That(result.Value.CorrectAnswer.Value - request.ResourceSnapshotValue.Value, Is.LessThan(0));
-            }
+
         }
 
         [TestCase(BinaryOperator.Addition)]
@@ -88,41 +83,11 @@ namespace MathHorde.Tests.EditMode.MathEngine
             }
         }
 
-        [Test]
-        public void Generate_MinimizeWithoutAnyDecrease_FailsInsteadOfRewardingArmorIncrease()
-        {
-            var profile = ProblemValidatorTests.Profile(count: 2, operators: new[] { BinaryOperator.Addition });
-            var request = Request(type: ProblemType.ResourceOperationComparison, count: 2, goal: GateGoal.Minimize, profile: profile);
-            Assert.That(new MathProblemGenerator().Generate(request).ErrorCode, Is.EqualTo("GENERATION_EXHAUSTED"));
-        }
 
-        [Test]
-        public void Generate_CapacityClampsOnlyValidation_RawAnswerAndSnapshotDeltaAreRetained()
-        {
-            var generator = new MathProblemGenerator();
-            bool observedClamping = false;
-            for (int seed = 0; seed < 100 && !observedClamping; seed++)
-            {
-                var request = Request(seed: seed, type: ProblemType.ResourceOperationComparison, count: 2, capacity: 40);
-                var result = generator.Generate(request);
-                Assert.That(result.IsSuccess, Is.True, result.ErrorCode);
-                var p = result.Value;
-                if (p.CorrectAnswer.Value <= 40) continue;
-                observedClamping = true;
-                Assert.That(p.Options.Single(o => o.IsCorrect).Value, Is.EqualTo(p.CorrectAnswer));
-                Assert.That(p.CorrectAnswer.Value - request.ResourceSnapshotValue.Value, Is.GreaterThan(20));
-                Assert.That(p.Reward.UseSnapshotDelta, Is.True);
-                Assert.That(new ProblemValidator().IsValid(p, request.Difficulty), Is.True);
-            }
-            Assert.That(observedClamping, Is.True);
-        }
 
-        [Test]
-        public void Generate_ImpossibleCapacityGap_IsExhaustedWithoutInventingCapacity()
-        {
-            var request = Request(type: ProblemType.ResourceOperationComparison, count: 2, capacity: 1);
-            Assert.That(new MathProblemGenerator().Generate(request).ErrorCode, Is.EqualTo("GENERATION_EXHAUSTED"));
-        }
+
+
+
 
         [Test]
         public void Generate_NegativeResultsRequireAndRespectProfilePermission()
@@ -148,17 +113,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That(new MathProblemGenerator().Generate(Request(profile: profile)).ErrorCode, Is.EqualTo("GENERATION_EXHAUSTED"));
         }
 
-        [TestCase(null)]
-        [TestCase(0)]
-        [TestCase(-1)]
-        public void Generate_InvalidCapacity_FailsBeforeAnyCandidate(int? capacity)
-        {
-            var validator = new RecordingValidator();
-            var generator = Generator(new RecordingExpressionGenerator(), validator);
-            var result = generator.Generate(Request(type: ProblemType.ResourceOperationComparison, capacity: capacity));
-            Assert.That(result.ErrorCode, Is.EqualTo("GATE_CAPACITY_INVALID"));
-            Assert.That(validator.Candidates.Count, Is.EqualTo(0));
-        }
+
 
         [Test]
         public void Generate_ReachTargetWithoutTarget_FailsBeforeAnyCandidate()
@@ -169,11 +124,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That(validator.Candidates.Count, Is.EqualTo(0));
         }
 
-        [Test]
-        public void Generate_CapacityOnAnswerProblem_IsRejected()
-        {
-            Assert.That(new MathProblemGenerator().Generate(Request(capacity: 50)).ErrorCode, Is.EqualTo("GATE_CAPACITY_INVALID"));
-        }
+
 
         [Test]
         public void Generate_NullInputsAndInvalidRequest_AreExplicit()
@@ -211,16 +162,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That(validator.Candidates.All(p => p.Seed == request.Seed), Is.True);
         }
 
-        [Test]
-        public void Generate_GateRetriesAndSimplification_KeepCapturedContext()
-        {
-            var validator = new RecordingValidator(reject: 16);
-            var request = Request(type: ProblemType.ResourceOperationComparison, goal: GateGoal.ReachTarget, capacity: 49);
-            var result = Generator(new RecordingExpressionGenerator(), validator).Generate(request);
-            Assert.That(result.IsSuccess, Is.True);
-            Assert.That(validator.Candidates.Count, Is.EqualTo(17));
-            Assert.That(validator.Candidates.All(p => p.ResourceCapacity == 49 && p.TargetValue == 25), Is.True);
-        }
+
 
         [Test]
         public void Generate_ExhaustionIsBoundedAndNeverReturnsRejectedCandidate()
@@ -280,7 +222,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
                 var replay = generator.Generate(Request(seed: p.Seed, type: request.Type, goal: request.Goal, capacity: 53));
                 Assert.That(Signature(p), Is.EqualTo(Signature(replay.Value)));
                 if (i < shortBatch.Count) Assert.That(Signature(p), Is.EqualTo(Signature(shortBatch[i].Value)));
-                Assert.That(p.ResourceCapacity, Is.EqualTo(53));
+                Assert.That(p.GateBaseValue, Is.InRange(1, 30));
                 Assert.That(p.TargetValue, Is.EqualTo(25));
             }
             Assert.That(longBatch.Select(r => r.Value.Id).Distinct().Count(), Is.EqualTo(32));
@@ -289,13 +231,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
             Assert.That(() => generator.GenerateBatch(null, 0), Throws.TypeOf<ArgumentNullException>());
         }
 
-        [Test]
-        public void GenerateBatch_FailedItemsAreReturnedWithoutInventingContext()
-        {
-            var results = new MathProblemGenerator().GenerateBatch(Request(type: ProblemType.ResourceOperationComparison, capacity: null), 4);
-            Assert.That(results.Count, Is.EqualTo(4));
-            Assert.That(results.All(r => !r.IsSuccess && r.ErrorCode == "GATE_CAPACITY_INVALID"), Is.True);
-        }
+
 
         [Test]
         public void Generate_ConcurrentPrefetchIsDeterministic()
@@ -332,7 +268,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
         {
             bool gate = type == ProblemType.ResourceOperationComparison;
             bool unknown = type == ProblemType.MissingOperand || type == ProblemType.EquationSolving;
-            var resource = gate && goal == GateGoal.Minimize ? ResourceType.EnemyArmor : ResourceType.Health;
+            var resource = ResourceType.Health;
             return new ProblemGenerationRequest
             {
                 Seed = seed, Type = type,
@@ -340,9 +276,8 @@ namespace MathHorde.Tests.EditMode.MathEngine
                     new[] { BinaryOperator.Addition, BinaryOperator.Subtraction, BinaryOperator.Multiplication, BinaryOperator.Division },
                     (SkillTag[])Enum.GetValues(typeof(SkillTag)), 0, 30, 1000, 2, 4, true, 2, unknown, unknown ? 1 : 0, false, count, 6f, 4, true),
                 LaneCount = lanes, ThinkTimeSeconds = time, RewardResource = resource,
-                Reward = new RewardSpec(resource, gate ? 0 : 5, gate), Goal = goal,
-                ResourceSnapshotValue = gate ? snapshot : (int?)null,
-                ResourceCapacity = gate ? capacity : capacity == 1000 ? null : capacity,
+                Reward = new RewardSpec(resource, 5), Goal = goal,
+                GateLimits = gate ? new GateGenerationLimits(1, 100, 2, 4) : (GateGenerationLimits?)null,
                 TargetValue = !omitTarget && (type == ProblemType.TargetValueSelection || gate && goal == GateGoal.ReachTarget) ? 25 : (int?)null,
                 SkillProfile = skills,
             };
@@ -350,7 +285,7 @@ namespace MathHorde.Tests.EditMode.MathEngine
 
         internal static string Signature(MathProblem p)
             => p.Id + "|" + p.Seed + "|" + p.Type + "|" + p.DisplayExpression + "|" + p.CorrectAnswer.ToDisplayString()
-                + "|" + p.Goal + "|" + p.TargetValue + "|" + p.ResourceCapacity + "|" + string.Join(",", p.SkillTags)
+                + "|" + p.Goal + "|" + p.TargetValue + "|" + p.GateBaseValue + "|" + string.Join(",", p.SkillTags)
                 + "|" + string.Join(";", p.Options.Select(o => o.OptionIndex + ":" + o.Lane.Value + ":" + o.Value.ToDisplayString()
                     + ":" + o.IsCorrect + ":" + o.DisplayLabel + ":" + o.GateOperation?.ToDisplayString() + ":" + o.DistractorErrorModel));
 

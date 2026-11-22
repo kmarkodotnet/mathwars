@@ -54,8 +54,7 @@ namespace MathHorde.Tests.PlayMode.Hud
             for (int i = 0; i < simultaneous; i++)
             {
                 entries[i] = new MathEventScheduleEntry(0, type, 1, 6, resource, goal);
-                rewards[i] = new RewardSpec(resource, type == ProblemType.ResourceOperationComparison ? 0 : 10,
-                    type == ProblemType.ResourceOperationComparison);
+                rewards[i] = new RewardSpec(resource, 10);
                 if (goal == GateGoal.ReachTarget || type == ProblemType.TargetValueSelection) targets[i] = 0;
             }
             _level = new LevelDefinition(new LevelId("question-test"), new WorldId("w1"), "level.test", 4, 200,
@@ -67,9 +66,9 @@ namespace MathHorde.Tests.PlayMode.Hud
                 _resources.ApplyDelta(resource, 20, "LEVEL_INIT");
             }
             var profile = new DifficultyProfile(1, 1, 1, 1,
-                goal == GateGoal.Minimize ? new[] { BinaryOperator.Subtraction } : new[] { BinaryOperator.Addition, BinaryOperator.Modulo },
+                goal == GateGoal.Minimize ? new[] { BinaryOperator.Subtraction } : new[] { BinaryOperator.Addition, BinaryOperator.Subtraction },
                 (SkillTag[])Enum.GetValues(typeof(SkillTag)), 0, 100, 1000, 2, 2, false, 0, false, 0, goal == GateGoal.Minimize, 2, 6, 1, false);
-            _director = new MathEventDirector(_resources, _bus, new MathEventDirectorSettings(3, 5, 3, 2, 1, rewards, targets));
+            _director = new MathEventDirector(_resources, _bus, new MathEventDirectorSettings(3, 5, 3, 2, 1, new MathHorde.MathEngine.GateGenerationLimits(1, 100, 2, 4), rewards, targets));
             _director.Initialize(_level, profile, new MathProblemGenerator(), new DeterministicRandomSource(7));
             var preparation = _director.PrepareUpcomingEvents(0);
             Assert.That(preparation.IsSuccess, Is.True, preparation.ErrorCode);
@@ -100,19 +99,19 @@ namespace MathHorde.Tests.PlayMode.Hud
         }
 
         [TestCase(GateGoal.Maximize, "Legtöbb", ResourceType.Health, "Életerő")]
-        [TestCase(GateGoal.Minimize, "Legkevesebb", ResourceType.EnemyArmor, "Páncél")]
+        [TestCase(GateGoal.Minimize, "Legkevesebb", ResourceType.Health, "Életerő")]
         [TestCase(GateGoal.Maximize, "Legtöbb", ResourceType.Health, "Életerő")]
-        [TestCase(GateGoal.ReachTarget, "Cél: 0", ResourceType.Shield, "Pajzs")]
+        [TestCase(GateGoal.ReachTarget, "Cél: 0", ResourceType.Health, "Életerő")]
         public void ResourcePreviewContainsOnlyResourceAndGoalThenShowsFrozenSpawnSnapshot(GateGoal goal, string label, ResourceType resource, string name)
         {
             Create(ProblemType.ResourceOperationComparison, goal, resource);
             Tick(0);
             var item = _director.ActiveEvents[0];
             Assert.That(item.Problem, Is.Null);
-            Assert.That(Visible()[0].QuestionText, Is.EqualTo(name + "\n" + label));
+            Assert.That(Visible()[0].QuestionText, Is.EqualTo(name + " +10\n" + label));
             _resources.ApplyDelta(resource, -7, "TEST");
             Tick(1);
-            string expected = name + ": 13\n" + label;
+            string expected = "Kezdő szám: " + item.GateBaseValue + "\n" + label + " / Életerő +10";
             Assert.That(Visible()[0].QuestionText, Is.EqualTo(expected));
             _resources.ApplyDelta(resource, -5, "TEST");
             Tick(.25f);
@@ -198,7 +197,7 @@ namespace MathHorde.Tests.PlayMode.Hud
         }
 
         [Test]
-        public void SelectionClearsQuestionBeforeFeedbackAndPreparationFailureClearsPreview()
+        public void SelectionClearsQuestionAndResourceChangesKeepPreparedContent()
         {
             Create(); Tick(0); Tick(1); Tick(1);
             var item = _director.ActiveEvents[0];
@@ -210,8 +209,8 @@ namespace MathHorde.Tests.PlayMode.Hud
             Create(ProblemType.ResourceOperationComparison); Tick(0);
             _resources.SetMax(ResourceType.Health, 31, "TEST");
             _director.Tick(1); _presenter.RenderPending();
-            Assert.That(_director.ActiveEvents[0].State, Is.EqualTo(MathEventState.Expired));
-            Assert.That(Visible().Length, Is.EqualTo(0));
+            Assert.That(_director.ActiveEvents[0].State, Is.EqualTo(MathEventState.Approaching));
+            Assert.That(Visible().Length, Is.EqualTo(1));
         }
 
         [Test]

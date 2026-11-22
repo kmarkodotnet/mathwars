@@ -40,7 +40,7 @@ namespace MathHorde.Tests.EditMode.Problems
             int? targetValue = null,
             IReadOnlyList<SkillTag> skillTags = null,
             GateGoal goal = GateGoal.Maximize,
-            int? resourceCapacity = null)
+            int? gateBaseValue = null)
         {
             return new MathProblem(
                 id: new MathProblemId(Guid.NewGuid()),
@@ -52,12 +52,12 @@ namespace MathHorde.Tests.EditMode.Problems
                 difficultyLevel: difficultyLevel,
                 skillTags: skillTags ?? new[] { SkillTag.Multiplication },
                 thinkTimeSeconds: thinkTimeSeconds,
-                reward: new RewardSpec(ResourceType.Health, 30, useSnapshotDelta: false),
+                reward: new RewardSpec(ResourceType.Health, 30),
                 seed: 12345,
                 goal: goal,
                 targetValue: targetValue,
                 explanation: null,
-                resourceCapacity: resourceCapacity);
+                gateBaseValue: gateBaseValue);
         }
 
         [Test]
@@ -75,7 +75,7 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(problem.Seed, Is.EqualTo(12345));
             Assert.That(problem.Goal, Is.EqualTo(GateGoal.Maximize));
             Assert.That(problem.TargetValue, Is.Null);
-            Assert.That(problem.ResourceCapacity, Is.Null);
+            Assert.That(problem.GateBaseValue, Is.Null);
             Assert.That(problem.Explanation, Is.Null);
         }
 
@@ -99,9 +99,9 @@ namespace MathHorde.Tests.EditMode.Problems
         public void Constructor_ReachTargetResourceGate_PreservesTargetAndCapacity()
         {
             var problem = BuildValidProblem(type: ProblemType.ResourceOperationComparison,
-                targetValue: 60, goal: GateGoal.ReachTarget, resourceCapacity: 75);
+                targetValue: 60, goal: GateGoal.ReachTarget, gateBaseValue: 75);
             Assert.That(problem.TargetValue, Is.EqualTo(60));
-            Assert.That(problem.ResourceCapacity, Is.EqualTo(75));
+            Assert.That(problem.GateBaseValue, Is.EqualTo(75));
         }
 
         [TestCase(GateGoal.Maximize)]
@@ -118,15 +118,15 @@ namespace MathHorde.Tests.EditMode.Problems
         public void Constructor_InvalidGateContext_RemainsAValidatableCandidate(int? capacity)
         {
             var problem = BuildValidProblem(type: ProblemType.ResourceOperationComparison,
-                goal: GateGoal.ReachTarget, resourceCapacity: capacity);
-            Assert.That(problem.ResourceCapacity, Is.EqualTo(capacity));
+                goal: GateGoal.ReachTarget, gateBaseValue: capacity);
+            Assert.That(problem.GateBaseValue, Is.EqualTo(capacity));
             Assert.That(problem.TargetValue, Is.Null);
         }
 
         [Test]
         public void Constructor_CapacityOnOtherType_IsDeferredToValidator()
         {
-            Assert.That(BuildValidProblem(resourceCapacity: 100).ResourceCapacity, Is.EqualTo(100));
+            Assert.That(BuildValidProblem(gateBaseValue: 100).GateBaseValue, Is.EqualTo(100));
         }
 
         [TestCase(0)]
@@ -162,7 +162,7 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(
                 () => new MathProblem(
                     new MathProblemId(Guid.NewGuid()), ProblemType.AnswerLaneSelection, null, "x", new EvaluationResult(1),
-                    SampleOptions(), 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Health, 1, false), 1,
+                    SampleOptions(), 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Health, 1), 1,
                     GateGoal.Maximize, null, null),
                 Throws.TypeOf<ArgumentNullException>());
         }
@@ -173,7 +173,7 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(
                 () => new MathProblem(
                     new MathProblemId(Guid.NewGuid()), ProblemType.AnswerLaneSelection, SampleExpression(), "x", new EvaluationResult(1),
-                    null, 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Health, 1, false), 1,
+                    null, 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Health, 1), 1,
                     GateGoal.Maximize, null, null),
                 Throws.TypeOf<ArgumentNullException>());
         }
@@ -184,7 +184,7 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(
                 () => new MathProblem(
                     new MathProblemId(Guid.NewGuid()), ProblemType.AnswerLaneSelection, SampleExpression(), "x", new EvaluationResult(1),
-                    SampleOptions(), 1, null, 1f, new RewardSpec(ResourceType.Health, 1, false), 1,
+                    SampleOptions(), 1, null, 1f, new RewardSpec(ResourceType.Health, 1), 1,
                     GateGoal.Maximize, null, null),
                 Throws.TypeOf<ArgumentNullException>());
         }
@@ -206,7 +206,7 @@ namespace MathHorde.Tests.EditMode.Problems
             Assert.That(
                 () => new MathProblem(
                     new MathProblemId(Guid.NewGuid()), ProblemType.AnswerLaneSelection, SampleExpression(), null, new EvaluationResult(1),
-                    SampleOptions(), 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Health, 1, false), 1,
+                    SampleOptions(), 1, new[] { SkillTag.Addition }, 1f, new RewardSpec(ResourceType.Health, 1), 1,
                     GateGoal.Maximize, null, null),
                 Throws.TypeOf<ArgumentNullException>());
         }

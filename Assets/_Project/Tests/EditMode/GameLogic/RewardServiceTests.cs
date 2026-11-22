@@ -40,8 +40,8 @@ namespace MathHorde.Tests.EditMode.GameLogic
             internal Fixture(int capacity = 4, int shield = 20, int maxShield = 200)
             {
                 Resources = new ResourceService(Sink, Clock);
-                Resources.Initialize(CombatTestFixtures.BuildLevel(startingShield: shield, maxShield: maxShield,
-                    startingHealth: 20, maxHealth: 100));
+                Resources.Initialize(CombatTestFixtures.BuildLevel(startingShield: 20, maxShield: 200,
+                    startingHealth: shield, maxHealth: maxShield));
                 Rewards = new RewardService(Resources, Sink, Clock, capacity);
                 Clock.Advance(3.5f);
             }
@@ -49,7 +49,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
 
         private static GateResolution Resolution(int index = 0, int delta = 25,
             GateResolutionOutcome outcome = GateResolutionOutcome.CorrectRewarded,
-            ResourceType resource = ResourceType.Shield)
+            ResourceType resource = ResourceType.Health)
             => new GateResolution(MathEventId.Create(7, index), outcome,
                 outcome == GateResolutionOutcome.CorrectRewarded, 1, 45, 20, delta, resource, default);
 
@@ -57,14 +57,14 @@ namespace MathHorde.Tests.EditMode.GameLogic
         public void CorrectReward_UsesLiveValueAndRawSnapshotDelta_AndPublishesActualChange()
         {
             var f = new Fixture();
-            f.Resources.TryConsume(ResourceType.Shield, 12, "WEAPON_FIRE", out _);
+            f.Resources.TryConsume(ResourceType.Health, 12, "WEAPON_FIRE", out _);
             var result = f.Rewards.ApplyReward(Resolution());
             Assert.That(result.EventId, Is.EqualTo(MathEventId.Create(7, 0)));
             Assert.That(result.Status, Is.EqualTo(RewardApplicationStatus.Applied));
             Assert.That(result.RequestedDelta, Is.EqualTo(25));
             Assert.That(result.AppliedDelta, Is.EqualTo(25));
-            Assert.That(result.Resource, Is.EqualTo(ResourceType.Shield));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(33));
+            Assert.That(result.Resource, Is.EqualTo(ResourceType.Health));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(33));
             Assert.That(f.Rewards.AppliedRewardEventIds.Count, Is.EqualTo(1));
             var events = f.Sink.OfType<RewardApplied>();
             Assert.That(events.Count, Is.EqualTo(1));
@@ -93,7 +93,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(result.Status, Is.EqualTo(RewardApplicationStatus.Applied));
             Assert.That(result.RequestedDelta, Is.EqualTo(delta));
             Assert.That(result.AppliedDelta, Is.EqualTo(applied));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(final));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(final));
             Assert.That(f.Sink.OfType<RewardApplied>()[0].AppliedDelta, Is.EqualTo(applied));
         }
 
@@ -101,26 +101,32 @@ namespace MathHorde.Tests.EditMode.GameLogic
         public void LiveCapacityChange_DoesNotRecalculateTheRawGateDelta()
         {
             var f = new Fixture(maxShield: 43);
-            f.Resources.TryConsume(ResourceType.Shield, 12, "WEAPON_FIRE", out _);
-            f.Resources.SetMax(ResourceType.Shield, 30, "UPGRADE");
+            f.Resources.TryConsume(ResourceType.Health, 12, "WEAPON_FIRE", out _);
+            f.Resources.SetMax(ResourceType.Health, 30, "UPGRADE");
             var result = f.Rewards.ApplyReward(Resolution());
             Assert.That(result.RequestedDelta, Is.EqualTo(25));
             Assert.That(result.AppliedDelta, Is.EqualTo(22));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(30));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(30));
         }
 
         [TestCase(ResourceType.Health)]
-        [TestCase(ResourceType.Shield)]
+        [TestCase(ResourceType.Health)]
         [TestCase(ResourceType.EnemyArmor)]
         [TestCase(ResourceType.Energy)]
         public void CorrectReward_UsesResolutionResource(ResourceType resource)
         {
             var f = new Fixture();
+            if (resource != ResourceType.Health)
+            {
+                Assert.That(() => f.Rewards.ApplyReward(Resolution(delta: 15, resource: resource)), Throws.TypeOf<ArgumentException>());
+                Assert.That(f.Rewards.AppliedRewardEventIds.Count, Is.Zero);
+                return;
+            }
             int before = f.Resources.GetCurrent(resource);
             var result = f.Rewards.ApplyReward(Resolution(delta: 15, resource: resource));
             Assert.That(result.Resource, Is.EqualTo(resource));
             Assert.That(f.Resources.GetCurrent(resource), Is.EqualTo(before + 15));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(resource == ResourceType.Shield ? 35 : 20));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(resource == ResourceType.Health ? 35 : 20));
         }
 
         [TestCase(GateResolutionOutcome.IncorrectNoReward, RewardApplicationStatus.SkippedIncorrect, "INCORRECT")]
@@ -141,7 +147,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(events[0].ReasonCode, Is.EqualTo(reason));
             Assert.That(events[0].GameTime, Is.EqualTo(3.5));
             Assert.That(f.Rewards.ApplyReward(Resolution()).Status, Is.EqualTo(RewardApplicationStatus.AlreadyApplied));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(20));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(20));
             Assert.That(f.Sink.OfType<RewardApplied>().Count, Is.EqualTo(0));
         }
 
@@ -157,8 +163,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(replay.AppliedDelta, Is.EqualTo(0));
             Assert.That(f.Sink.PublishedCount, Is.EqualTo(initialEvents + 1));
             Assert.That(f.Sink.OfType<RewardSkipped>()[0].ReasonCode, Is.EqualTo("ALREADY_APPLIED"));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(45));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(20));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(45));
             Assert.That(f.Rewards.AppliedRewardEventIds.Count, Is.EqualTo(1));
         }
 
@@ -167,14 +172,14 @@ namespace MathHorde.Tests.EditMode.GameLogic
         {
             var sink = new ReplaySink(); var clock = new GameClock();
             var resources = new ResourceService(sink, clock);
-            resources.Initialize(CombatTestFixtures.BuildLevel(startingShield: 20, maxShield: 200));
+            resources.Initialize(CombatTestFixtures.BuildLevel(startingHealth: 20, maxHealth: 200));
             sink.Rewards = new RewardService(resources, sink, clock, 1);
             sink.Resolution = Resolution();
             var result = sink.Rewards.ApplyReward(sink.Resolution);
             Assert.That(result.Status, Is.EqualTo(RewardApplicationStatus.Applied));
             Assert.That(sink.Replayed, Is.True);
             Assert.That(sink.Replay.Status, Is.EqualTo(RewardApplicationStatus.AlreadyApplied));
-            Assert.That(resources.GetCurrent(ResourceType.Shield), Is.EqualTo(45));
+            Assert.That(resources.GetCurrent(ResourceType.Health), Is.EqualTo(45));
         }
 
         [Test]
@@ -190,7 +195,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(f.Rewards.AppliedRewardEventIds.Count, Is.EqualTo(1));
             Assert.That(f.Rewards.ApplyReward(Resolution(1)).Status, Is.EqualTo(RewardApplicationStatus.AlreadyApplied));
             Assert.That(f.Rewards.ApplyReward(Resolution()).Status, Is.EqualTo(RewardApplicationStatus.Applied));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(70));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(70));
             f.Rewards.RestoreAppliedRewards(Array.Empty<Guid>());
             Assert.That(f.Rewards.AppliedRewardEventIds.Count, Is.EqualTo(0));
             Assert.That(f.Rewards.ApplyReward(Resolution()).Status, Is.EqualTo(RewardApplicationStatus.Applied));
@@ -209,7 +214,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             restored.RestoreAppliedRewards(journal);
             Assert.That(restored.ApplyReward(Resolution()).Status, Is.EqualTo(RewardApplicationStatus.AlreadyApplied));
             Assert.That(restored.ApplyReward(Resolution(1)).Status, Is.EqualTo(RewardApplicationStatus.AlreadyApplied));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(45));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(45));
         }
 
         [TestCase(ResourceType.Shield, 1, "COMBAT_REWARD", 20, 22)]
@@ -252,7 +257,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(() => f.Rewards.ApplyReward(Resolution(1)), Throws.TypeOf<InvalidOperationException>());
             Assert.That(f.Rewards.AppliedRewardEventIds.Count, Is.EqualTo(1));
             Assert.That(f.Sink.PublishedCount, Is.EqualTo(before));
-            Assert.That(f.Resources.GetCurrent(ResourceType.Shield), Is.EqualTo(45));
+            Assert.That(f.Resources.GetCurrent(ResourceType.Health), Is.EqualTo(45));
             f.Rewards.RestoreAppliedRewards(f.Rewards.AppliedRewardEventIds);
             Assert.That(f.Rewards.ApplyReward(Resolution(1)).Status, Is.EqualTo(RewardApplicationStatus.Applied));
         }
@@ -267,19 +272,19 @@ namespace MathHorde.Tests.EditMode.GameLogic
             // neither their fresh-service state nor the strict zero-byte oracle changes.
             var warmSink = new EmptySink(); var warmClock = new GameClock();
             var warmResources = new ResourceService(warmSink, warmClock);
-            warmResources.Initialize(CombatTestFixtures.BuildLevel(startingShield: 20, maxShield: 100000));
+            warmResources.Initialize(CombatTestFixtures.BuildLevel(startingHealth: 20, maxHealth: 100000));
             var warmRewards = new RewardService(warmResources, warmSink, warmClock, 100);
             for (int i = 0; i < 100; i++)
             {
                 var warmResolution = Resolution(i, 2, (GateResolutionOutcome)(i % 4));
                 warmRewards.ApplyReward(warmResolution); warmRewards.ApplyReward(warmResolution);
-                warmRewards.ApplyCombatReward(ResourceType.Shield, 1, "COMBAT_REWARD");
-                warmResources.TryConsume(ResourceType.Shield, 1, "WEAPON_FIRE", out _);
-                warmResources.GetMax(ResourceType.Shield); warmResources.CaptureSnapshot(ResourceType.Shield);
+                warmRewards.ApplyCombatReward(ResourceType.Health, 1, "COMBAT_REWARD");
+                warmResources.TryConsume(ResourceType.Health, 1, "WEAPON_FIRE", out _);
+                warmResources.GetMax(ResourceType.Health); warmResources.GetCurrent(ResourceType.Health);
             }
             var sink = new EmptySink(); var clock = new GameClock();
             var resources = new ResourceService(sink, clock);
-            resources.Initialize(CombatTestFixtures.BuildLevel(startingShield: 20, maxShield: 100000));
+            resources.Initialize(CombatTestFixtures.BuildLevel(startingHealth: 20, maxHealth: 100000));
             var rewards = new RewardService(resources, sink, clock, count);
             if (restore) rewards.RestoreAppliedRewards(new[] { MathEventId.Create(8, 0).Value });
             int applied = 0, duplicate = 0;
@@ -289,17 +294,17 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 var resolution = Resolution(i, 2, (GateResolutionOutcome)(i % 4));
                 if (rewards.ApplyReward(resolution).Status == RewardApplicationStatus.Applied) applied++;
                 if (rewards.ApplyReward(resolution).Status == RewardApplicationStatus.AlreadyApplied) duplicate++;
-                rewards.ApplyCombatReward(ResourceType.Shield, 1, "COMBAT_REWARD");
-                resources.TryConsume(ResourceType.Shield, 1, "WEAPON_FIRE", out _);
-                resources.GetMax(ResourceType.Shield);
-                resources.CaptureSnapshot(ResourceType.Shield);
+                rewards.ApplyCombatReward(ResourceType.Health, 1, "COMBAT_REWARD");
+                resources.TryConsume(ResourceType.Health, 1, "WEAPON_FIRE", out _);
+                resources.GetMax(ResourceType.Health);
+                resources.GetCurrent(ResourceType.Health);
             }
             long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
             Assert.That(allocated, Is.EqualTo(0));
             Assert.That(applied, Is.EqualTo(count / 4));
             Assert.That(duplicate, Is.EqualTo(count));
             Assert.That(rewards.AppliedRewardEventIds.Count, Is.EqualTo(count + (restore ? 1 : 0)));
-            Assert.That(resources.GetCurrent(ResourceType.Shield), Is.EqualTo(5020));
+            Assert.That(resources.GetCurrent(ResourceType.Health), Is.EqualTo(5020));
         }
     }
 }

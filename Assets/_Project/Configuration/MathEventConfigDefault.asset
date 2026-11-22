@@ -16,8 +16,8 @@ MonoBehaviour:
   _mathEventIntervalJitter: 0.15
   _mathEventCooldownSecondsFloor: 6
   _maxConcurrentMathEvents: 1
-  _gateSpawnDepth: 30
-  _decisionZoneDepth: 3
+  _gateSpawnDepth: 5
+  _decisionZoneDepth: 4.5
   _feedbackDisplaySeconds: 1.5
   _goalIconLeadSeconds: 2
   _maxConsecutiveSameProblemType: 2

@@ -7,10 +7,8 @@ namespace MathHorde.Presentation.Events
     {
         internal static void RequireActive(ActiveMathEvent item)
         {
-            ResourceRules.RequireActive(item.RewardResource);
-            if (item.Problem != null) ResourceRules.RequireActive(item.Problem.Reward.Resource);
-            if (item.ResourceGate.HasValue)
-                ResourceRules.RequireActive(item.ResourceGate.Value.Prepared.Reward.Resource);
+            string error = ResourceRules.ValidateRewardPair(item.RewardResource, item.Problem?.Reward.Resource ?? item.RewardResource);
+            if (error != null) throw new System.ArgumentException(error);
         }
     }
 }

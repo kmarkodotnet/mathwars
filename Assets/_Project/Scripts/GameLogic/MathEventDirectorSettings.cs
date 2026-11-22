@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using MathHorde.Core.Problems;
+using MathHorde.MathEngine;
 
 namespace MathHorde.GameLogic
 {
     public sealed class MathEventDirectorSettings
     {
+        public GateGenerationLimits GateLimits { get; }
         public int MaxConcurrentMathEvents { get; }
         public float GateSpawnDepth { get; }
         public float DecisionZoneDepth { get; }
@@ -17,6 +19,7 @@ namespace MathHorde.GameLogic
 
         public MathEventDirectorSettings(int maxConcurrentMathEvents, float gateSpawnDepth,
             float decisionZoneDepth, float gateApproachSpeed, float feedbackDisplaySeconds,
+            GateGenerationLimits gateLimits,
             IReadOnlyDictionary<int, RewardSpec> rewardsByScheduleIndex,
             IReadOnlyDictionary<int, int> targetsByScheduleIndex = null)
         {
@@ -27,6 +30,7 @@ namespace MathHorde.GameLogic
             Range(feedbackDisplaySeconds, 0.5f, 5f, nameof(feedbackDisplaySeconds));
             if (gateSpawnDepth <= decisionZoneDepth) throw new ArgumentException("Spawn must be beyond the decision zone.", nameof(gateSpawnDepth));
             if (rewardsByScheduleIndex == null) throw new ArgumentNullException(nameof(rewardsByScheduleIndex));
+            GateLimits = gateLimits;
             MaxConcurrentMathEvents = maxConcurrentMathEvents; GateSpawnDepth = gateSpawnDepth;
             DecisionZoneDepth = decisionZoneDepth; GateApproachSpeed = gateApproachSpeed; FeedbackDisplaySeconds = feedbackDisplaySeconds;
             var rewards = new Dictionary<int, RewardSpec>();

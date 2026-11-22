@@ -107,16 +107,16 @@ namespace MathHorde.Tests.PlayMode.Integration
         {
             var waves = new[] { new WaveDefinition(0, 0, 1000, spawns: new[]
             { new WaveSpawnEntry("basic_bot", 20, 0.05f, new[] { new LaneIndex(0) }) }) };
-            var level = BuildLevel(waves, new[] { new MathEventScheduleEntry(0, type, 0.05f, 2f, ResourceType.Shield, GateGoal.Maximize) });
+            var level = BuildLevel(waves, new[] { new MathEventScheduleEntry(0, type, 0.05f, 2f, ResourceType.Health, GateGoal.Maximize) });
             var profile = new DifficultyProfile(4, 4, 4, 4,
-                new[] { BinaryOperator.Addition, BinaryOperator.Modulo }, (SkillTag[])System.Enum.GetValues(typeof(SkillTag)),
+                new[] { BinaryOperator.Addition, BinaryOperator.Subtraction }, (SkillTag[])System.Enum.GetValues(typeof(SkillTag)),
                 0, 500, 2000, 2, 2, false, 0, false, 0, false, 2, 2f, 1, true);
             var bus = new GameEventBus(); var clock = new UnityGameClock();
             var resources = new ResourceService(bus, clock);
             var combat = new CombatService(resources, bus);
             bool gate = type == ProblemType.ResourceOperationComparison;
-            var settings = new MathEventDirectorSettings(1, 5f, 3f, 20f, 1f,
-                new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Shield, gate ? 0 : 10, gate) });
+            var settings = new MathEventDirectorSettings(1, 5f, 3f, 20f, 1f, new MathHorde.MathEngine.GateGenerationLimits(1, 100, 2, 4),
+                new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Health, 10) });
             var director = new MathEventDirector(resources, bus, settings);
             var session = new GameSessionService(clock, new WaveDirector(), combat, director, resources, bus);
             var enemy = new EnemyDefinition("basic_bot", EnemyType.Basic, 1000, 1f, 5, 1f, "prefab_basic_bot");
@@ -150,8 +150,7 @@ namespace MathHorde.Tests.PlayMode.Integration
                     if (!sawSpawn && active.State == MathEventState.Approaching)
                     {
                         sawSpawn = true;
-                        snapshot = active.SnapshotValue;
-                        if (gate) Assert.That(snapshot, Is.EqualTo(resources.GetCurrent(ResourceType.Shield)), "Snapshot must follow this frame's combat.");
+                        snapshot = active.GateBaseValue;
                     }
                     if (active.State == MathEventState.AwaitingDecision)
                     {
@@ -169,17 +168,13 @@ namespace MathHorde.Tests.PlayMode.Integration
             Assert.That(shots, Is.GreaterThan(shotsAtDecision));
             Assert.That(combat.ActiveEnemies.Count, Is.GreaterThan(0)); Assert.That(session.IsRunning, Is.True);
             Assert.That(clock.IsPaused, Is.False); Assert.That(diagnostics, Is.EqualTo(0));
-            if (gate) Assert.That(active.ResourceGate.Value.SnapshotValue, Is.EqualTo(snapshot));
             double beforePause = clock.GameTime, deadline = active.DeadlineGameTime;
             session.Pause(); session.Tick(0.5f);
             Assert.That(clock.GameTime, Is.EqualTo(beforePause)); Assert.That(active.DeadlineGameTime, Is.EqualTo(deadline));
             session.Resume();
             LaneIndex selectedLane = default;
-            if (gate)
-                selectedLane = active.ResourceGate.Value.Template.Options[active.ResourceGate.Value.CorrectOptionIndex].Lane;
-            else
-                foreach (var option in active.Problem.Options)
-                    if (option.IsCorrect) selectedLane = option.Lane;
+            foreach (var option in active.Problem.Options)
+                if (option.IsCorrect) selectedLane = option.Lane;
             director.OnPlayerLaneSelected(selectedLane, clock.GameTime);
             Assert.That(active.State, Is.EqualTo(MathEventState.Resolving));
             Assert.That(director.PendingResolutions.Count, Is.EqualTo(1));
@@ -187,17 +182,17 @@ namespace MathHorde.Tests.PlayMode.Integration
             var resolver = new GateResolutionService(bus, 1);
             var rewards = new RewardService(resources, bus, clock, 1);
             var resolution = resolver.Resolve(director.PendingResolutions[0], active);
-            int beforeReward = resources.GetCurrent(ResourceType.Shield);
+            int beforeReward = resources.GetCurrent(ResourceType.Health);
             var application = rewards.ApplyReward(resolution);
             Assert.That(application.Status, Is.EqualTo(RewardApplicationStatus.Applied));
             Assert.That(application.RequestedDelta, Is.EqualTo(resolution.RewardDelta));
-            Assert.That(resources.GetCurrent(ResourceType.Shield), Is.EqualTo(beforeReward + application.AppliedDelta));
+            Assert.That(resources.GetCurrent(ResourceType.Health), Is.EqualTo(beforeReward + application.AppliedDelta));
             director.OnRewardProcessed(application, clock.GameTime);
             Assert.That(active.State, Is.EqualTo(MathEventState.Completed));
             var restoredRewards = new RewardService(resources, bus, clock, 1);
             restoredRewards.RestoreAppliedRewards(rewards.AppliedRewardEventIds);
             Assert.That(restoredRewards.ApplyReward(resolution).Status, Is.EqualTo(RewardApplicationStatus.AlreadyApplied));
-            Assert.That(resources.GetCurrent(ResourceType.Shield), Is.EqualTo(beforeReward + application.AppliedDelta));
+            Assert.That(resources.GetCurrent(ResourceType.Health), Is.EqualTo(beforeReward + application.AppliedDelta));
         }
 
         [UnityTest]

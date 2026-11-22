@@ -29,14 +29,14 @@ namespace MathHorde.GameLogic.Events
     public readonly struct MathEventGatesSpawned : IGameEvent
     {
         public MathEventId EventId { get; }
-        public int SnapshotValue { get; }
-        public ResourceType SnapshotResource { get; }
+        public int GateBaseValue { get; }
+        public ResourceType RewardResource { get; }
         public double GameTime { get; }
-        public MathEventGatesSpawned(MathEventId eventId, int snapshotValue, ResourceType snapshotResource, double gameTime)
+        public MathEventGatesSpawned(MathEventId eventId, int gateBaseValue, ResourceType rewardResource, double gameTime)
         {
             EventId = eventId;
-            SnapshotValue = snapshotValue;
-            SnapshotResource = snapshotResource;
+            GateBaseValue = gateBaseValue;
+            RewardResource = rewardResource;
             GameTime = gameTime;
         }
     }

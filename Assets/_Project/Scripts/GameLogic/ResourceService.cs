@@ -102,6 +102,9 @@ namespace MathHorde.GameLogic
 
         public ResourceChange ApplyDelta(ResourceType type, int delta, string reasonCode)
         {
+            ResourceRules.RequireActive(type);
+            if (reasonCode == "MATH_GATE" && type != ResourceType.Health)
+                throw new ArgumentException("REWARD_RESOURCE_NOT_ALLOWED", nameof(type));
             var pool = GetPoolOrDefault(type);
             int previous = pool.Current;
             long rawTarget = (long)previous + delta;
@@ -155,12 +158,7 @@ namespace MathHorde.GameLogic
             return PublishChange(type, previous, clampedCurrent, requestedDelta: 0, clampedCurrent - previous, wasClamped, reasonCode);
         }
 
-        public int CaptureSnapshot(ResourceType type)
-        {
-            // The returned value is the snapshot. Retaining another dictionary
-            // copy serves no reader and would allocate on the first math Tick.
-            return GetCurrent(type);
-        }
+
 
         private PoolValues GetPoolOrDefault(ResourceType type)
         {

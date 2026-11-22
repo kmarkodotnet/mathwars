@@ -176,16 +176,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(change.WasClamped, Is.True);
         }
 
-        [Test]
-        public void CaptureSnapshot_ReturnsCurrentValue()
-        {
-            var service = CreateService(out _, out _);
-            service.Initialize(BuildLevel(startingShield: 20));
 
-            int snapshot = service.CaptureSnapshot(ResourceType.Shield);
-
-            Assert.That(snapshot, Is.EqualTo(20));
-        }
 
         [Test]
         public void State_IsCachedUntilMutation_AndPreviousSnapshotsRemainImmutable()
@@ -194,7 +185,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             service.Initialize(BuildLevel(startingShield: 20));
             var original = service.State;
             Assert.That(service.State, Is.SameAs(original));
-            service.ApplyDelta(ResourceType.Shield, 25, "MATH_GATE");
+            service.ApplyDelta(ResourceType.Shield, 25, "BOSS_PHASE");
             var updated = service.State;
             Assert.That(updated.GetCurrent(ResourceType.Shield), Is.EqualTo(45));
             Assert.That(original.GetCurrent(ResourceType.Shield), Is.EqualTo(20));
@@ -216,7 +207,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
             Assert.That(empty.Pools.Count, Is.EqualTo(0));
             Assert.That(service.GetCurrent(ResourceType.Energy), Is.EqualTo(0));
             Assert.That(service.GetMax(ResourceType.Energy), Is.EqualTo(0));
-            service.ApplyDelta(ResourceType.Energy, 10, "MATH_GATE");
+            service.ApplyDelta(ResourceType.Energy, 10, "PICKUP");
             Assert.That(service.GetCurrent(ResourceType.Energy), Is.EqualTo(10));
             Assert.That(service.GetMax(ResourceType.Energy), Is.EqualTo(int.MaxValue));
             Assert.That(service.State.Pools.Count, Is.EqualTo(1));
@@ -224,42 +215,15 @@ namespace MathHorde.Tests.EditMode.GameLogic
         }
 
         [Test]
-        public void SnapshotBasedGateReward_ReferenceScenario_MatchesContract()
+        public void MathRewardIsHealthOnly_AndFixedRewardAddsToLivePool()
         {
-            // Contract game-logic.md 2.2:
-            //   Initialize: Shield = 20 (Max 200)
-            //   CaptureSnapshot(Shield) -> 20
-            //   harc: TryConsume(Shield, 1, "WEAPON_FIRE") x 12 -> Current = 8
-            //   GateResolution: operationResult = 45, snapshot = 20 => delta = +25
-            //   ApplyDelta(Shield, +25, "MATH_GATE") -> PreviousValue = 8, NewValue = 33, WasClamped = false
             var service = CreateService(out _, out _);
-            service.Initialize(BuildLevel(startingShield: 20, shieldCapacity: 200));
-
-            int snapshot = service.CaptureSnapshot(ResourceType.Shield);
-            Assert.That(snapshot, Is.EqualTo(20));
-
-            for (int i = 0; i < 12; i++)
-            {
-                bool consumed = service.TryConsume(ResourceType.Shield, 1, "WEAPON_FIRE", out _);
-                Assert.That(consumed, Is.True);
-            }
-
-            Assert.That(service.GetCurrent(ResourceType.Shield), Is.EqualTo(8));
-
-            // The math gate ("x2 vs +25") resolved to the +25 option, whose
-            // operation result is 45; the reward is the delta against the
-            // SNAPSHOT (20), not against whatever the live value drifted to
-            // during combat — this is the whole point of CaptureSnapshot.
-            const int operationResult = 45;
-            int rewardDelta = operationResult - snapshot;
-            Assert.That(rewardDelta, Is.EqualTo(25));
-
-            var change = service.ApplyDelta(ResourceType.Shield, rewardDelta, "MATH_GATE");
-
-            Assert.That(change.PreviousValue, Is.EqualTo(8));
-            Assert.That(change.NewValue, Is.EqualTo(33));
-            Assert.That(change.WasClamped, Is.False);
-            Assert.That(service.GetCurrent(ResourceType.Shield), Is.EqualTo(33));
+            service.Initialize(BuildLevel());
+            Assert.That(() => service.ApplyDelta(ResourceType.Shield, 30, "MATH_GATE"), Throws.TypeOf<System.ArgumentException>());
+            service.TryConsume(ResourceType.Health, 12, "ENEMY_CONTACT", out _);
+            int before = service.GetCurrent(ResourceType.Health);
+            var result = service.ApplyDelta(ResourceType.Health, 30, "MATH_GATE");
+            Assert.That(result.NewValue, Is.EqualTo(System.Math.Min(service.GetMax(ResourceType.Health), before + 30)));
         }
 
         [Test]

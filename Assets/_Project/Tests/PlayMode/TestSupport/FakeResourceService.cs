@@ -39,8 +39,6 @@ namespace MathHorde.Tests.PlayMode.TestSupport
         public ResourceChange SetMax(ResourceType type, int newMax, string reasonCode) =>
             throw new NotSupportedException("Presentation nem hívhat SetMax-ot (contract game-logic.md 2.1).");
 
-        public int CaptureSnapshot(ResourceType type) =>
-            throw new NotSupportedException("Presentation nem hívhat CaptureSnapshot-ot.");
 
         public void Initialize(LevelDefinition level) =>
             throw new NotSupportedException("Csak a GameSessionService hívhatja (contract game-logic.md 2.).");

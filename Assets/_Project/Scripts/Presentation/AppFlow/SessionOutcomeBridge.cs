@@ -30,11 +30,14 @@ namespace MathHorde.Presentation.AppFlow
         private readonly IGameEventSource _eventSource;
         private readonly IAppStateMachine _stateMachine;
         private bool _disposed;
+        private readonly bool _defer;
+        private SessionEnded? _pending;
 
-        public SessionOutcomeBridge(IGameEventSource eventSource, IAppStateMachine stateMachine)
+        public SessionOutcomeBridge(IGameEventSource eventSource, IAppStateMachine stateMachine, bool defer = false)
         {
             _eventSource = eventSource ?? throw new ArgumentNullException(nameof(eventSource));
             _stateMachine = stateMachine ?? throw new ArgumentNullException(nameof(stateMachine));
+            _defer = defer;
 
             _eventSource.Subscribe<SessionEnded>(HandleSessionEnded);
         }
@@ -51,6 +54,20 @@ namespace MathHorde.Presentation.AppFlow
         }
 
         private void HandleSessionEnded(SessionEnded e)
+        {
+            if (_defer) { _pending = e; return; }
+            Apply(e);
+        }
+
+        public void RenderPending()
+        {
+            if (!_pending.HasValue) return;
+            var ended = _pending.Value;
+            Apply(ended);
+            _pending = null;
+        }
+
+        private void Apply(SessionEnded e)
         {
             AppTrigger trigger = e.Result == SessionResult.Victory
                 ? AppTrigger.VictoryConditionMet

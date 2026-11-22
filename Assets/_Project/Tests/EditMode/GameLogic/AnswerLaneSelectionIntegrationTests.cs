@@ -41,7 +41,6 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 Assert.That(active.State, Is.EqualTo(MathEventState.Preview));
                 Assert.That(active.Problem, Is.SameAs(original));
                 Assert.That(active.Carriers.Count, Is.EqualTo(0));
-                Assert.That(active.ResourceGate, Is.Null);
                 var preview = sink.OfType<MathEventPreviewStarted>().Single();
                 Assert.That(preview.ProblemId, Is.EqualTo(original.Id));
                 Assert.That(preview.DisplayExpression, Is.EqualTo(original.Expression.ToDisplayString() + " = ?"));
@@ -56,8 +55,7 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 Assert.That(active.Carriers.Count, Is.EqualTo(count));
                 Assert.That(active.Problem, Is.SameAs(original));
                 Assert.That(original.Reward.FlatAmount, Is.EqualTo(30));
-                Assert.That(original.Reward.UseSnapshotDelta, Is.False);
-                Assert.That(original.ResourceCapacity, Is.Null);
+                Assert.That(original.GateBaseValue, Is.Null);
 
                 foreach (var carrier in active.Carriers)
                 {
@@ -180,8 +178,8 @@ namespace MathHorde.Tests.EditMode.GameLogic
                 {
                     new MathEventScheduleEntry(0, ProblemType.AnswerLaneSelection, 1f, 0f, ResourceType.Health, GateGoal.Maximize)
                 });
-                var settings = new MathEventDirectorSettings(1, 5f, 3f, 2f, 1f,
-                    new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Health, 30, false) });
+                var settings = new MathEventDirectorSettings(1, 5f, 3f, 2f, 1f, new MathHorde.MathEngine.GateGenerationLimits(1, 100, 2, 4),
+                    new Dictionary<int, RewardSpec> { [0] = new RewardSpec(ResourceType.Health, 30) });
                 Resources = new ResourceService(sink, clock);
                 Resources.Initialize(level);
                 Resolver = new GateResolutionService(sink, 1);
@@ -196,7 +194,8 @@ namespace MathHorde.Tests.EditMode.GameLogic
         private sealed class CountingGenerator : IMathProblemGenerator
         {
             private readonly MathProblemGenerator _inner = new MathProblemGenerator();
-            internal int Generates, ResourceCalls;
+            internal int Generates;
+            internal int ResourceCalls => 0;
             internal ProblemGenerationRequest Request;
             internal MathProblem Problem;
             public Result<MathProblem> Generate(ProblemGenerationRequest request)
@@ -208,10 +207,6 @@ namespace MathHorde.Tests.EditMode.GameLogic
             }
             public IReadOnlyList<Result<MathProblem>> GenerateBatch(ProblemGenerationRequest request, int count)
                 => _inner.GenerateBatch(request, count);
-            public Result<PreparedResourceGate> PrepareResourceGate(ResourceGatePreparationRequest request)
-            { ResourceCalls++; return _inner.PrepareResourceGate(request); }
-            public Result<ResourceGateBinding> BindResourceGate(PreparedResourceGate prepared, int snapshot, int capacity)
-            { ResourceCalls++; return _inner.BindResourceGate(prepared, snapshot, capacity); }
         }
 
         private sealed class EmptySink : IGameEventSink

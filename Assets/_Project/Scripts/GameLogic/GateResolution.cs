@@ -19,7 +19,7 @@ namespace MathHorde.GameLogic
         public bool WasCorrect { get; }
         public int SelectedOptionIndex { get; }
         public int OperationResult { get; }
-        public int SnapshotValue { get; }
+        public int GateBaseValue { get; }
         public int RewardDelta { get; }
         public ResourceType Resource { get; }
 
@@ -27,7 +27,7 @@ namespace MathHorde.GameLogic
         public MathAnswerSnapshot Answer { get; }
 
         public GateResolution(MathEventId eventId, GateResolutionOutcome outcome, bool wasCorrect,
-            int selectedOptionIndex, int operationResult, int snapshotValue, int rewardDelta,
+            int selectedOptionIndex, int operationResult, int gateBaseValue, int rewardDelta,
             ResourceType resource, MathAnswerSnapshot answer)
         {
             EventId = eventId;
@@ -35,7 +35,7 @@ namespace MathHorde.GameLogic
             WasCorrect = wasCorrect;
             SelectedOptionIndex = selectedOptionIndex;
             OperationResult = operationResult;
-            SnapshotValue = snapshotValue;
+            GateBaseValue = gateBaseValue;
             RewardDelta = rewardDelta;
             Resource = resource;
             Answer = answer;

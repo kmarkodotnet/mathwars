@@ -59,6 +59,8 @@ namespace MathHorde.GameLogic
 
         public RewardApplication ApplyReward(in GateResolution resolution)
         {
+            if (resolution.Resource != Core.Resources.ResourceType.Health)
+                throw new ArgumentException(resolution.Resource == Core.Resources.ResourceType.Ammo ? "AMMO_NOT_ALLOWED" : "REWARD_RESOURCE_NOT_ALLOWED", nameof(resolution));
             ResourceRules.RequireActive(resolution.Resource);
             if (_appliedRewards.Contains(resolution.EventId))
                 return Skip(resolution, RewardApplicationStatus.AlreadyApplied, "ALREADY_APPLIED");
@@ -80,8 +82,7 @@ namespace MathHorde.GameLogic
                     return Skip(resolution, RewardApplicationStatus.AlreadyApplied, "ALREADY_APPLIED");
             }
 
-            // Keep the raw mathematical delta. Only the resource service clamps against
-            // the current live pool; the captured gate snapshot is never written back.
+            // Apply the configured fixed amount to the live pool. Only ResourceService clamps.
             var change = _resources.ApplyDelta(resolution.Resource, resolution.RewardDelta, "MATH_GATE");
             _events.Publish(new RewardApplied(resolution.EventId, resolution.Resource,
                 change.AppliedDelta, _clock.GameTime));

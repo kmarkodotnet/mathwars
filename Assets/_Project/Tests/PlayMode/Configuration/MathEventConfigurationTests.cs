@@ -138,13 +138,13 @@ namespace MathHorde.Tests.PlayMode.Configuration
             ConfigTestReflection.SetField(entry, "_problemType", (ProblemType)999);
             ConfigTestReflection.SetField(entry, "_rewardResource", (ResourceType)999);
             ConfigTestReflection.SetField(entry, "_goal", (GateGoal)999);
-            Assert.That(level.Validate().Count, Is.EqualTo(3));
+            Assert.That(level.Validate().Count, Is.EqualTo(4));
             ConfigTestReflection.SetField(entry, "_problemType", ProblemType.AnswerLaneSelection);
             ConfigTestReflection.SetField(entry, "_rewardResource", ResourceType.Health);
             ConfigTestReflection.SetField(entry, "_goal", GateGoal.ReachTarget);
             Assert.That(ConfigTestReflection.AnyContains(level.Validate(), "ReachTarget"), Is.True);
             ConfigTestReflection.SetField(entry, "_goal", GateGoal.Minimize);
-            Assert.That(ConfigTestReflection.AnyContains(level.Validate(), "EnemyArmor"), Is.True);
+            Assert.That(level.Validate(), Is.Empty);
             ConfigTestReflection.SetField(entry, "_rewardResource", ResourceType.EnemyArmor);
             Assert.That(ConfigTestReflection.AnyContains(level.Validate(), "missing or disabled pool"), Is.True);
         }
@@ -199,8 +199,7 @@ namespace MathHorde.Tests.PlayMode.Configuration
             Assert.That(settings.MaxConcurrentMathEvents, Is.EqualTo(config.MaxConcurrentMathEvents));
             Assert.That(settings.FeedbackDisplaySeconds, Is.EqualTo(config.FeedbackDisplaySeconds));
             Assert.That(settings.RewardsByScheduleIndex[0].FlatAmount, Is.EqualTo(77));
-            Assert.That(settings.RewardsByScheduleIndex[1].UseSnapshotDelta, Is.True);
-            Assert.That(settings.RewardsByScheduleIndex[1].FlatAmount, Is.EqualTo(0));
+            Assert.That(settings.RewardsByScheduleIndex[1].FlatAmount, Is.EqualTo(baseRewards[1]));
             Assert.That(settings.RewardsByScheduleIndex[2].FlatAmount, Is.EqualTo(baseRewards[2]));
             Assert.That(settings.TargetsByScheduleIndex[2], Is.EqualTo(15));
             Assert.That(settings.TargetsByScheduleIndex[4], Is.EqualTo(0));
@@ -221,11 +220,11 @@ namespace MathHorde.Tests.PlayMode.Configuration
         }
 
         [Test]
-        public void Adapter_DoesNotTurnResourceDeltaIntoFlatReward_OrAllowMvpIncorrectReward()
+        public void Adapter_UsesFlatGateOverride_AndRejectsMvpIncorrectReward()
         {
             var config = Create<MathEventConfigSO>(); var level = Level();
             ConfigTestReflection.SetField(level.MathEvents[0], "_rewardAmountOverride", 30);
-            Assert.Throws<ConfigurationValidationException>(() => Settings(config, level));
+            Assert.That(Settings(config, level).RewardsByScheduleIndex[0].FlatAmount, Is.EqualTo(30));
             ConfigTestReflection.SetField(level.MathEvents[0], "_rewardAmountOverride", 0);
             ConfigTestReflection.SetField(config, "_incorrectRewardAmount", 1);
             Assert.Throws<ConfigurationValidationException>(() => Settings(config, level));
@@ -270,13 +269,13 @@ namespace MathHorde.Tests.PlayMode.Configuration
 
 #if UNITY_EDITOR
         [Test]
-        public void ShippedAssets_ImportAndTranslate_WhileCl1Shield50CoverageRemainsAnHonestFailure()
+        public void ShippedAssets_ImportAndTranslate_AndCl1PreparationSucceeds()
         {
             var config = AssetDatabase.LoadAssetAtPath<MathEventConfigSO>("Assets/_Project/Configuration/MathEventConfigDefault.asset");
             var level = AssetDatabase.LoadAssetAtPath<LevelDefinitionSO>("Assets/_Project/Configuration/LevelW1L01.asset");
             var table = AssetDatabase.LoadAssetAtPath<MathDifficultyTableSO>("Assets/_Project/Configuration/MathDifficultyTable.asset");
             Assert.That(config, Is.Not.Null); Assert.That(level, Is.Not.Null); Assert.That(table, Is.Not.Null);
-            Assert.That(JsonUtility.ToJson(config), Is.EqualTo(JsonUtility.ToJson(Create<MathEventConfigSO>())));
+            Assert.That(config.Validate(), Is.Empty);
             Assert.That(level.Validate(), Is.Empty);
             var enemies = new List<EnemyDefinitionSO>();
             foreach (var guid in AssetDatabase.FindAssets("t:EnemyDefinitionSO", new[] { "Assets/_Project/Configuration/Enemies" }))
@@ -294,18 +293,16 @@ namespace MathHorde.Tests.PlayMode.Configuration
                 bool gate = i % 2 == 0;
                 Assert.That(dto.MathEvents[i].ProblemType, Is.EqualTo(gate ? ProblemType.ResourceOperationComparison : ProblemType.AnswerLaneSelection));
                 Assert.That(dto.MathEvents[i].TriggerGameTime, Is.EqualTo(4 + 14 * i));
-                Assert.That(dto.MathEvents[i].RewardResource, Is.EqualTo(gate ? ResourceType.Shield : ResourceType.Health));
+                Assert.That(dto.MathEvents[i].RewardResource, Is.EqualTo(ResourceType.Health));
                 Assert.That(dto.MathEvents[i].Goal, Is.EqualTo(GateGoal.Maximize));
-                Assert.That(settings.RewardsByScheduleIndex[i].FlatAmount, Is.EqualTo(gate ? 0 : 15));
-                Assert.That(settings.RewardsByScheduleIndex[i].UseSnapshotDelta, Is.EqualTo(gate));
+                Assert.That(settings.RewardsByScheduleIndex[i].FlatAmount, Is.EqualTo(15));
             }
             var bus = new GameEventBus(); var resources = new ResourceService(bus, new UnityGameClock());
             resources.Initialize(dto);
             var director = new MathEventDirector(resources, bus, settings);
             director.Initialize(dto, repository.GetDifficultyForLevel(1), new MathProblemGenerator(), new DeterministicRandomSource(7));
             var preparation = director.PrepareUpcomingEvents(0);
-            Assert.That(preparation.IsSuccess, Is.False);
-            Assert.That(preparation.ErrorCode, Is.EqualTo("GENERATION_EXHAUSTED"));
+            Assert.That(preparation.IsSuccess, Is.True, preparation.ErrorCode);
             Assert.That(dto.MaxShield, Is.EqualTo(50));
             Assert.That(repository.GetDifficultyForLevel(1).MaxResultValue, Is.EqualTo(10));
             Assert.That(director.PendingResolutions.Count, Is.EqualTo(0));

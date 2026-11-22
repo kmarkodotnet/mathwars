@@ -64,8 +64,8 @@ namespace MathHorde.Core.Problems
         /// <summary>TargetValueSelection or a ReachTarget resource gate.</summary>
         public int? TargetValue { get; }
 
-        /// <summary>Captured resource pool maximum. Candidate validity is checked by ProblemValidator.</summary>
-        public int? ResourceCapacity { get; }
+        /// <summary>Generated common operand; never live resource state. Validated by ProblemValidator.</summary>
+        public int? GateBaseValue { get; }
 
         /// <summary>Optional; may be null (spec 6.5).</summary>
         public string Explanation { get; }
@@ -85,7 +85,7 @@ namespace MathHorde.Core.Problems
             GateGoal goal,
             int? targetValue,
             string explanation,
-            int? resourceCapacity = null)
+            int? gateBaseValue = null)
         {
             if (expression == null)
             {
@@ -133,15 +133,19 @@ namespace MathHorde.Core.Problems
             Expression = expression;
             DisplayExpression = displayExpression;
             CorrectAnswer = correctAnswer;
-            Options = options;
+            var copiedOptions = new AnswerOption[options.Count];
+            for (int i = 0; i < copiedOptions.Length; i++) copiedOptions[i] = options[i];
+            Options = Array.AsReadOnly(copiedOptions);
             DifficultyLevel = difficultyLevel;
-            SkillTags = skillTags;
+            var copiedTags = new SkillTag[skillTags.Count];
+            for (int i = 0; i < copiedTags.Length; i++) copiedTags[i] = skillTags[i];
+            SkillTags = Array.AsReadOnly(copiedTags);
             ThinkTimeSeconds = thinkTimeSeconds;
             Reward = reward;
             Seed = seed;
             Goal = goal;
             TargetValue = targetValue;
-            ResourceCapacity = resourceCapacity;
+            GateBaseValue = gateBaseValue;
             Explanation = explanation;
         }
     }

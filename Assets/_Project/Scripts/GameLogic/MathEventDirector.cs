@@ -78,53 +78,40 @@ namespace MathHorde.GameLogic
             for (int i = 0; i < _schedule.Length; i++)
             {
                 var s = _schedule[i];
-                if (s.View.Machine.IsTerminal || s.View.ResourceGate.HasValue || s.View.State == MathEventState.Resolving) continue;
-                bool gate = s.Entry.ProblemType == ProblemType.ResourceOperationComparison;
-                int capacity = gate ? _resources.GetMax(s.Entry.RewardResource) : 0;
-                if (!s.Attempted || (gate && capacity != s.PreparedCapacity))
+                if (s.View.Machine.IsTerminal || s.View.State == MathEventState.Resolving) continue;
+                if (!s.Attempted)
                 {
-                    s.Attempted = true; s.PreparedCapacity = capacity; s.Prepared = null; s.Problem = null;
-                    s.Error = Prepare(s, capacity);
+                    s.Attempted = true;
+                    s.Error = Prepare(s);
                 }
                 if (s.Error != null && firstError == null) firstError = s.Error;
             }
             return firstError == null ? Result<bool>.Ok(true) : Result<bool>.Fail(firstError);
         }
 
-        private string Prepare(ScheduledEvent s, int capacity)
+        private string Prepare(ScheduledEvent s)
         {
             var e = s.Entry;
             bool gate = e.ProblemType == ProblemType.ResourceOperationComparison;
             if (!_settings.RewardsByScheduleIndex.TryGetValue(s.Index, out var reward) || reward == null
-                || reward.Resource != e.RewardResource || reward.UseSnapshotDelta != gate || reward.IncorrectAmount != 0
-                || (!gate && reward.FlatAmount <= 0) || !Enum.IsDefined(typeof(ProblemType), e.ProblemType)
-                || !Enum.IsDefined(typeof(GateGoal), e.Goal)) return "MATH_EVENT_CONFIG_INVALID";
+                || reward.IncorrectAmount != 0 || reward.FlatAmount <= 0
+                || !Enum.IsDefined(typeof(ProblemType), e.ProblemType) || !Enum.IsDefined(typeof(GateGoal), e.Goal))
+                return "MATH_EVENT_CONFIG_INVALID";
+            string rewardError = Core.Resources.ResourceRules.ValidateRewardPair(e.RewardResource, reward.Resource);
+            if (rewardError != null) return rewardError;
             bool needsTarget = e.ProblemType == ProblemType.TargetValueSelection || (gate && e.Goal == GateGoal.ReachTarget);
             if (needsTarget && !s.View.TargetValue.HasValue) return "GATE_TARGET_MISSING";
             if (!needsTarget && s.View.TargetValue.HasValue) return "MATH_EVENT_CONFIG_INVALID";
-            if (gate)
+            var result = _generator.Generate(new ProblemGenerationRequest
             {
-                if (capacity <= 0) return "GATE_CAPACITY_INVALID";
-                var result = _generator.PrepareResourceGate(new ResourceGatePreparationRequest
-                {
-                    Seed = s.Seed, Difficulty = _difficulty, LaneCount = _level.LaneCount,
-                    ThinkTimeSeconds = s.BaseThinkTime, RewardResource = e.RewardResource, Reward = reward,
-                    Goal = e.Goal, TargetValue = s.View.TargetValue, ResourceCapacity = capacity,
-                });
-                if (!result.IsSuccess) return result.ErrorCode;
-                s.Prepared = result.Value;
-            }
-            else
-            {
-                var result = _generator.Generate(new ProblemGenerationRequest
-                {
-                    Seed = s.Seed, Type = e.ProblemType, Difficulty = _difficulty, LaneCount = _level.LaneCount,
-                    ThinkTimeSeconds = s.BaseThinkTime, RewardResource = e.RewardResource, Reward = reward,
-                    Goal = e.Goal, TargetValue = s.View.TargetValue,
-                });
-                if (!result.IsSuccess) return result.ErrorCode;
-                s.Problem = result.Value;
-            }
+                Seed = s.Seed, Type = e.ProblemType, Difficulty = _difficulty, LaneCount = _level.LaneCount,
+                ThinkTimeSeconds = s.BaseThinkTime, RewardResource = e.RewardResource, Reward = reward,
+                Goal = e.Goal, TargetValue = s.View.TargetValue,
+                GateLimits = gate ? _settings.GateLimits : (GateGenerationLimits?)null,
+            });
+            if (!result.IsSuccess) return result.ErrorCode;
+            s.Problem = result.Value;
+            s.View.RewardAmount = reward.FlatAmount;
             return null;
         }
 
@@ -147,12 +134,12 @@ namespace MathHorde.GameLogic
                 var s = _schedule[i]; var v = s.View;
                 if (v.State == MathEventState.Inactive && s.Entry.TriggerGameTime <= gameTime && occupied < _settings.MaxConcurrentMathEvents)
                 {
-                    if (!s.Attempted || (s.Prepared == null && s.Problem == null))
+                    if (!s.Attempted || s.Problem == null)
                     { PreparationFailed(s, "MATH_EVENT_NOT_PREPARED", gameTime); continue; }
                     v.PreviewStartedAt = gameTime;
                     s.EffectiveThinkTime = (double)s.BaseThinkTime * _thinkMultiplier;
                     s.EffectiveSpeed = (double)_settings.GateApproachSpeed * _speedMultiplier;
-                    v.Problem = s.Problem;
+                    v.Problem = v.Type == ProblemType.ResourceOperationComparison ? null : s.Problem;
                     v.Machine.Fire(MathEventTrigger.Schedule, gameTime);
                     _active.Add(v); occupied++;
                     _events.Publish(new MathEventPreviewStarted(v.EventId, v.Type, v.ProblemId,
@@ -160,18 +147,11 @@ namespace MathHorde.GameLogic
                 }
                 if (v.State == MathEventState.Preview && gameTime >= v.PreviewStartedAt + s.Entry.PreviewDurationSeconds)
                 {
-                    if (v.Type == ProblemType.ResourceOperationComparison)
-                    {
-                        int snapshot = _resources.CaptureSnapshot(v.SnapshotResource);
-                        int capacity = _resources.GetMax(v.SnapshotResource);
-                        var binding = _generator.BindResourceGate(s.Prepared, snapshot, capacity);
-                        if (!binding.IsSuccess) { PreparationFailed(s, binding.ErrorCode, gameTime); occupied--; continue; }
-                        v.ResourceGate = binding.Value; v.SnapshotValue = snapshot;
-                    }
+                    v.Problem = s.Problem;
                     s.SpawnedAt = gameTime;
                     FillCarriers(s, _settings.GateSpawnDepth);
                     v.Machine.Fire(MathEventTrigger.PreviewElapsed, gameTime);
-                    _events.Publish(new MathEventGatesSpawned(v.EventId, v.SnapshotValue, v.SnapshotResource, gameTime));
+                    _events.Publish(new MathEventGatesSpawned(v.EventId, v.GateBaseValue, v.RewardResource, gameTime));
                 }
                 if (v.State == MathEventState.Approaching)
                 {
@@ -247,16 +227,7 @@ namespace MathHorde.GameLogic
         private void FillCarriers(ScheduledEvent s, float depth)
         {
             var v = s.View;
-            if (v.ResourceGate.HasValue)
-            {
-                var b = v.ResourceGate.Value;
-                for (int i = 0; i < b.OptionCount; i++)
-                {
-                    var o = b.Template.Options[i];
-                    v.CarrierBuffer.Add(new GateCarrier(o.OptionIndex, o.Lane, new Vec2(o.Lane.Value, depth), o.DisplayLabel, i == b.CorrectOptionIndex));
-                }
-            }
-            else for (int i = 0; i < v.Problem.Options.Count; i++)
+            for (int i = 0; i < v.Problem.Options.Count; i++)
             {
                 var o = v.Problem.Options[i];
                 v.CarrierBuffer.Add(new GateCarrier(o.OptionIndex, o.Lane, new Vec2(o.Lane.Value, depth), o.DisplayLabel, o.IsCorrect));
@@ -315,9 +286,7 @@ namespace MathHorde.GameLogic
             internal readonly MathEventScheduleEntry Entry;
             internal readonly ActiveMathEvent View;
             internal readonly float BaseThinkTime;
-            internal PreparedResourceGate Prepared;
             internal MathProblem Problem;
-            internal int PreparedCapacity;
             internal bool Attempted;
             internal string Error;
             internal double EffectiveThinkTime, EffectiveSpeed;

@@ -24,26 +24,26 @@ MonoBehaviour:
     _spawns:
     - _enemy: {fileID: 11400000, guid: 5e96af01c3b49b94ba9a560ede27a0f0, type: 2}
       _count: 10
-      _spawnIntervalSeconds: 1.2
+      _spawnIntervalSeconds: 6
       _allowedLanes: 
   - _waveIndex: 1
     _startGameTime: 60
-    _durationSeconds: 60
+    _durationSeconds: 90
     _spawns:
     - _enemy: {fileID: 11400000, guid: b0c8647f1a7b5c445ac2b8e8b604f947, type: 2}
       _count: 8
-      _spawnIntervalSeconds: 1
+      _spawnIntervalSeconds: 10
       _allowedLanes: 
     - _enemy: {fileID: 11400000, guid: 8279c0ede7cffb14da38ce3e2dfb40f7, type: 2}
       _count: 4
-      _spawnIntervalSeconds: 2
+      _spawnIntervalSeconds: 10
       _allowedLanes: 
   _mathEvents:
   - _triggerGameTime: 4
     _problemType: 0
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 2
+    _rewardResource: 1
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -59,7 +59,7 @@ MonoBehaviour:
     _problemType: 0
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 2
+    _rewardResource: 1
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -75,7 +75,7 @@ MonoBehaviour:
     _problemType: 0
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 2
+    _rewardResource: 1
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -91,7 +91,7 @@ MonoBehaviour:
     _problemType: 0
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 2
+    _rewardResource: 1
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0
@@ -107,7 +107,7 @@ MonoBehaviour:
     _problemType: 0
     _previewDurationSeconds: 2
     _thinkTimeSecondsOverride: 0
-    _rewardResource: 2
+    _rewardResource: 1
     _goal: 0
     _rewardAmountOverride: 0
     _targetValueOverride: 0

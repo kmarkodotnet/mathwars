@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using MathHorde.Core.Problems;
 using MathHorde.Core.Resources;
 using MathHorde.GameLogic;
+using MathHorde.GameLogic.Events;
+using MathHorde.MathEngine;
 
 namespace MathHorde.Infrastructure.Configuration
 {
@@ -13,6 +15,32 @@ namespace MathHorde.Infrastructure.Configuration
     /// </summary>
     public static class MathEventConfigurationAdapter
     {
+        public static MathEventDirector CreateDirector(IResourceService resources, IGameEventSink events,
+            MathEventDirectorSettings settings, Core.Levels.LevelDefinition level, Core.Skills.DifficultyProfile difficulty, int seed)
+        {
+            var director = new MathEventDirector(resources, events, settings);
+            director.Initialize(level, difficulty, new MathProblemGenerator(), new Core.Common.DeterministicRandomSource(seed));
+            return director;
+        }
+
+        public static MathEventDirectorSettings CreateDirectorSettings(MathEventConfigSO config,
+            LevelDefinitionSO level, MathDifficultyTableSO math, TimePressureTableSO time, RewardTableSO rewards, int challengeLevel)
+        {
+            if (math == null || time == null || rewards == null)
+                throw new ConfigurationValidationException(new[] { "Hiányzó matematikai konfigurációs tábla." });
+            var errors = new List<string>(math.Validate());
+            errors.AddRange(time.Validate(math)); errors.AddRange(rewards.Validate());
+            if (errors.Count > 0) throw new ConfigurationValidationException(errors);
+            var timing = time.GetLevel(challengeLevel);
+            var row = rewards.GetLevel(challengeLevel);
+            var amounts = new Dictionary<int, int>();
+            for (int i = 0; i < level.MathEvents.Count; i++)
+                amounts.Add(i, level.MathEvents[i].ProblemType == ProblemType.ResourceOperationComparison
+                    ? Math.Max(1, (int)Math.Round(row.HealthRewardBase * rewards.GateRewardHealthMultiplier, MidpointRounding.AwayFromZero))
+                    : Math.Max(1, row.HealthRewardBase));
+            return CreateDirectorSettings(config, level, timing.GateApproachSpeed, timing.MinGapBetweenProblemsSeconds, amounts);
+        }
+
         public static MathEventDirectorSettings CreateDirectorSettings(MathEventConfigSO config,
             LevelDefinitionSO level, float gateApproachSpeed, float minGapBetweenProblemsSeconds,
             IReadOnlyDictionary<int, int> rewardAmountsByScheduleIndex,
@@ -39,22 +67,16 @@ namespace MathHorde.Infrastructure.Configuration
                     if (entry == null) continue;
                     if (entry.RewardResource == ResourceType.Ammo)
                         errors.Add($"MathEvents[{index}].RewardResource: AMMO_NOT_ALLOWED.");
-                    else if ((entry.RewardResource == ResourceType.Health && level.MaxHealth <= 0)
-                        || (entry.RewardResource == ResourceType.Shield && level.MaxShield <= 0)
-                        || (entry.RewardResource != ResourceType.Health && entry.RewardResource != ResourceType.Shield))
-                        errors.Add($"MathEvents[{index}].RewardResource: missing or disabled pool.");
+                    else if (entry.RewardResource != ResourceType.Health || level.MaxHealth <= 0)
+                        errors.Add($"MathEvents[{index}].RewardResource: REWARD_RESOURCE_NOT_ALLOWED.");
                     bool gate = entry.ProblemType == ProblemType.ResourceOperationComparison;
-                    int amount = 0;
-                    if (!gate)
-                    {
-                        amount = entry.RewardAmountOverride;
-                        if (amount == 0 && (rewardAmountsByScheduleIndex == null || !rewardAmountsByScheduleIndex.TryGetValue(index, out amount)))
-                            errors.Add($"MathEvents[{index}].RewardAmount: hiányzó RewardTable érték.");
-                        ConfigValidation.RequireRange(errors, $"MathEvents[{index}].RewardAmount", amount, 1, 500);
-                    }
-                    rewards.Add(index, new RewardSpec(entry.RewardResource, amount, gate, config.IncorrectRewardAmount));
+                    int amount = entry.RewardAmountOverride;
+                    if (amount == 0 && (rewardAmountsByScheduleIndex == null || !rewardAmountsByScheduleIndex.TryGetValue(index, out amount)))
+                        errors.Add($"MathEvents[{index}].RewardAmount: hiányzó RewardTable érték.");
+                    ConfigValidation.RequireRange(errors, $"MathEvents[{index}].RewardAmount", amount, 1, int.MaxValue);
+                    rewards.Add(index, new RewardSpec(entry.RewardResource, amount, config.IncorrectRewardAmount));
 
-                    if (entry.ProblemType == ProblemType.TargetValueSelection)
+                    if (entry.ProblemType == ProblemType.TargetValueSelection || (gate && entry.Goal == GateGoal.ReachTarget))
                     {
                         int target = entry.TargetValueOverride;
                         if (target == 0 && (generatedTargetsByScheduleIndex == null || !generatedTargetsByScheduleIndex.TryGetValue(index, out target)))
@@ -68,7 +90,9 @@ namespace MathHorde.Infrastructure.Configuration
             }
             if (errors.Count > 0) throw new ConfigurationValidationException(errors);
             return new MathEventDirectorSettings(config.MaxConcurrentMathEvents, config.GateSpawnDepth,
-                config.DecisionZoneDepth, gateApproachSpeed, config.FeedbackDisplaySeconds, rewards, targets);
+                config.DecisionZoneDepth, gateApproachSpeed, config.FeedbackDisplaySeconds,
+                new GateGenerationLimits(config.ResourceGateOperandMin, config.ResourceGateOperandMax,
+                    config.ResourceGateMultiplierMin, config.ResourceGateMultiplierMax), rewards, targets);
         }
     }
 }

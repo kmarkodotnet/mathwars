@@ -4,7 +4,7 @@ using MathHorde.Core.Skills;
 
 namespace MathHorde.MathEngine
 {
-    /// <summary>All generation inputs, including the captured resource context (ADR-013).</summary>
+    /// <summary>All generation inputs, independent of live game state (ADR-018/019).</summary>
     public sealed class ProblemGenerationRequest
     {
         public int Seed { get; init; }
@@ -16,8 +16,7 @@ namespace MathHorde.MathEngine
         public ResourceType RewardResource { get; init; }
         public RewardSpec Reward { get; init; }
         public GateGoal Goal { get; init; }
-        public int? ResourceSnapshotValue { get; init; }
-        public int? ResourceCapacity { get; init; }
+        public GateGenerationLimits? GateLimits { get; init; }
         public int? TargetValue { get; init; }
     }
 }

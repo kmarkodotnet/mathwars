@@ -1,6 +1,40 @@
 # IMPLEMENTATION_STATUS.md — Math Horde
 
-Utolsó frissítés: **2026-11-21** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
+Utolsó frissítés: **2026-11-22** · Aktuális fázis: **F3 — matematikai kapuk, folyamatban**
+
+## F3-12 — Valódi matematikai scene-integráció (2026-11-22)
+
+Az ADR-018/019 modellje működik a szállított `Gameplay` scene-ben: öt
+összehasonlító kapu és öt eredményválasztó feladat, folyamatos harccal,
+mindkét ténylegesen választható fegyverrel. A feladatok minden száma generált,
+immutable; a jutalom fix Health (CL1 kapu 30, sáv 15), a SO-séma képletéből.
+Nincs snapshot-alapú Prepare/Bind út, kapacitás-optimum, Ammo- vagy Shield-matek.
+Az utóbbi pajzs harci pufferként megmaradt, StartingShield=0 / MaxShield=50 mellett.
+
+A bootstrap valódi Gate/Question/Feedback/Lane presenter-, feloldó-, reward- és
+analytics-láncot kapcsol össze. A szöveg/attempt/mentés a Tick után készül.
+Startup-előkészítési hiba nem indít gameplay-frame-et. A session valós
+pontosságot és tíz QuestionAttempt-et rögzít a helyi statisztikában.
+Az egyszeri IO- vagy jogosultsági íráshiba nem dobja el a finalizált sessiont:
+a következő kulcsesemény/periodikus autosave újrapróbálja, a mentett jelző csak
+sikeres írás után igaz. Ehhez nincs új termék-UI vagy háttérszolgáltatás.
+
+Friss kapuk: **.NET 809/809/0, EditMode 808/808/0, PlayMode 369/369/0**
+(total/passed/failed, mindenütt 0 kihagyás). A teljes Full után a review során
+javított Presentation-mentési útra a teljes PlayMode kapu ismét lefutott.
+CL1 Maximize/Minimize kétszer 10 000 seed, meglévő generátor/validátor fuzz és a
+teljes session resolve/reward/analytics-buffer G4=0 bájt igazolt.
+
+A scene driver 0,8 s döntési reakciót és döntési ablakokon kívül középső sávból
+harcot használ a normál inputadapteren keresztül. A tizedik feloldás kb. 133,22 s,
+a tényleges session Victoryval kb. 150,00 s-nál ér véget. Ez reprodukálható
+végigjátszási bizonyíték; a teljes 14 s döntési ablakot minden alkalommal kihasználó
+játékosra nem állítunk tízfeloldásos garanciát. A balance újramérése és az Android
+eszközös QA továbbra is külön feladat. Részletek: [TESTING](TESTING.md#f3-12--valódi-matematikai-scene-integráció-2026-11-22).
+
+Az alábbi korábbi fázisleírások történeti bizonyítékok; a jelenlegi matematikai
+modellt ez a szakasz és az ADR-018/019 határozza meg. A jegy lezárását a
+[generált backlog](backlog.md) mutatja.
 
 **ADR-017: F1-20 és F1-21 elkészült; F3-12 nyitott.**
 A jelenlegi F1 scene két valódi fegyvertípussal, mindig végtelenül tüzel. Nincs ammo pool,
