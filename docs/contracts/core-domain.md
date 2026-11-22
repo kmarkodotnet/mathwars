@@ -14,11 +14,18 @@
 >
 > **Revízió r3 (2026-11-19, architect, ADR-013):** a `MathProblem` megőrzi az
 > erőforrás-kapacitást; a kapuk nyers és kapacitással vágott optimuma egyaránt
-> egyértelmű; `ReachTarget` erőforrás-kapu is hordozhat célértéket. Az ADR-012-ben
-> már rögzített, önálló `DifficultyProfile.MaxResultValue` mező átvezetve.
-
+> egyértelmű. **Ezt az r5 felülírta.**
+>
 > **Revízió r4 — ADR-017 (2026-11-19):** F1-20 kivezeti az aktív ammo-adatokat;
-> F1-21 adja a választható fegyverkészletet. Ez célkontrakt, a két jegy még nyitott.
+> F1-21 adja a választható fegyverkészletet.
+>
+> **Revízió r5 — ADR-018 + ADR-019 (2026-11-22, architect) — ÉRVÉNYES:**
+> a matematikai feladatoknak **nincs élő játékos-értékből származó operandusa**.
+> A `ResourceOperationComparison` közös, generált `GateBaseValue`-t és opciónként
+> egy **teljesen konkrét** műveletet hordoz. `RewardSpec.UseSnapshotDelta` és
+> `MathProblem.ResourceCapacity` **törölve**; a jutalom mindkét kötelező
+> mechanikán fix, pozitív `FlatAmount` **`Health`** erőforrásra. A 3.1. szakasz
+> snapshot-alapú `Prepared`/`Binding` típusai **kivezetve**.
 
 ## 0. Általános szabályok
 
@@ -31,6 +38,7 @@
 | `System.Random` példányosítása TILOS (a teljes megoldásban) — minden véletlen `IRandomSource`-on keresztül, `DeterministicRandomSource` implementációval | ADR-006 |
 | **Statikus adat és futásidejű állapot külön típus.** `*Definition` = konfigurációból fordított, immutable, session-független adat. `*Snapshot` / `Active*` / `*State` = futásidejű, per-instance állapot a GameLogic rétegben. A kettő **soha nem egyesítendő** (ADR-009) | a definíció megosztható több instance között, poolozható, és a szimuláció tetszőleges számú instance-t futtathat ugyanarra a definícióra |
 | **Minden perzisztált vagy SO-ban szerkesztett enum értékei explicit numerikusak** (`Basic = 0, …`), és új érték **csak a lista végére**, új számmal kerülhet; meglévő érték számát átírni TILOS | Unity az enumot `int`-ként szerializálja; sorrend-változás csendben átírja a kész assetek és mentések jelentését |
+| **A matematikai feladat semmilyen bemenete nem élő játékállapot** (ADR-018). A Core feladattípusai nem hordoznak erőforrás-snapshotot vagy kapacitást; a feladat a generálás után a megoldásig változatlan | a gyermek nem „mozgó célra” válaszol; a helyes válasz nem csúszhat el |
 
 ---
 
@@ -167,10 +175,11 @@ public interface IExpressionVisitor<out TResult>
 2. `EqualityNode` csak a fa **gyökereként** szerepelhet.
 3. `IntegerDivisionWithRemainder` csak **gyökér** vagy `EqualityNode` közvetlen gyermeke lehet
    (mert az eredménye pár, nem skalár).
-4. A megoldandó `UnknownNode` legfeljebb egy példányban, és kizárólag
+4. A megoldandó `UnknownNode` legfeljebb egy példányban, és **kizárólag**
    `ProblemType.MissingOperand` / `EquationSolving` típusú feladatban szerepel.
-   A resource-gate műveleti sablon külön eset: opcióként pontosan egy UnknownNode
-   a még nem rögzített erőforrás-snapshot behelyettesítési helye (3.1., ADR-015).
+   **A `ResourceOperationComparison` kapuműveletei `UnknownNode`-ot nem
+   tartalmazhatnak** (ADR-018/019): minden kapuoperandus konkrét `ConstantNode`.
+   A korábbi „snapshot behelyettesítési hely” kivétel (ADR-015/016) megszűnt.
 5. Az MVP bővítési pontja (spec 6.0.1–6.0.4): új csomóponttípus csak új `ExpressionNode`
    leszármazott + `IExpressionVisitor` bővítés, meglévő típus módosítása nélkül.
 
@@ -183,7 +192,7 @@ namespace MathHorde.Core.Problems;
 
 public enum ProblemType
 {
-    ResourceOperationComparison = 0,  // 5.1 — erőforrás-módosító kapuk
+    ResourceOperationComparison = 0,  // 5.1 — összehasonlító kapuk (ADR-018: önálló operandusok)
     AnswerLaneSelection = 1,          // 5.2 — eredményválasztó sávok
     MissingOperand = 2,               // 7 + ? = 3 × 8
     EquationSolving = 3,              // (? + 17) × 3 = 6 × (14 − 3)
@@ -191,12 +200,9 @@ public enum ProblemType
 }
 
 /// A kapu/sáv-feladat CÉLJA — kizárólag az optimalizálás IRÁNYA, erőforrás-független.
-/// A "melyik erőforrásról van szó" kérdést a MathProblem.Reward.Resource /
-/// MathEventScheduleEntry.RewardResource adja meg. A kettő ORTOGONÁLIS:
-/// "Több életerőt!" = (Maximize, Health); "Kevesebb páncél!" = (Minimize, EnemyArmor);
-/// "Több pajzsot!" = (Maximize, Shield); "Érd el a 60-at!" = (ReachTarget, aktív nem-ammo resource).
-/// A GAME_DESIGN.md 3.4 táblázatának `MoreHealth` / `LessEnemyArmor` / `MoreShield`
-/// nevei PREZENTÁCIÓS címkék (ikon + string-tábla kulcs), NEM enum-értékek.
+/// A jutalom erőforrása és összege ettől ORTOGONÁLIS, és az ADR-018 óta mindig
+/// fix `Health` összeg: "Válaszd a nagyobbat!" = Maximize, "Válaszd a kisebbet!" =
+/// Minimize, "Érd el a célt!" = ReachTarget (GAME_DESIGN 3.4).
 public enum GateGoal { Maximize = 0, Minimize = 1, ReachTarget = 2 }
 
 public readonly struct MathProblemId : IEquatable<MathProblemId>
@@ -215,11 +221,13 @@ public sealed class AnswerOption
 {
     public int OptionIndex { get; }          // 0..N-1, a generátor adja
     public LaneIndex Lane { get; }           // melyik sávon érkezik
-    public EvaluationResult Value { get; }   // AnswerLaneSelection esetén a szám
-    public ExpressionNode GateOperation { get; } // ResourceOperationComparison esetén
-                                                 //   pl. BinaryOp(×, Unknown, 2) → "×2"
+    public EvaluationResult Value { get; }   // a VALÓDI eredmény (döntés előtt nem jeleníthető meg)
+    /// ResourceOperationComparison esetén a kapu TELJESEN KONKRÉT művelete:
+    ///   BinaryOperationNode(op, ConstantNode(GateBaseValue), ConstantNode(k))
+    /// UnknownNode itt TILOS (ADR-018/019). Más feladattípusnál null.
+    public ExpressionNode GateOperation { get; }
     public bool IsCorrect { get; }
-    public ErrorCategory? DistractorErrorModel { get; } // null, ha IsCorrect
+    public ErrorCategory? DistractorErrorModel { get; } // null, ha IsCorrect; kapunál MINDIG null
     public string DisplayLabel { get; }      // "56" vagy "×2" vagy "+25"
 }
 
@@ -259,59 +267,78 @@ public enum SkillTag
     TwoDigitMultiplication = 23, DivisionWithRemainder = 24
 }
 
-/// Mit ad a helyes válasz. RewardDelta = OperationResult − SnapshotValue (5.1).
+/// Mit ad a helyes válasz. FIX, előre konfigurált összeg (ADR-018): a jutalom
+/// SOHA nem a feladat aritmetikájából származik, és nincs delta-képzés.
 public sealed class RewardSpec
 {
+    /// Kizárólag ResourceType.Health lehet (ADR-018 2–4. pont).
     public ResourceType Resource { get; }
-    /// AnswerLaneSelection esetén fix érték (pl. +30 életerő).
-    /// ResourceOperationComparison esetén 0 — ott a delta számított.
+    /// A helyes válasz fix jutalma, MINDKÉT kötelező feladattípusnál. > 0.
     public int FlatAmount { get; }
-    public bool UseSnapshotDelta { get; }   // true ⇒ ResourceOperationComparison
-    public int IncorrectAmount { get; }     // alap: 0 (spec 9.: nincs extra büntetés)
+    /// Hibás válasz jutalma; MVP: 0 (spec 9.: nincs extra büntetés).
+    /// Invariáns: 0 <= IncorrectAmount <= FlatAmount.
+    public int IncorrectAmount { get; }
 }
+```
 
+> **KIVEZETETT mező:** `RewardSpec.UseSnapshotDelta` **törölve** (ADR-019 2.6.).
+> Nem tombstone: nem szerializált ordinal, és az ADR-018 után egyetlen érvényes
+> értéke `false` lett volna. Visszavezetése kontraktsértés.
+
+```csharp
 public sealed class MathProblem
 {
     public MathProblemId Id { get; }
     public ProblemType Type { get; }
-    public ExpressionNode Expression { get; }      // a megjelenítendő fa
-    public string DisplayExpression { get; }       // "7 × 8 = ?" — előszámolt
+    /// A megjelenítendő fa. ResourceOperationComparison esetén a HELYES opció
+    /// GateOperation-fája (így az I1 ellenőrzés értelmes marad).
+    public ExpressionNode Expression { get; }
+    /// "7 × 8 = ?" — előszámolt. ResourceOperationComparison esetén a bázisérték
+    /// invariáns decimális alakja (pl. "6"); a kapucímkék az opciókon vannak.
+    public string DisplayExpression { get; }
     public EvaluationResult CorrectAnswer { get; }
-    public IReadOnlyList<AnswerOption> Options { get; }  // 2..4 elem; üres TargetValue-nál nem
+    public IReadOnlyList<AnswerOption> Options { get; }  // 2..4 elem
     public int DifficultyLevel { get; }            // 1..10
     public IReadOnlyList<SkillTag> SkillTags { get; }    // legalább 1 elem
     public float ThinkTimeSeconds { get; }         // > 0
     public RewardSpec Reward { get; }
     public int Seed { get; }                       // reprodukálhatóság (6.3)
-    public GateGoal Goal { get; }                  // kapu célja, ikonhoz
-    public int? TargetValue { get; }               // TargetValueSelection vagy ReachTarget erőforrás-kapu
-    public int? ResourceCapacity { get; }          // ResourceOperationComparison: rögzített ResourcePool.Max (> 0); máskor null
+    public GateGoal Goal { get; }                  // a feladat célja, ikonhoz
+    public int? TargetValue { get; }               // TargetValueSelection vagy ReachTarget kapu
+    /// ResourceOperationComparison: a feladat generálásakor EGYSZER sorsolt, közös
+    /// bázisérték (> 0), amelyre minden opció művelete alkalmazódik. Más
+    /// feladattípusnál null. NEM erőforrásállás és nem kapacitás (ADR-018).
+    public int? GateBaseValue { get; }
     public string Explanation { get; }             // opcionális, lehet null (6.5)
 }
 ```
 
-**Ammo-tilalom (ADR-017):** a RewardSpec/MathProblem, az előkészített resource terv és
-a binding kizárólag aktív, nem-ammo erőforráshoz érvényes. A tombstone nem lehet
-feladat bemenete, célja, opciója vagy jutalma; a generátor/validátor minden útján
-`AMMO_NOT_ALLOWED`. A DTO-k történeti/validálandó jelöltként hordozhatnak tombstone-t; ez nem aktív
-feladatengedély. A requestőrök és mindkét validátor kötelezően elutasítják,
-a konstruktor nem helyettesítheti vagy teheti elérhetetlenné ezeket az ellenőrzéseket.
+> **KIVEZETETT mező:** `MathProblem.ResourceCapacity` **törölve** (ADR-019 2.5.).
+> A fix jutalom miatt az erőforrás `Max`-ja nem befolyásolja, melyik opció az
+> optimális; a kapacitás-vágás és a „nyers vs effektív optimum” fogalompár
+> megszűnt. A `ResourcePool.Max` természetesen továbbra is a jóváíráskor vág
+> (`ResourceService`), de ez nem feladatadat.
 
-**A kapacitás bemeneti szerződése (ADR-013):** a `ResourceCapacity` a
-`Reward.Resource` pooljának a feladat létrehozásakor rögzített `Max` értéke,
-nem nehézségtábla-adat és nem élő erőforrás-lekérdezés. `ResourceOperationComparison`
-esetén kötelező és pozitív; minden más feladattípusnál `null`. A nullable típus
-az eltérő feladattípusokat és a validálandó jelölteket szolgálja, nem jelent
-„korlátlan erőforrást”. A hiányzó/érvénytelen kapacitás üzleti validációs hiba
-(`GATE_CAPACITY_INVALID`), nem konstruktor-kivétel.
+**Erőforrás- és jutalomkorlát (ADR-017 + ADR-018/019):** a `RewardSpec` és a
+`MathProblem` kizárólag `ResourceType.Health` jutalmat hordozhat.
+`Ammo` ⇒ `AMMO_NOT_ALLOWED`; `Shield` / `EnemyArmor` / `Energy` ⇒
+`REWARD_RESOURCE_NOT_ALLOWED`. A `Pajzs` kizárása az ADR-018 3. pontja szerint
+**új** tilalom, és nem csak a jutalomra, hanem bemenetre, célra és opciócímkére
+is érvényes. A `MathProblem` konstruktora nem rejtheti el ezeket az
+ellenőrzéseket; a generátor és mindkét validátorbelépés ugyanabból a szabályból
+dolgozik. Az `EnemyArmor`/`Energy` enumérték megmarad (ordinal-stabilitás), de
+aktív matematikai jutalomként le van tiltva; újraengedélyezés = új ADR.
 
-A meglévő `MathProblem` konstruktor végére opcionális `int? resourceCapacity = null`
-paraméter kerül: a jelenlegi forrásszintű hívások továbbra is fordulnak. A régi,
-kapacitás nélküli erőforrás-kapujelölt azonban nem válik automatikusan érvényessé.
-A `TargetValue` eddigi konstruktor-őrét ki kell bővíteni: megadható
-`TargetValueSelection`-nél, illetve `ResourceOperationComparison` + `ReachTarget`
-esetén; más kombinációban továbbra is programozói hiba. `ReachTarget`
-erőforrás-kapunál a hiányzó célértéket a validátor jelzi (`GATE_TARGET_MISSING`).
+**A bázisérték bemeneti szerződése (ADR-018/019):** a `GateBaseValue` a
+**generátor által sorsolt operandus**, nem erőforrás-lekérdezés és nem
+nehézségtábla-adat. Értéke a `[DifficultyProfile.MinOperandValue,
+MaxOperandValue]` és a `MathEventConfigSO` kapu-korlátainak metszetében van
+(math-engine.md 7.1.). `ResourceOperationComparison` esetén kötelező és pozitív;
+minden más feladattípusnál `null` (`GATE_BASE_VALUE_MISSING`). A `TargetValue`
+konstruktor-őre változatlan: megadható `TargetValueSelection`-nél, illetve
+`ResourceOperationComparison` + `ReachTarget` esetén; más kombinációban
+programozói hiba. `ReachTarget` kapunál a hiányzó célértéket a validátor jelzi
+(`GATE_TARGET_MISSING`).
 
 **MathProblem-invariánsok (a `ProblemValidator` kényszeríti, spec 6.4):**
 
@@ -326,8 +353,10 @@ erőforrás-kapunál a hiányzó célértéket a validátor jelzi (`GATE_TARGET_
 | I7 | minden részkifejezés és a végeredmény `int` tartományban marad (`checked` ellenőrzés) |
 | I8 | `MissingOperand`/`EquationSolving` esetén az ismeretlen **egyértelmű** (pontosan egy egész megoldás) |
 | I9 | a helyes válasz sávpozíciója az `IRandomSource`-ból sorsolt, hosszú távon egyenletes |
-| I10 | `ResourceOperationComparison` esetén pozitív `ResourceCapacity` kötelező. Minden kapupár nyers és effektív (`min(Value.Value, ResourceCapacity)`) eredménye különböző, az effektív különbség legalább `MinGateGap`. A `Goal` szerinti nyers és effektív optimum egyaránt egyértelmű, és ugyanaz az opció; `ReachTarget` esetén a megadott `TargetValue`-tól vett távolság dönt (math-engine.md 5., 7.1.) |
+| I10 | `ResourceOperationComparison` esetén pozitív `GateBaseValue` kötelező; minden opció `GateOperation`-ja `BinaryOperationNode(op, ConstantNode(GateBaseValue), ConstantNode(k))` alakú, `UnknownNode` nélkül, és nem `Modulo`/`IntegerDivisionWithRemainder`. Az `(op, k)` párok páronként különbözők, az opcióértékek páronként különbözők, az eltérésük legalább `MinGateGap`, és a `Goal` szerinti optimum pontosan egy opció (`ReachTarget`: egyedi legkisebb céltávolság) — math-engine.md 5., 7.1. |
 | I11 | negatív végeredmény csak akkor engedett, ha a `DifficultyProfile.AllowNegativeResults == true` |
+| I12 | `Reward.Resource == Health`, `Reward.FlatAmount > 0` és `0 <= Reward.IncorrectAmount <= FlatAmount` (ADR-018) |
+| I13 | **Időbeli stabilitás:** a `MathProblem` immutable, és egyetlen mezője sem származik élő játékállapotból; ezért a `CorrectAnswer`/`IsCorrect` kiosztás a generálástól a feloldásig nem változhat (ADR-018 2. probléma) |
 
 ```csharp
 /// A játékos által leadott válasz (egy MathEvent-hez).
@@ -346,83 +375,33 @@ public sealed class MathAnswer
 
 ---
 
-### 3.1. Előkészített resource gate és végleges binding (ADR-015, ELFOGADVA)
+### 3.1. KIVEZETVE — előkészített resource gate és snapshot-binding (ADR-015/016 → ADR-018/019)
 
-Namespace: `MathHorde.Core.Problems`. Ezek **Unity- és MathEngine-független**
-Core típusok. A `MathProblem`, `AnswerOption`, `MathAnswer` meglévő aláírása és
-immutabilitása nem változik. A valós idejű `ResourceOperationComparison` a
-következő reprezentációt használja; a régi teljes MathProblem továbbra is
-érvényes offline generálási/validációs tesztadat lehet.
+Az alábbi típusok **nem részei a hatályos kontraktnak**, és nem implementálhatók:
+`ResourceGateOptionTemplate`, `ResourceGateTemplate`, `PreparedResourceGate`
+(beleértve a `PreparedCapacity`, `Candidates`, `GetSkillTags` tagokat) és
+`ResourceGateBinding` (`SnapshotValue`, `ResourceCapacity`, `CandidateIndex`,
+`GetValue`). Indoklás: a kapu-feladatnak nincs futásidejű bemenete, ezért a
+„sablon + spawnkori binding” kettéosztás nem hordozna információt
+(ADR-019 2.1.).
 
-```csharp
-public readonly struct ResourceGateOptionTemplate
-{
-    public int OptionIndex { get; }
-    public LaneIndex Lane { get; }
-    public ExpressionNode GateOperation { get; } // pontosan egy snapshot-UnknownNode
-    public string DisplayLabel { get; }          // előformázott: "+25", "×2"
-}
+Helyettük **mindkét** kötelező mechanika a meglévő, immutable `MathProblem`-et
+használja, amelyet a `IMathProblemGenerator.Generate` állít elő a session
+Ticken **kívül** (GameLogic 5.2.). Amit ez megőriz:
 
-public sealed class ResourceGateTemplate
-{
-    public IReadOnlyList<ResourceGateOptionTemplate> Options { get; } // 2..4
-    public IReadOnlyList<SkillTag> SkillTags { get; }
-}
+- **Immutable kötés:** a feladat a generálás pillanatától a feloldásig egyetlen,
+  változatlan objektum (I13). A kapuk megjelenése (`Approaching`) csak e kész
+  objektum **referenciájának** publikálása, nem új számítás.
+- **G4 (Tick-allokációmentesség):** a `Tick` nem hív generátort, validátort,
+  klasszifikátort, nem olvas erőforrást és nem sorsol — ezért nem is allokál.
+- **Fokozatos felfedés:** a Preview csak célt és fix jutalmat jelez előre, a
+  műveleti címkék a kapuk megjelenésekor, az **eredmények** pedig kizárólag a
+  feloldás után láthatók (spec 5.1).
 
-public sealed class PreparedResourceGate
-{
-    public MathProblemId Id { get; }
-    public int Seed { get; }
-    public DifficultyProfile Difficulty { get; }
-    public float ThinkTimeSeconds { get; }       // skálázatlan alapidő
-    public RewardSpec Reward { get; }
-    public GateGoal Goal { get; }
-    public int? TargetValue { get; }
-    public int PreparedCapacity { get; }         // támogatott kontextus, nem élő Max
-    public IReadOnlyList<ResourceGateTemplate> Candidates { get; } // determinisztikus sorrend
-    public IReadOnlyList<SkillTag> GetSkillTags(int candidateIndex, int snapshotValue);
-}
-
-public readonly struct ResourceGateBinding
-{
-    public PreparedResourceGate Prepared { get; }
-    public int CandidateIndex { get; }
-    public ResourceGateTemplate Template { get; } // Prepared.Candidates[CandidateIndex]
-    public MathProblemId ProblemId { get; }       // Prepared.Id
-    public int SnapshotValue { get; }
-    public int ResourceCapacity { get; }          // spawnkor ténylegesen rögzített Max
-    public int OptionCount { get; }
-    public int CorrectOptionIndex { get; }
-    public IReadOnlyList<SkillTag> SkillTags { get; } // előkészített, kontextushelyes lista
-    public EvaluationResult GetValue(int optionIndex);
-}
-```
-
-A két sealed osztály és a sablon-opció immutable; bemeneti listáikat másolt,
-visszakasztolással sem módosítható olvasó nézetben tárolják. A binding nem tartalmaz
-új listát vagy dobozolt interfész-adatot: négy readonly EvaluationResult mezőből
-olvas az indexelt getter; a nem használt mezők defaultok. Érvénytelen index
-programozói hiba. A default binding (`Prepared == null`) nem érvényes feladat.
-Az eseményazonosító GameLogic-adat, ezért a Core binding nem függ MathEventId-től:
-az `ActiveMathEvent` tartja össze az EventId-t és a binding ProblemId-jét.
-A GetSkillTags a Prepare során a konkrét snapshothoz és jelölthöz előre
-osztályozott immutable listát adja vissza, allokáció nélkül. A Template.SkillTags
-csak a szimbolikus műveletek tagje; a binding.SkillTags a régi validátorral
-egyezően a helyes konkrét kifejezés és minden szimbolikus kapuművelet uniója.
-Így az átlépés/többjegyűség tagje nem vész el, és Bindben nem fut Classify.
-
-Minden opció nyers értéke `EvaluateWith(GateOperation, SnapshotValue)`. A binding
-I2–I7, I9–I11 egyenértékű ellenőrzésén átmegy; I1-ben a kijelölt helyes opció
-behelyettesített művelete adja a helyes választ, I8 megoldandó ismeretlenje itt
-nem alkalmazandó. A sablonban még nincs Value/IsCorrect/ResourceCapacity:
-ezekről előkészítéskor nem szabad végleges snapshotadatot állítani. Az operandus-,
-eredmény-, készség-, kapacitás- és réskorlátok nem lazulnak. A binding egyszer
-keletkezik és utána változatlan; a későbbi harc sem értékeit, sem Maxát nem írja át.
-
-Az [ADR-016](../decisions/ADR-016.md) szerint a sablon snapshot-UnknownNode-jába
-kerülő érték külső `0..ResourceCapacity` kontextus; a generátor operandustartománya
-a generált ConstantNode-okra vonatkozik. Ez nem eredmény- vagy készségkivétel:
-a behelyettesített konkrét kifejezés ezeket továbbra is teljesen teljesíti.
+Az ADR-015 `0..Max` lefedettsége és az ADR-016 snapshot-pontosítása elvi szinten
+érvényes marad, de **nincs hatályos alkalmazási területe**: a termékben nincs
+snapshot-vezérelt matematikai feladat. Ilyen mechanika jövőbeli bevezetése új
+termékdöntést (ADR) és új kontraktszakaszt igényel.
 
 ---
 
@@ -448,6 +427,9 @@ adatátviteli párja, nem új kiértékelés. A GateResolution ezt viszi tovább
 A meglévő sealed MathAnswer/QuestionAttempt csak a Ticken kívüli analitikai
 drainben materializálható; a feloldási út nem allokálhatja ezeket. Ez nem változtat
 a napló tartalmán, pontosságán vagy idempotenciáján.
+
+> A `MathAnswerSnapshot` neve **történeti**: a „snapshot” itt válasz-pillanatképet
+> jelent, nem erőforrás-snapshotot. Az ADR-018 tilalma nem érinti ezt a típust.
 
 ---
 
@@ -533,7 +515,7 @@ public sealed class DifficultyProfile
     public bool AllowNegativeResults { get; }
     public int AnswerOptionCount { get; }    // 2..4
     public float BaseThinkTimeSeconds { get; }
-    /// A `ResourceOperationComparison` két kapueredménye közti minimális eltérés (I10).
+    /// A `ResourceOperationComparison` opcióértékei közti minimális eltérés (I10).
     public int MinGateGap { get; }
     public bool AutoAdaptationEnabled { get; }
 }
@@ -557,13 +539,22 @@ namespace MathHorde.Core.Resources;
 public enum ResourceType
 {
     Ammo = 0, // INAKTÍV tombstone (ADR-017); nem pool és nem matematikai erőforrás
+    /// Az EGYETLEN erőforrás, amelyet matematikai feladat jutalmazhat (ADR-018).
     Health = 1,
+    /// Harci puffer (a HP előtt fogy). Matematikai feladat bemenete, célja,
+    /// opciója vagy jutalma NEM lehet (ADR-018 3. pont). Forrása az MVP-ben a
+    /// `LevelDefinition.StartingShield` és a boss-fázisokhoz tartozó
+    /// `IRewardService.ApplyCombatReward` (F5).
     Shield = 2,
     /// Session-szintű, NEM per-ellenség pool: a pálya összes `Armored` ellenségének
-    /// páncél-bónuszát skálázó, csökkentendő erőforrás. A `(Minimize, EnemyArmor)`
-    /// kapuk ezt viszik lejjebb; `Current == Min` ⇒ a páncél hatása 0.
+    /// páncél-bónuszát skálázó, csökkentendő erőforrás.
     /// A per-ellenség páncélértéket az `EnemyDefinition.ArmorPoints` adja (F5).
+    /// **Matematikai jutalomként inaktív** (ADR-018 2/4. pont): a korábbi
+    /// `(Minimize, EnemyArmor)` kapu-jutalom megszűnt; a `Minimize` cél fix
+    /// `Health`-jutalommal működik. Újraengedélyezés = új ADR.
     EnemyArmor = 3,
+    /// Jövőbeli (F5+) erőforrás a `FocusCharge` ötlethez. Matematikai jutalomként
+    /// inaktív; az ADR-018 4. pontja kifejezetten tiltja az új matek-erőforrást.
     Energy = 4
 }
 
@@ -606,6 +597,8 @@ felesleg elveszik; lőszerpool és lőszerből képzett overflow-pontszám nincs
 Az Ammo tombstone-val ResourcePool/ResourceState nem hozható létre vagy bővíthető;
 programozói hiba `ArgumentException`. A generikus ismeretlen-pool lekérdezés nem
 jelent végtelen lőszert, az Ammo lekérdezése is elutasított.
+A `Max` **jóváíráskor** vág (fix jutalom + tele Health ⇒ `WasClamped = true`), de a
+feladat tartalmát nem befolyásolja: a kapacitás nem feladatadat (ADR-019 2.5.).
 
 ---
 
@@ -838,6 +831,8 @@ public sealed class MathEventScheduleEntry
     public ProblemType ProblemType { get; }
     public float PreviewDurationSeconds { get; }
     public float ThinkTimeSecondsOverride { get; }  // <= 0 ⇒ a DifficultyProfile-ból
+    /// Kizárólag `ResourceType.Health` lehet (ADR-018); minden más érték
+    /// konfigurációs hiba a repository/adapter szintjén.
     public ResourceType RewardResource { get; }
     public GateGoal Goal { get; }
 }
@@ -857,9 +852,11 @@ public sealed class LevelDefinition
     public int StartingShield { get; }
     /// A pajzs-pool kapacitása. A spec 4.3 minden erőforrásra `aktuális + maximális`
     /// párt ír elő, ezért a pajzs is kap sajátot — NEM vezethető le a
-    /// `StartingShield`-ből (a pajzs tipikusan 0-ról indul és kapukkal töltődik,
-    /// tehát `StartingShield == 0`, `MaxShield == 50`).
-    /// Alapérték a `LevelDefinitionSO`-ban: 50 (GAME_DESIGN.md 6.1).
+    /// `StartingShield`-ből.
+    /// **ADR-018 óta a pajzsot matematikai feladat nem töltheti**; forrása a
+    /// `StartingShield` és (F5-től) a boss-jutalom. Ha egy pályán a pajzs
+    /// nem kap forrást, az balance-döntés kérdése (GAME_DESIGN 6.1 nyitott tétel),
+    /// nem kontraktsértés. Alapérték a `LevelDefinitionSO`-ban: 50.
     public int MaxShield { get; }
     public float RequiredMathAccuracy { get; }   // 0 ⇒ nincs matek-minimum
     public string WeaponId { get; }        // kezdő típus
@@ -878,6 +875,7 @@ public sealed class LevelDefinition
 | L5 | `0 <= StartingHealth <= MaxHealth`, **`0 <= StartingShield <= MaxShield`** | `ArgumentOutOfRangeException` |
 | L6 | `0 <= RequiredMathAccuracy <= 1` | `ArgumentOutOfRangeException` |
 | L7 | `AvailableWeaponIds` 1..4 egyedi, nem üres Id, `WeaponId` benne van; mind feloldható | `ArgumentException` / repository config hiba |
+| L8 | minden `MathEvents[i].RewardResource == ResourceType.Health` (ADR-018) | repository/adapter konfigurációs hiba |
 
 **Konstruktor-paraméter sorrend (kötelező):** `… startingHealth, maxHealth, startingShield,
 maxShield, requiredMathAccuracy, weaponId, availableWeaponIds` (utóbbi F1-21-től) — azaz a `maxShield` közvetlenül a
@@ -901,7 +899,9 @@ public sealed class WorldDefinition
     /// METSZETE; üres metszet esetén a világ szűkebb halmaza nyer (worlds.md 1.).
     public IReadOnlyCollection<SkillTag> IntroducedSkills { get; }
     /// Mely kapucélok használhatók. W1: csak `Maximize`; `Minimize` W3-tól,
-    /// `ReachTarget` W2-től (a W2 boss `TargetValueSelection` feladatot ad).
+    /// `ReachTarget` W2-től. Az ADR-018/019 óta mindhárom cél fix `Health`
+    /// jutalommal működik, tehát a `Minimize` nem igényel `EnemyArmor` poolt —
+    /// a világonkénti bevezetés tartalmi (tanítási sorrend), nem technikai korlát.
     public IReadOnlyCollection<GateGoal> EnabledGateGoals { get; }
     /// Mely ellenség-archetípusok spawnolhatnak itt (vizuális/mechanikai tartalmi kapu).
     public IReadOnlyCollection<EnemyType> IntroducedEnemyTypes { get; }
@@ -937,3 +937,4 @@ public sealed class WorldUnlockRequirement
 | Mentés-szerializáció, fájl-IO | Infrastructure |
 | Magyar nyelvű felhasználói szöveg | `Resources/Strings/hu.json` (kulcs-alapú) |
 | Konkrét balance-ÉRTÉKEK (10 szint számai, jutalmak) | `docs/balance/*` → ScriptableObject assetek |
+| **Élő erőforrásállás mint feladatbemenet** | nincs ilyen a termékben (ADR-018) |
